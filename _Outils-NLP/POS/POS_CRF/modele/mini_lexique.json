@@ -1,0 +1,50 @@
+{
+  "_doc": "Mini-lexique de correction post-CRF. Uniquement les mots où le CRF échoue et la catégorie est sans ambiguïté. Modifiable librement.",
+
+  "contractions": {
+    "_doc": "Contractions prépositionnelles — toujours PRE, jamais d'autre interprétation",
+    "au":       "PRE",
+    "aux":      "PRE"
+  },
+
+  "prepositions": {
+    "_doc": "Prépositions strictement non ambiguës (pas de lecture NOM/VER/ADJ attestée)",
+    "malgré":   "PRE",
+    "parmi":    "PRE",
+    "envers":   "PRE",
+    "hormis":   "PRE",
+    "derrière": "PRE",
+    "jusque":   "PRE",
+    "jusqu":    "PRE"
+  },
+
+  "conjonctions": {
+    "_doc": "Conjonctions composées — aucune ambiguïté",
+    "lorsque":  "CON",
+    "puisque":  "CON",
+    "quoique":  "CON",
+    "lorsqu":   "CON",
+    "puisqu":   "CON",
+    "quoiqu":   "CON"
+  },
+
+  "adverbes": {
+    "_doc": "Adverbes en -ment — jamais autre chose, et adverbes de fréquence sûrs",
+    "vraiment":     "ADV",
+    "certainement": "ADV",
+    "probablement": "ADV",
+    "absolument":   "ADV",
+    "évidemment":   "ADV",
+    "simplement":   "ADV",
+    "tellement":    "ADV",
+    "seulement":    "ADV",
+    "toujours":     "ADV",
+    "jamais":       "ADV",
+    "souvent":      "ADV",
+    "parfois":      "ADV",
+    "bientôt":      "ADV",
+    "aussitôt":     "ADV",
+    "autrefois":    "ADV",
+    "désormais":    "ADV"
+  }
+}

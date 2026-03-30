@@ -1,0 +1,18 @@
+[project]
+name = "lectura-p2g-bilstm"
+version = "1.0.0"
+description = "Convertisseur phonème-graphème BiLSTM ONNX pour le français"
+readme = "README.md"
+license = {text = "CC-BY-SA-4.0"}
+requires-python = ">=3.10"
+dependencies = [
+    "onnxruntime>=1.15",
+    "numpy>=1.24",
+]
+
+[project.urls]
+Homepage = "https://music-music.music"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"

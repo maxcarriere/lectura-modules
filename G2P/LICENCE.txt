@@ -1,0 +1,64 @@
+LICENCE — Lectura G2P Unifié (lectura-g2p-unifie)
+==================================================
+
+Version 1.0.0 — 2025
+
+
+1. LICENCE PRINCIPALE — CC BY-SA 4.0
+
+  Ce produit est distribué sous licence Creative Commons
+  Attribution — Partage dans les Mêmes Conditions 4.0 International
+  (CC BY-SA 4.0).
+
+  Texte complet : https://creativecommons.org/licenses/by-sa/4.0/legalcode.fr
+
+  Vous êtes autorisé à :
+
+    - PARTAGER : copier et redistribuer le matériel sur tout support
+      ou dans tout format, y compris à des fins commerciales.
+
+    - ADAPTER : remixer, transformer et créer à partir du matériel,
+      y compris à des fins commerciales.
+
+  Selon les conditions suivantes :
+
+    - ATTRIBUTION : vous devez créditer l'auteur (Lectura), indiquer
+      si des modifications ont été effectuées et fournir un lien vers
+      la licence. Voir le fichier ATTRIBUTION.md pour les crédits
+      complets.
+
+    - PARTAGE DANS LES MÊMES CONDITIONS : si vous remixez, transformez
+      ou créez à partir du matériel, vous devez distribuer vos
+      contributions sous la même licence CC BY-SA 4.0.
+
+
+2. COMPOSANTS ET LICENCES
+
+  a) Code source (lectura_nlp/, demo_cli.py, exemples/)
+     → CC BY-SA 4.0 — Copyright (c) 2025 Lectura
+
+  b) Modèle ONNX INT8 (modeles/unifie_int8.onnx)
+     → CC BY-SA 4.0 — Dérivé de données GLAFF, Lexique et UD French-GSD
+
+  c) Vocabulaire (modeles/unifie_vocab.json)
+     → CC BY-SA 4.0 — Dérivé des mêmes sources
+
+  d) Poids JSON (modeles/unifie_weights.json)
+     → CC BY-SA 4.0 — Export numérique du modèle entraîné
+
+  e) Corrections G2P (modeles/g2p_corrections_unifie.json)
+     → CC BY-SA 4.0 — Dérivées du GLAFF et de Lexique 3.83
+
+  f) Données d'entraînement (non incluses dans la distribution)
+     → Licences d'origine :
+       - GLAFF 1.2.1       : CC BY-SA 3.0
+       - Lexique 3.83      : CC BY-SA 4.0
+       - UD French-GSD 2.x : CC BY-SA 4.0
+     Voir ATTRIBUTION.md pour les crédits détaillés.
+
+
+3. ABSENCE DE GARANTIE
+
+  Le produit est fourni "en l'état", sans garantie d'aucune sorte,
+  expresse ou implicite. Lectura ne saurait être tenu responsable
+  de tout dommage résultant de l'utilisation du produit.

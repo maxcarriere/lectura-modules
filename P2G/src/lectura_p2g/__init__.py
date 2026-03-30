@@ -1,0 +1,25 @@
+"""Lectura P2G — Modèle unifié P2G+POS+Morpho pour le français (IPA → orthographe).
+
+Architecture : BiLSTM char-level + word feedback multi-tête (2.56M params, ONNX INT8 = 2.6 Mo)
+Licence : CC-BY-SA-4.0
+
+Trois backends d'inférence au choix :
+  - ONNX Runtime  (rapide, ~2ms/phrase)
+  - NumPy         (léger, ~50ms/phrase)
+  - Pure Python   (zéro dépendance, ~200ms/phrase)
+
+Exemple rapide::
+
+    from lectura_p2g.inference_onnx import OnnxInferenceEngine
+
+    engine = OnnxInferenceEngine("modeles/unifie_p2g_v2_int8.onnx",
+                                  "modeles/unifie_p2g_v2_vocab.json")
+    result = engine.analyser(["le", "ʃa", "ɛ", "bɔ̃"])
+    print(result["ortho"])  # ['le', 'chat', 'est', 'bon']
+"""
+
+__version__ = "1.0.0"
+
+# API publique
+from lectura_p2g.tokeniseur import tokeniser_ipa, ipa_phrase_vers_chars
+from lectura_p2g.posttraitement import corriger_p2g, corriger_phrase_v2

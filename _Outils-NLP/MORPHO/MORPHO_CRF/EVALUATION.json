@@ -1,0 +1,805 @@
+{
+  "name": "CRF morpho",
+  "accuracy_complete": 0.8847,
+  "accuracy_pos": 0.9747,
+  "accuracy_lemma": 0.8187,
+  "total_tokens": 27875,
+  "correct_tokens": 24660,
+  "trait_accuracy": {
+    "genre": {
+      "correct": 5513,
+      "total": 5775,
+      "accuracy": 0.9546
+    },
+    "nombre": {
+      "correct": 14206,
+      "total": 14649,
+      "accuracy": 0.9698
+    },
+    "temps": {
+      "correct": 2317,
+      "total": 2358,
+      "accuracy": 0.9826
+    },
+    "mode": {
+      "correct": 3791,
+      "total": 3872,
+      "accuracy": 0.9791
+    },
+    "personne": {
+      "correct": 4401,
+      "total": 4474,
+      "accuracy": 0.9837
+    }
+  },
+  "per_tag": {
+    "ADJ": {
+      "precision": 1.0,
+      "recall": 0.0508,
+      "f1": 0.0967,
+      "support": 256
+    },
+    "ADJ:dem|Fem|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 77
+    },
+    "ADJ:dem|Masc|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 103
+    },
+    "ADJ:dem|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 38
+    },
+    "ADJ:int|Masc|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 2
+    },
+    "ADJ:pos|Fem|Sing": {
+      "precision": 0.9535,
+      "recall": 0.988,
+      "f1": 0.9704,
+      "support": 83
+    },
+    "ADJ:pos|Masc|Sing": {
+      "precision": 0.7746,
+      "recall": 0.9322,
+      "f1": 0.8462,
+      "support": 59
+    },
+    "ADJ:pos|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 82
+    },
+    "ADJ:pos|Sing": {
+      "precision": 0.9664,
+      "recall": 0.8712,
+      "f1": 0.9163,
+      "support": 132
+    },
+    "ADJ|Fem": {
+      "precision": 1.0,
+      "recall": 0.0568,
+      "f1": 0.1075,
+      "support": 88
+    },
+    "ADJ|Fem|Plur": {
+      "precision": 0.7067,
+      "recall": 0.9138,
+      "f1": 0.797,
+      "support": 116
+    },
+    "ADJ|Fem|Sing": {
+      "precision": 0.6917,
+      "recall": 0.899,
+      "f1": 0.7818,
+      "support": 297
+    },
+    "ADJ|Masc": {
+      "precision": 0.8732,
+      "recall": 0.4806,
+      "f1": 0.62,
+      "support": 129
+    },
+    "ADJ|Masc|Plur": {
+      "precision": 0.7516,
+      "recall": 0.8551,
+      "f1": 0.8,
+      "support": 138
+    },
+    "ADJ|Masc|Sing": {
+      "precision": 0.7848,
+      "recall": 0.8917,
+      "f1": 0.8349,
+      "support": 360
+    },
+    "ADJ|Plur": {
+      "precision": 0.7815,
+      "recall": 0.944,
+      "f1": 0.8551,
+      "support": 125
+    },
+    "ADJ|Sing": {
+      "precision": 0.595,
+      "recall": 0.931,
+      "f1": 0.7261,
+      "support": 232
+    },
+    "ADV": {
+      "precision": 0.969,
+      "recall": 0.9631,
+      "f1": 0.9661,
+      "support": 1817
+    },
+    "ART:def|Fem|Sing": {
+      "precision": 0.9972,
+      "recall": 0.9986,
+      "f1": 0.9979,
+      "support": 701
+    },
+    "ART:def|Masc|Sing": {
+      "precision": 0.9968,
+      "recall": 0.9979,
+      "f1": 0.9974,
+      "support": 949
+    },
+    "ART:def|Plur": {
+      "precision": 0.9985,
+      "recall": 0.9985,
+      "f1": 0.9985,
+      "support": 686
+    },
+    "ART:def|Sing": {
+      "precision": 0.9962,
+      "recall": 0.9981,
+      "f1": 0.9972,
+      "support": 529
+    },
+    "ART:ind": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0,
+      "support": 5
+    },
+    "ART:ind|Fem|Plur": {
+      "precision": 0.7143,
+      "recall": 1.0,
+      "f1": 0.8333,
+      "support": 5
+    },
+    "ART:ind|Fem|Sing": {
+      "precision": 0.9858,
+      "recall": 0.9858,
+      "f1": 0.9858,
+      "support": 281
+    },
+    "ART:ind|Masc|Plur": {
+      "precision": 0.8571,
+      "recall": 0.8571,
+      "f1": 0.8571,
+      "support": 7
+    },
+    "ART:ind|Masc|Sing": {
+      "precision": 0.9876,
+      "recall": 0.9876,
+      "f1": 0.9876,
+      "support": 322
+    },
+    "ART:ind|Plur": {
+      "precision": 0.9698,
+      "recall": 0.9461,
+      "f1": 0.9578,
+      "support": 204
+    },
+    "ART:ind|Sing": {
+      "precision": 0.8333,
+      "recall": 0.9259,
+      "f1": 0.8772,
+      "support": 27
+    },
+    "AUX": {
+      "precision": 1.0,
+      "recall": 0.375,
+      "f1": 0.5455,
+      "support": 8
+    },
+    "AUX|Cnd|Pres|1|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 5
+    },
+    "AUX|Cnd|Pres|3|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 5
+    },
+    "AUX|Cnd|Pres|3|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 10
+    },
+    "AUX|Ind|Fut|3|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 6
+    },
+    "AUX|Ind|Fut|3|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 16
+    },
+    "AUX|Ind|Imp|1|Plur": {
+      "precision": 0.2857,
+      "recall": 1.0,
+      "f1": 0.4444,
+      "support": 2
+    },
+    "AUX|Ind|Imp|1|Sing": {
+      "precision": 0.5333,
+      "recall": 0.8889,
+      "f1": 0.6667,
+      "support": 9
+    },
+    "AUX|Ind|Imp|3|Plur": {
+      "precision": 0.875,
+      "recall": 0.9545,
+      "f1": 0.913,
+      "support": 22
+    },
+    "AUX|Ind|Imp|3|Sing": {
+      "precision": 0.8769,
+      "recall": 0.9048,
+      "f1": 0.8906,
+      "support": 63
+    },
+    "AUX|Ind|Past|3|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 9
+    },
+    "AUX|Ind|Pres|1|Plur": {
+      "precision": 0.8095,
+      "recall": 1.0,
+      "f1": 0.8947,
+      "support": 17
+    },
+    "AUX|Ind|Pres|1|Sing": {
+      "precision": 0.925,
+      "recall": 0.961,
+      "f1": 0.9427,
+      "support": 77
+    },
+    "AUX|Ind|Pres|2|Plur": {
+      "precision": 1.0,
+      "recall": 0.7778,
+      "f1": 0.875,
+      "support": 36
+    },
+    "AUX|Ind|Pres|3|Plur": {
+      "precision": 0.9262,
+      "recall": 0.9912,
+      "f1": 0.9576,
+      "support": 114
+    },
+    "AUX|Ind|Pres|3|Sing": {
+      "precision": 0.9378,
+      "recall": 0.9885,
+      "f1": 0.9625,
+      "support": 610
+    },
+    "AUX|Inf": {
+      "precision": 0.9701,
+      "recall": 1.0,
+      "f1": 0.9848,
+      "support": 65
+    },
+    "AUX|Part": {
+      "precision": 0.8333,
+      "recall": 0.4,
+      "f1": 0.5405,
+      "support": 50
+    },
+    "AUX|Part|Masc|Sing": {
+      "precision": 0.5833,
+      "recall": 0.9245,
+      "f1": 0.7153,
+      "support": 53
+    },
+    "AUX|Sub|Pres|3|Plur": {
+      "precision": 0.6667,
+      "recall": 0.6667,
+      "f1": 0.6667,
+      "support": 3
+    },
+    "AUX|Sub|Pres|3|Sing": {
+      "precision": 0.875,
+      "recall": 0.913,
+      "f1": 0.8936,
+      "support": 23
+    },
+    "CON": {
+      "precision": 0.9634,
+      "recall": 0.9685,
+      "f1": 0.9659,
+      "support": 1303
+    },
+    "INTJ": {
+      "precision": 0.9328,
+      "recall": 0.9775,
+      "f1": 0.9546,
+      "support": 355
+    },
+    "NOM": {
+      "precision": 0.8317,
+      "recall": 0.5599,
+      "f1": 0.6692,
+      "support": 3240
+    },
+    "NOM|Fem": {
+      "precision": 0,
+      "recall": 0.0,
+      "f1": 0,
+      "support": 3
+    },
+    "NOM|Fem|Plur": {
+      "precision": 0,
+      "recall": 0.0,
+      "f1": 0,
+      "support": 3
+    },
+    "NOM|Fem|Sing": {
+      "precision": 0.6866,
+      "recall": 0.5169,
+      "f1": 0.5897,
+      "support": 89
+    },
+    "NOM|Masc|Plur": {
+      "precision": 0.5,
+      "recall": 0.125,
+      "f1": 0.2,
+      "support": 8
+    },
+    "NOM|Masc|Sing": {
+      "precision": 0.7456,
+      "recall": 0.5575,
+      "f1": 0.638,
+      "support": 226
+    },
+    "NOM|Plur": {
+      "precision": 0.7683,
+      "recall": 0.8964,
+      "f1": 0.8274,
+      "support": 1158
+    },
+    "NOM|Sing": {
+      "precision": 0.6994,
+      "recall": 0.9343,
+      "f1": 0.7999,
+      "support": 2814
+    },
+    "PRE": {
+      "precision": 0.9904,
+      "recall": 0.9936,
+      "f1": 0.992,
+      "support": 4342
+    },
+    "PRO:dem|Fem|Plur|3": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 6
+    },
+    "PRO:dem|Fem|Sing|3": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 9
+    },
+    "PRO:dem|Masc|3": {
+      "precision": 0.3111,
+      "recall": 1.0,
+      "f1": 0.4746,
+      "support": 14
+    },
+    "PRO:dem|Masc|Plur|3": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 13
+    },
+    "PRO:dem|Masc|Sing|3": {
+      "precision": 0.9387,
+      "recall": 0.9134,
+      "f1": 0.9259,
+      "support": 335
+    },
+    "PRO:dem|Sing|3": {
+      "precision": 0.25,
+      "recall": 0.0385,
+      "f1": 0.0667,
+      "support": 26
+    },
+    "PRO:ind|Fem|Plur|3": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667,
+      "support": 2
+    },
+    "PRO:ind|Fem|Sing|3": {
+      "precision": 0.8182,
+      "recall": 0.9,
+      "f1": 0.8571,
+      "support": 10
+    },
+    "PRO:ind|Masc|Plur|3": {
+      "precision": 0.8462,
+      "recall": 0.9167,
+      "f1": 0.88,
+      "support": 12
+    },
+    "PRO:ind|Masc|Sing|3": {
+      "precision": 0.8829,
+      "recall": 0.9731,
+      "f1": 0.9258,
+      "support": 186
+    },
+    "PRO:ind|Plur|3": {
+      "precision": 0.9231,
+      "recall": 0.9231,
+      "f1": 0.9231,
+      "support": 13
+    },
+    "PRO:ind|Sing|3": {
+      "precision": 1.0,
+      "recall": 0.25,
+      "f1": 0.4,
+      "support": 12
+    },
+    "PRO:int": {
+      "precision": 0.6923,
+      "recall": 0.45,
+      "f1": 0.5455,
+      "support": 20
+    },
+    "PRO:int|3": {
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5,
+      "support": 2
+    },
+    "PRO:per|3": {
+      "precision": 0.9964,
+      "recall": 0.9789,
+      "f1": 0.9876,
+      "support": 285
+    },
+    "PRO:per|Fem|Plur|3": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 8
+    },
+    "PRO:per|Fem|Sing": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6667,
+      "support": 1
+    },
+    "PRO:per|Fem|Sing|3": {
+      "precision": 0.9846,
+      "recall": 0.9697,
+      "f1": 0.9771,
+      "support": 66
+    },
+    "PRO:per|Masc|Plur|3": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 50
+    },
+    "PRO:per|Masc|Sing": {
+      "precision": 1.0,
+      "recall": 0.95,
+      "f1": 0.9744,
+      "support": 20
+    },
+    "PRO:per|Masc|Sing|3": {
+      "precision": 0.9879,
+      "recall": 0.9819,
+      "f1": 0.9849,
+      "support": 332
+    },
+    "PRO:per|Plur|1": {
+      "precision": 1.0,
+      "recall": 0.9894,
+      "f1": 0.9947,
+      "support": 94
+    },
+    "PRO:per|Plur|2": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 187
+    },
+    "PRO:per|Plur|3": {
+      "precision": 1.0,
+      "recall": 0.9375,
+      "f1": 0.9677,
+      "support": 16
+    },
+    "PRO:per|Sing|1": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 380
+    },
+    "PRO:per|Sing|2": {
+      "precision": 1.0,
+      "recall": 0.8571,
+      "f1": 0.9231,
+      "support": 14
+    },
+    "PRO:per|Sing|3": {
+      "precision": 0.9286,
+      "recall": 0.8864,
+      "f1": 0.907,
+      "support": 44
+    },
+    "PRO:rel": {
+      "precision": 0.9096,
+      "recall": 0.9174,
+      "f1": 0.9135,
+      "support": 351
+    },
+    "PRO:rel|Fem|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 2
+    },
+    "PRO:rel|Fem|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 5
+    },
+    "PRO:rel|Masc|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 5
+    },
+    "VER": {
+      "precision": 0.9615,
+      "recall": 0.6944,
+      "f1": 0.8065,
+      "support": 36
+    },
+    "VER|Cnd|Pres|1|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 1
+    },
+    "VER|Cnd|Pres|1|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 15
+    },
+    "VER|Cnd|Pres|3|Plur": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667,
+      "support": 4
+    },
+    "VER|Cnd|Pres|3|Sing": {
+      "precision": 0.913,
+      "recall": 1.0,
+      "f1": 0.9545,
+      "support": 21
+    },
+    "VER|Imp|Pres|1|Plur": {
+      "precision": 1.0,
+      "recall": 0.8571,
+      "f1": 0.9231,
+      "support": 14
+    },
+    "VER|Imp|Pres|2|Plur": {
+      "precision": 0.871,
+      "recall": 0.871,
+      "f1": 0.871,
+      "support": 31
+    },
+    "VER|Imp|Pres|2|Sing": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0,
+      "support": 3
+    },
+    "VER|Ind|Fut|1|Plur": {
+      "precision": 0.6,
+      "recall": 0.75,
+      "f1": 0.6667,
+      "support": 4
+    },
+    "VER|Ind|Fut|1|Sing": {
+      "precision": 0.9,
+      "recall": 1.0,
+      "f1": 0.9474,
+      "support": 9
+    },
+    "VER|Ind|Fut|2|Plur": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 7
+    },
+    "VER|Ind|Fut|3|Plur": {
+      "precision": 0.75,
+      "recall": 1.0,
+      "f1": 0.8571,
+      "support": 6
+    },
+    "VER|Ind|Fut|3|Sing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 37
+    },
+    "VER|Ind|Imp|1|Plur": {
+      "precision": 1.0,
+      "recall": 0.1429,
+      "f1": 0.25,
+      "support": 7
+    },
+    "VER|Ind|Imp|1|Sing": {
+      "precision": 0.9231,
+      "recall": 0.5714,
+      "f1": 0.7059,
+      "support": 21
+    },
+    "VER|Ind|Imp|2|Plur": {
+      "precision": 0.3333,
+      "recall": 0.5,
+      "f1": 0.4,
+      "support": 4
+    },
+    "VER|Ind|Imp|3|Plur": {
+      "precision": 0.875,
+      "recall": 0.875,
+      "f1": 0.875,
+      "support": 24
+    },
+    "VER|Ind|Imp|3|Sing": {
+      "precision": 0.9118,
+      "recall": 0.8611,
+      "f1": 0.8857,
+      "support": 72
+    },
+    "VER|Ind|Past|3|Plur": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6667,
+      "support": 1
+    },
+    "VER|Ind|Past|3|Sing": {
+      "precision": 0.8,
+      "recall": 0.9412,
+      "f1": 0.8649,
+      "support": 17
+    },
+    "VER|Ind|Pres|1|Plur": {
+      "precision": 1.0,
+      "recall": 0.7857,
+      "f1": 0.88,
+      "support": 28
+    },
+    "VER|Ind|Pres|1|Sing": {
+      "precision": 0.9211,
+      "recall": 0.875,
+      "f1": 0.8974,
+      "support": 160
+    },
+    "VER|Ind|Pres|2|Plur": {
+      "precision": 0.869,
+      "recall": 0.9481,
+      "f1": 0.9068,
+      "support": 77
+    },
+    "VER|Ind|Pres|2|Sing": {
+      "precision": 0.9091,
+      "recall": 1.0,
+      "f1": 0.9524,
+      "support": 10
+    },
+    "VER|Ind|Pres|3|Plur": {
+      "precision": 0.9431,
+      "recall": 0.9062,
+      "f1": 0.9243,
+      "support": 128
+    },
+    "VER|Ind|Pres|3|Sing": {
+      "precision": 0.9406,
+      "recall": 0.9082,
+      "f1": 0.9241,
+      "support": 610
+    },
+    "VER|Inf": {
+      "precision": 0.98,
+      "recall": 0.9908,
+      "f1": 0.9853,
+      "support": 543
+    },
+    "VER|Part": {
+      "precision": 0.8602,
+      "recall": 0.3187,
+      "f1": 0.4651,
+      "support": 251
+    },
+    "VER|Part|Fem|Plur": {
+      "precision": 0.82,
+      "recall": 0.9318,
+      "f1": 0.8723,
+      "support": 44
+    },
+    "VER|Part|Fem|Sing": {
+      "precision": 0.6144,
+      "recall": 0.9216,
+      "f1": 0.7373,
+      "support": 102
+    },
+    "VER|Part|Masc": {
+      "precision": 0.8387,
+      "recall": 0.4127,
+      "f1": 0.5532,
+      "support": 63
+    },
+    "VER|Part|Masc|Plur": {
+      "precision": 0.7391,
+      "recall": 0.9315,
+      "f1": 0.8242,
+      "support": 73
+    },
+    "VER|Part|Masc|Sing": {
+      "precision": 0.6602,
+      "recall": 0.9591,
+      "f1": 0.7821,
+      "support": 318
+    },
+    "VER|Sub|Pres|1|Sing": {
+      "precision": 0,
+      "recall": 0.0,
+      "f1": 0,
+      "support": 1
+    },
+    "VER|Sub|Pres|3|Plur": {
+      "precision": 1.0,
+      "recall": 0.2,
+      "f1": 0.3333,
+      "support": 5
+    },
+    "VER|Sub|Pres|3|Sing": {
+      "precision": 0.8,
+      "recall": 0.2857,
+      "f1": 0.4211,
+      "support": 14
+    }
+  }
+}

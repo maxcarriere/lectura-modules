@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "lectura-formules"
+version = "2.0.0"
+description = "Lecture algorithmique des formules (nombres, sigles, dates, téléphones, heures, monnaies, etc.) pour le français"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "CC-BY-SA-4.0"}
+authors = [{name = "Lectura"}]
+keywords = ["formules", "french", "nlp", "nombres", "lecture", "romains"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lectura_formules = [
+    "data/tables/*.csv",
+]
+# Les WAV (~12 Mo) ne sont PAS embarqués dans le package.
+# Utiliser tables.set_sounds_dir() pour configurer le chemin sons externe.
