@@ -11,10 +11,13 @@ Usage :
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def _sigmoid(x: np.ndarray) -> np.ndarray:
@@ -97,6 +100,7 @@ class NumpyInferenceEngine:
     """Inférence NumPy pour le modèle unifié."""
 
     def __init__(self, weights_path: str | Path, vocab_path: str | Path):
+        logger.info("Loading G2P NumPy model from %s", weights_path)
         with open(vocab_path, encoding="utf-8") as f:
             data = json.load(f)
 
@@ -199,6 +203,7 @@ class NumpyInferenceEngine:
         return char_ids, word_starts, word_ends
 
     def analyser(self, tokens: list[str]) -> dict[str, Any]:
+        logger.debug("analyser() called with %s tokens", len(tokens))
         if not tokens:
             return {"tokens": [], "g2p": [], "pos": [], "liaison": [], "morpho": {}}
 

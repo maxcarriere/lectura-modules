@@ -15,8 +15,11 @@ Licence : CC-BY-SA-4.0
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Types de sortie
@@ -2224,9 +2227,11 @@ def lire_formule(
         Texte lu, IPA et événements alignés.
     """
     ftype = formule_type.lower()
+    logger.debug("lire_formule() type=%s text=%r", ftype, text)
 
     lecteur = _LECTEURS.get(ftype)
     if lecteur is None:
+        logger.warning("Unrecognized formule type %r, falling back to spelling", ftype)
         return _epeler_texte(text, span)
 
     # Passer les kwargs pertinents
@@ -2258,6 +2263,7 @@ def enrichir_formules(
     if options is None:
         options = OptionsLecture()
 
+    count = 0
     for tok in tokens:
         ttype = getattr(tok, "type", None)
         if ttype is None:
@@ -2281,5 +2287,7 @@ def enrichir_formules(
         )
         setattr(tok, "display_fr", lecture.display_fr)
         setattr(tok, "lecture", lecture)
+        count += 1
 
+    logger.info("enrichir_formules() enriched %s formule tokens", count)
     return tokens

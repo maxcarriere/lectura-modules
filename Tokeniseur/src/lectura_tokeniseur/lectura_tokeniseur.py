@@ -27,10 +27,13 @@ Voir LICENCE.txt et ATTRIBUTION.md.
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 __version__ = "2.0.0"
 
@@ -297,6 +300,7 @@ def normalise(text: str) -> str:
     Returns:
         Texte normalisé.
     """
+    logger.debug("normalise() called, input length=%s", len(text) if text else 0)
     if not text:
         return text
 
@@ -846,6 +850,7 @@ def _classify_formule_single(text: str) -> FormuleType | None:
     if _detect_nombre(text):
         return FormuleType.NOMBRE
 
+    logger.warning("Unrecognized formule pattern: %r", text)
     return None
 
 
@@ -1395,6 +1400,7 @@ def tokenise(text: str) -> list[Token]:
     Returns:
         Liste de Token (Mot, Ponctuation, Separateur, Formule).
     """
+    logger.debug("tokenise() called, input length=%s", len(text) if text else 0)
     if not text:
         return []
 
@@ -1408,6 +1414,7 @@ def tokenise(text: str) -> list[Token]:
     # Passe 2 : classification et fusion des formules
     tokens = _classify_and_merge(tokens)
 
+    logger.debug("tokenise() produced %s tokens", len(tokens))
     return tokens
 
 

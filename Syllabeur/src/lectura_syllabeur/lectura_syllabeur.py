@@ -39,11 +39,14 @@ Voir LICENCE.txt et ATTRIBUTION.md.
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 __version__ = "2.0.0"
 
@@ -495,6 +498,7 @@ class EspeakPhonemizer:
                 self._available = True
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 self._available = False
+                logger.warning("eSpeak-NG not available, phonemization will fail")
         return self._available
 
     def phonemize(self, word: str) -> str:
@@ -1423,6 +1427,7 @@ class LecturaSyllabeur:
         -------
         ResultatAnalyse
         """
+        logger.debug("analyze() word=%r phone=%r", word, phone)
         if phone is None:
             phone = self._phonemizer.phonemize(word)
 
@@ -1471,6 +1476,8 @@ class LecturaSyllabeur:
         if options is None:
             options = OptionsGroupes()
 
+        logger.debug("analyser_complet() called with %s mots", len(mots))
+
         # E1 : construire les groupes de lecture
         groupes = construire_groupes(mots, options)
 
@@ -1482,11 +1489,14 @@ class LecturaSyllabeur:
         # Reconstituer le texte original
         texte = " ".join(m.text for m in mots)
 
-        return ResultatSyllabation(
+        result = ResultatSyllabation(
             texte_original=texte,
             groupes=resultats_groupes,
             options=options,
         )
+        logger.info("analyser_complet() produced %s groupes, %s syllabes",
+                     result.nb_groupes, result.nb_syllabes)
+        return result
 
     def construire_groupes(
         self,

@@ -10,10 +10,13 @@ Usage :
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class OnnxInferenceEngine:
@@ -22,6 +25,7 @@ class OnnxInferenceEngine:
     def __init__(self, onnx_path: str | Path, vocab_path: str | Path):
         import onnxruntime as ort
 
+        logger.info("Loading G2P ONNX model from %s", onnx_path)
         self.session = ort.InferenceSession(str(onnx_path))
 
         with open(vocab_path, encoding="utf-8") as f:
@@ -77,6 +81,7 @@ class OnnxInferenceEngine:
                 "morpho": {feat: [val_per_token]},
             }
         """
+        logger.debug("analyser() called with %s tokens", len(tokens))
         if not tokens:
             return {"tokens": [], "g2p": [], "pos": [], "liaison": [], "morpho": {}}
 
