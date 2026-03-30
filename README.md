@@ -1,0 +1,67 @@
+# Lectura NLP — Modules de traitement du langage naturel pour le francais
+
+Briques logicielles autonomes pour le traitement du francais : tokenisation,
+phonetique, syllabes, formules. Chaque module est installable independamment
+via `pip install`.
+
+## Modules
+
+| Module | Description | Version | pip install |
+|--------|-------------|---------|-------------|
+| **[Tokeniseur](Tokeniseur/)** | Normalisation et tokenisation du francais, detection de formules | 2.0.0 | `pip install lectura-tokeniseur` |
+| **[G2P](G2P/)** | Grapheme-to-Phoneme unifie + POS + Morpho + Liaison | 1.0.0 | `pip install lectura-g2p-unifie` |
+| **[P2G](P2G/)** | Phoneme-to-Grapheme unifie + POS + Morpho (IPA vers orthographe) | 1.0.0 | `pip install lectura-p2g-unifie` |
+| **[Syllabeur](Syllabeur/)** | Analyse syllabique avec groupes de lecture | 2.0.0 | `pip install lectura-syllabeur` |
+| **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 2.0.0 | `pip install lectura-formules` |
+
+## Caracteristiques
+
+- **Zero dependance** sur les modules de base (Tokeniseur, Formules, Syllabeur)
+- **3 backends d'inference** pour G2P/P2G : ONNX Runtime, NumPy, Pure Python
+- **Type hints complets** (Python 3.10+, PEP-561)
+- **Modeles compacts** : G2P = 1.8 Mo, P2G = 2.6 Mo (ONNX INT8)
+
+## Installation rapide
+
+```bash
+# Un seul module
+pip install lectura-tokeniseur
+
+# G2P avec backend ONNX (recommande)
+pip install lectura-g2p-unifie[onnx]
+
+# Tous les modules
+pip install lectura-tokeniseur lectura-g2p-unifie[onnx] lectura-p2g-unifie[onnx] lectura-syllabeur lectura-formules
+```
+
+## Exemple
+
+```python
+from lectura_tokeniseur import tokenise
+from lectura_formules import lire_formule
+
+# Tokeniser du texte francais
+tokens = tokenise("Le 1er janvier 2025, j'ai lu 42 pages.")
+
+# Lire une formule
+result = lire_formule("NOMBRE", "42")
+print(result.display_fr)  # "quarante-deux"
+```
+
+## Licence
+
+Les modules Lectura NLP sont distribues sous **double licence** :
+
+- **[AGPL-3.0-or-later](LICENCE.txt)** — libre, avec obligation de publication
+  du code source pour tout logiciel derive.
+- **[Licence Commerciale](LICENCE-COMMERCIALE.md)** — payante, pour integration
+  dans des logiciels proprietaires sans obligation de publication.
+
+Les modeles pre-entraines (.onnx) sont soumis a des conditions specifiques :
+voir [MODEL_LICENCE.md](MODEL_LICENCE.md).
+
+Pour obtenir une licence commerciale : **https://lectura.fr/licences**
+
+## Auteur
+
+Max Carriere — [lectura.fr](https://lectura.fr)

@@ -7,7 +7,9 @@ Module autonome, zéro dépendance externe. Fournit :
   - Tables externalisées (CSV + WAV) via TablesStore
   - Chiffres romains bidirectionnels via int_to_roman / roman_to_int
 
-Licence : CC-BY-SA-4.0
+Copyright (C) 2025 Max Carriere
+Licence : AGPL-3.0-or-later — voir LICENCE.txt
+Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 """
 
 from lectura_formules.lecture_formules import (

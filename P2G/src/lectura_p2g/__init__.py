@@ -1,7 +1,10 @@
 """Lectura P2G — Modèle unifié P2G+POS+Morpho pour le français (IPA → orthographe).
 
 Architecture : BiLSTM char-level + word feedback multi-tête (2.56M params, ONNX INT8 = 2.6 Mo)
-Licence : CC-BY-SA-4.0
+
+Copyright (C) 2025 Max Carriere
+Licence : AGPL-3.0-or-later — voir LICENCE.txt
+Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 
 Trois backends d'inférence au choix :
   - ONNX Runtime  (rapide, ~2ms/phrase)

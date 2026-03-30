@@ -1,7 +1,10 @@
 """Lectura NLP — Modèle unifié G2P+POS+Morpho+Liaison pour le français.
 
 Architecture : BiLSTM char-level + multi-tête (1.75M params, ONNX INT8 = 1.8 Mo)
-Licence : CC-BY-SA-4.0
+
+Copyright (C) 2025 Max Carriere
+Licence : AGPL-3.0-or-later — voir LICENCE.txt
+Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 
 Trois backends d'inférence au choix :
   - ONNX Runtime  (rapide, ~2ms/phrase)
@@ -18,7 +21,7 @@ Exemple rapide::
     result = engine.analyser(tokeniser("Les enfants jouent."))
 """
 
-__version__ = "1.1.0"
+__version__ = "1.0.0"
 
 # API publique
 from lectura_nlp.tokeniseur import tokeniser, phrase_vers_chars

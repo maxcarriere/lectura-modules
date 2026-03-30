@@ -3,7 +3,9 @@
 Module autonome, zéro dépendance Python.
 Phonémiseur pluggable avec backend eSpeak-NG par défaut.
 
-Licence : CC-BY-SA-4.0
+Copyright (C) 2025 Max Carriere
+Licence : AGPL-3.0-or-later — voir LICENCE.txt
+Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 """
 
 from lectura_syllabeur.lectura_syllabeur import (

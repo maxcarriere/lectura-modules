@@ -4,7 +4,9 @@ Module autonome, zéro dépendance externe.
 Détecte les formules (nombres, sigles, dates, téléphones, numéros,
 ordinaux, fractions, notations scientifiques, expressions mathématiques).
 
-Licence : CC-BY-SA-4.0
+Copyright (C) 2025 Max Carriere
+Licence : AGPL-3.0-or-later — voir LICENCE.txt
+Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 """
 
 from lectura_tokeniseur.lectura_tokeniseur import (

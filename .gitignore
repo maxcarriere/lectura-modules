@@ -1,4 +1,39 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
+dist/
+build/
+*.egg
+
+# Tests
 .pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environnements
+.venv/
+venv/
+env/
+
+# Donnees d'entrainement (privees — vendues separement)
+**/entrainement/donnees/
+**/entrainement/donnees_brutes/
+
+# Modeles intermediaires (ne garder que les versions finales)
+*.pt
+**/*.pt
+
+# Dossier legacy (anciennes versions)
+_Outils-NLP/
+
+# OS
+.DS_Store
+Thumbs.db

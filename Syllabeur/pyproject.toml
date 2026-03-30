@@ -8,13 +8,14 @@ version = "2.0.0"
 description = "Analyseur syllabique complet du français — groupes de lecture, élisions, liaisons, enchaînements"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "CC-BY-SA-4.0"}
-authors = [{name = "Lectura"}]
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere"}]
 keywords = ["syllabeur", "french", "nlp", "syllabation", "phonétique"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Natural Language :: French",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -23,6 +24,11 @@ classifiers = [
     "Topic :: Text Processing :: Linguistic",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://lectura.fr/outils/syllabeur"
+Repository = "https://github.com/maxcarriere/lectura-dev/tree/main/Syllabeur"
+Issues = "https://github.com/maxcarriere/lectura-dev/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

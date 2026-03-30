@@ -8,13 +8,14 @@ version = "1.0.0"
 description = "Modèle unifié P2G + POS + Morpho pour le français (IPA → orthographe) — BiLSTM char-level multi-tête avec word feedback"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "CC-BY-SA-4.0"}
-authors = [{name = "Lectura"}]
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere"}]
 keywords = ["p2g", "french", "nlp", "phonétique", "orthographe", "pos-tagging", "morphologie"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Natural Language :: French",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -30,6 +31,11 @@ onnx = ["onnxruntime>=1.16"]
 numpy = ["numpy>=1.24"]
 train = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
 all = ["onnxruntime>=1.16", "numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://lectura.fr/outils/p2g"
+Repository = "https://github.com/maxcarriere/lectura-dev/tree/main/P2G"
+Issues = "https://github.com/maxcarriere/lectura-dev/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
