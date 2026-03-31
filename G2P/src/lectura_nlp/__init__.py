@@ -13,15 +13,26 @@ Trois backends d'inférence au choix :
 
 Exemple rapide::
 
-    from lectura_nlp.inference_numpy import NumpyInferenceEngine
+    from lectura_nlp import get_model_path
+    from lectura_nlp.inference_onnx import OnnxInferenceEngine
     from lectura_nlp.tokeniseur import tokeniser
 
-    engine = NumpyInferenceEngine("modeles/unifie_weights.json",
-                                  "modeles/unifie_vocab.json")
+    engine = OnnxInferenceEngine(get_model_path("unifie_int8.onnx"),
+                                  get_model_path("unifie_vocab.json"))
     result = engine.analyser(tokeniser("Les enfants jouent."))
 """
 
+from pathlib import Path
+
 __version__ = "1.0.0"
+
+_MODELES_DIR = Path(__file__).parent / "modeles"
+
+
+def get_model_path(filename: str) -> Path:
+    """Retourne le chemin absolu vers un fichier modele embarque."""
+    return _MODELES_DIR / filename
+
 
 # API publique
 from lectura_nlp.tokeniseur import tokeniser, phrase_vers_chars

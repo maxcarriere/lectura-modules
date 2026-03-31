@@ -39,6 +39,12 @@ Issues = "https://github.com/maxcarriere/lectura-dev/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+exclude = ["entrainement*", "evaluation*", "scripts*"]
 
 [tool.setuptools.package-data]
-lectura_p2g = ["py.typed"]
+lectura_p2g = [
+    "py.typed",
+    "modeles/*.onnx",
+    "modeles/*.json",
+    "modeles/*.md",
+]
