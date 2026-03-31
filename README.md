@@ -60,8 +60,8 @@ Les modules Lectura NLP sont distribues sous **double licence** :
 Les modeles pre-entraines (.onnx) sont soumis a des conditions specifiques :
 voir [MODEL_LICENCE.md](MODEL_LICENCE.md).
 
-Pour obtenir une licence commerciale : **https://lectura.fr/licences**
+Pour obtenir une licence commerciale : **https://www.lec-tu-ra.com/solutions/services/**
 
 ## Auteur
 
-Max Carriere — [lectura.fr](https://lectura.fr)
+Max Carriere — [lec-tu-ra.com](https://www.lec-tu-ra.com)

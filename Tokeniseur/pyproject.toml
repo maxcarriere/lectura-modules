@@ -9,7 +9,7 @@ description = "Normalisateur et tokeniseur complet pour le français — détect
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere"}]
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
 keywords = ["tokeniseur", "french", "nlp", "normalisation", "formules"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -26,7 +26,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://lectura.fr/outils/tokeniseur"
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Tokeniseur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

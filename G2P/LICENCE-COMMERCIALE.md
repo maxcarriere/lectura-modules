@@ -53,14 +53,14 @@ des modules Lectura NLP nécessite un accord séparé.
 
 ## 6. Tarification
 
-Les tarifs sont disponibles sur : **https://lectura.fr/pricing**
+Les tarifs sont disponibles sur : **https://www.lec-tu-ra.com/solutions/services/**
 
 ## 7. Contact
 
 Pour toute demande de licence commerciale :
 
-- Email : contact@lectura.fr
-- Web : https://lectura.fr/licences
+- Email : contact@lec-tu-ra.com
+- Web : https://www.lec-tu-ra.com/solutions/services/
 
 ---
 

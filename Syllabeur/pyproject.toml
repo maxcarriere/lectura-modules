@@ -9,7 +9,7 @@ description = "Analyseur syllabique complet du français — groupes de lecture,
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere"}]
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
 keywords = ["syllabeur", "french", "nlp", "syllabation", "phonétique"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -26,7 +26,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://lectura.fr/outils/syllabeur"
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Syllabeur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
