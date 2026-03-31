@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lectura-g2p-unifie"
+name = "lectura-g2p"
 version = "1.0.0"
-description = "Modèle unifié G2P + POS + Morpho + Liaison pour le français — BiLSTM char-level multi-tête"
+description = "Conversion graphème-phonème du français — G2P + POS + Morpho + Liaison (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}

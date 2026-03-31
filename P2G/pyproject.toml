@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lectura-p2g-unifie"
+name = "lectura-p2g"
 version = "1.0.0"
-description = "Modèle unifié P2G + POS + Morpho pour le français (IPA → orthographe) — BiLSTM char-level multi-tête avec word feedback"
+description = "Conversion phonème-graphème du français (IPA → orthographe) — P2G + POS + Morpho (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}

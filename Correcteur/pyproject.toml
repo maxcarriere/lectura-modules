@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-correcteur"
+version = "1.0.0"
+description = "Correcteur orthographique et grammatical Lectura"
+requires-python = ">=3.10"
+license = "CC-BY-SA-4.0"
+dependencies = ["lectura-lexique>=1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lectura_correcteur = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

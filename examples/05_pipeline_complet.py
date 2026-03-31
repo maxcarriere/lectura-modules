@@ -3,7 +3,7 @@
 Cet exemple montre comment enchainer les modules Lectura pour un
 traitement complet du francais.
 
-pip install lectura-tokeniseur lectura-formules lectura-g2p-unifie[onnx] lectura-syllabeur
+pip install lectura-tokeniseur lectura-formules lectura-g2p[onnx] lectura-syllabeur
 """
 
 from pathlib import Path
@@ -63,7 +63,7 @@ try:
 
 except ImportError:
     print("  (onnxruntime non installe — etape sautee)")
-    print("  pip install lectura-g2p-unifie[onnx]")
+    print("  pip install lectura-g2p[onnx]")
 
 print()
 print("=" * 60)

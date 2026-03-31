@@ -9,8 +9,8 @@ via `pip install`.
 | Module | Description | Version | pip install |
 |--------|-------------|---------|-------------|
 | **[Tokeniseur](Tokeniseur/)** | Normalisation et tokenisation du francais, detection de formules | 2.0.0 | `pip install lectura-tokeniseur` |
-| **[G2P](G2P/)** | Grapheme-to-Phoneme unifie + POS + Morpho + Liaison | 1.0.0 | `pip install lectura-g2p-unifie` |
-| **[P2G](P2G/)** | Phoneme-to-Grapheme unifie + POS + Morpho (IPA vers orthographe) | 1.0.0 | `pip install lectura-p2g-unifie` |
+| **[G2P](G2P/)** | Grapheme-to-Phoneme unifie + POS + Morpho + Liaison | 1.0.0 | `pip install lectura-g2p` |
+| **[P2G](P2G/)** | Phoneme-to-Grapheme unifie + POS + Morpho (IPA vers orthographe) | 1.0.0 | `pip install lectura-p2g` |
 | **[Syllabeur](Syllabeur/)** | Analyse syllabique avec groupes de lecture | 2.0.0 | `pip install lectura-syllabeur` |
 | **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 2.0.0 | `pip install lectura-formules` |
 
@@ -28,10 +28,10 @@ via `pip install`.
 pip install lectura-tokeniseur
 
 # G2P avec backend ONNX (recommande)
-pip install lectura-g2p-unifie[onnx]
+pip install lectura-g2p[onnx]
 
 # Tous les modules
-pip install lectura-tokeniseur lectura-g2p-unifie[onnx] lectura-p2g-unifie[onnx] lectura-syllabeur lectura-formules
+pip install lectura-tokeniseur lectura-g2p[onnx] lectura-p2g[onnx] lectura-syllabeur lectura-formules
 ```
 
 ## Exemple

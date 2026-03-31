@@ -35,6 +35,6 @@ Première version publique du modèle unifié P2G+POS+Morpho.
 
 ### Package
 
-- Package Python `lectura-p2g-unifie` avec dépendances optionnelles
+- Package Python `lectura-p2g` avec dépendances optionnelles
 - CLI interactive (`demo_cli.py`)
 - Licence CC BY-SA 4.0

@@ -25,7 +25,7 @@ Première version publique du modèle unifié G2P+POS+Morpho+Liaison.
 
 ### Package
 
-- Package Python `lectura-g2p-unifie` avec dépendances optionnelles
+- Package Python `lectura-g2p` avec dépendances optionnelles
 - CLI interactive (`demo_cli.py`)
 - Exemples d'intégration
 - Licence CC BY-SA 4.0

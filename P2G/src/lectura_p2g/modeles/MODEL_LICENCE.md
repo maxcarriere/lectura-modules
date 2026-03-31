@@ -18,7 +18,7 @@ avec les modules Lectura NLP :
 ### Usage autorise
 
 Ces modeles sont fournis pour etre utilises **exclusivement** via les
-packages Lectura NLP (`lectura-g2p-unifie`, `lectura-p2g-unifie`),
+packages Lectura NLP (`lectura-g2p`, `lectura-p2g`),
 sous les termes de :
 
 - L'**AGPL-3.0** (usage open-source avec copyleft), ou

@@ -15,9 +15,9 @@ Trois backends d'inférence : ONNX Runtime, NumPy, ou pur Python (zéro dépenda
 ### Installation
 
 ```bash
-pip install lectura-p2g-unifie             # zéro dépendance (backend pur Python)
-pip install lectura-p2g-unifie[numpy]      # backend NumPy
-pip install lectura-p2g-unifie[onnx]       # backend ONNX Runtime (le plus rapide)
+pip install lectura-p2g             # zéro dépendance (backend pur Python)
+pip install lectura-p2g[numpy]      # backend NumPy
+pip install lectura-p2g[onnx]       # backend ONNX Runtime (le plus rapide)
 ```
 
 ### Utilisation minimale (ONNX — recommande)

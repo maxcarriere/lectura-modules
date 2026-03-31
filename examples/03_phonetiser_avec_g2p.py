@@ -1,6 +1,6 @@
 """Exemple 3 — Convertir du texte en phonetique IPA (G2P).
 
-pip install lectura-g2p-unifie[onnx]
+pip install lectura-g2p[onnx]
 
 Trois backends disponibles :
   - OnnxInferenceEngine  (~2ms/phrase, necessite onnxruntime)
@@ -33,7 +33,7 @@ try:
         print(f"  {mot['ortho']:15s} → /{mot['phonemes']}/  (POS: {mot['pos']})")
 
 except ImportError:
-    print("onnxruntime non installe. Essayez : pip install lectura-g2p-unifie[onnx]")
+    print("onnxruntime non installe. Essayez : pip install lectura-g2p[onnx]")
 
 # --- Backend Pure Python (zero dependance) ---
 print("\n--- Backend Pure Python ---")

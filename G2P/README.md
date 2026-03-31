@@ -16,9 +16,9 @@ Trois backends d'inférence : ONNX Runtime, NumPy, ou pur Python (zéro dépenda
 ### Installation
 
 ```bash
-pip install lectura-g2p-unifie             # zéro dépendance (backend pur Python)
-pip install lectura-g2p-unifie[numpy]      # backend NumPy
-pip install lectura-g2p-unifie[onnx]       # backend ONNX Runtime (le plus rapide)
+pip install lectura-g2p             # zéro dépendance (backend pur Python)
+pip install lectura-g2p[numpy]      # backend NumPy
+pip install lectura-g2p[onnx]       # backend ONNX Runtime (le plus rapide)
 ```
 
 ### Utilisation minimale (ONNX — recommande)
