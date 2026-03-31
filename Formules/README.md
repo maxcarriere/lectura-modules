@@ -40,7 +40,7 @@ mkdir -p sons_formules
 
 # Telecharger depuis le repo GitHub
 git clone --depth 1 --filter=blob:none --sparse \
-  https://github.com/maxcarriere/lectura-dev.git /tmp/lectura-sons
+  https://github.com/maxcarriere/lectura-modules.git /tmp/lectura-sons
 cd /tmp/lectura-sons
 git sparse-checkout set Formules/src/lectura_formules/data/sons
 cp -r Formules/src/lectura_formules/data/sons/fr/wav/* sons_formules/

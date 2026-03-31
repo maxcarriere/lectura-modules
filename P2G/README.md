@@ -44,7 +44,7 @@ le fichier de poids JSON (26 Mo) depuis GitHub :
 
 ```bash
 curl -L -o unifie_p2g_v2_weights.json \
-  https://github.com/maxcarriere/lectura-dev/raw/main/P2G/modeles_numpy/unifie_p2g_v2_weights.json
+  https://github.com/maxcarriere/lectura-modules/raw/main/P2G/modeles_numpy/unifie_p2g_v2_weights.json
 ```
 
 ```python

@@ -34,8 +34,8 @@ all = ["onnxruntime>=1.16", "numpy>=1.24"]
 
 [project.urls]
 Homepage = "https://lectura.fr/outils/p2g"
-Repository = "https://github.com/maxcarriere/lectura-dev/tree/main/P2G"
-Issues = "https://github.com/maxcarriere/lectura-dev/issues"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/P2G"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

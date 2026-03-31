@@ -27,8 +27,8 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://lectura.fr/outils/tokeniseur"
-Repository = "https://github.com/maxcarriere/lectura-dev/tree/main/Tokeniseur"
-Issues = "https://github.com/maxcarriere/lectura-dev/issues"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Tokeniseur"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

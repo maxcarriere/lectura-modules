@@ -27,8 +27,8 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://lectura.fr/outils/formules"
-Repository = "https://github.com/maxcarriere/lectura-dev/tree/main/Formules"
-Issues = "https://github.com/maxcarriere/lectura-dev/issues"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Formules"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

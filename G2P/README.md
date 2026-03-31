@@ -49,7 +49,7 @@ le fichier de poids JSON (18 Mo) depuis GitHub :
 ```bash
 # Telecharger les poids NumPy/Pure
 curl -L -o unifie_weights.json \
-  https://github.com/maxcarriere/lectura-dev/raw/main/G2P/modeles_numpy/unifie_weights.json
+  https://github.com/maxcarriere/lectura-modules/raw/main/G2P/modeles_numpy/unifie_weights.json
 ```
 
 ```python
