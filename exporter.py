@@ -137,10 +137,16 @@ def main():
         print(f"\n  Dry-run termine. Relancer sans --dry-run pour copier.\n")
         return
 
-    # Supprimer l'ancien output
+    # Nettoyer l'ancien output (en preservant .git/)
     if output_dir.exists():
-        print(f"\n  Suppression de {output_dir} ...")
-        shutil.rmtree(output_dir)
+        print(f"\n  Nettoyage de {output_dir} ...")
+        for item in output_dir.iterdir():
+            if item.name == ".git":
+                continue
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
 
     # Copier les fichiers
     print(f"  Copie de {total_count} fichiers ...")
