@@ -1,8 +1,8 @@
 # Lectura NLP — Modules de traitement du langage naturel pour le francais
 
 Briques logicielles autonomes pour le traitement du francais : tokenisation,
-phonetique, syllabes, formules. Chaque module est installable independamment
-via `pip install`.
+phonetique, syllabes, formules. Installez tout d'un coup avec `pip install lectura`
+ou chaque module independamment.
 
 ## Modules
 
@@ -24,14 +24,17 @@ via `pip install`.
 ## Installation rapide
 
 ```bash
+# Tous les modules d'un coup
+pip install lectura
+
+# Avec backends ONNX pour G2P/P2G (recommande)
+pip install lectura[onnx]
+
 # Un seul module
 pip install lectura-tokeniseur
 
-# G2P avec backend ONNX (recommande)
+# G2P avec backend ONNX
 pip install lectura-g2p[onnx]
-
-# Tous les modules
-pip install lectura-tokeniseur lectura-g2p[onnx] lectura-p2g[onnx] lectura-syllabeur lectura-formules
 ```
 
 ## Exemple
