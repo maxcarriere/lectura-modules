@@ -21,63 +21,44 @@ pip install lectura-g2p-unifie[numpy]      # backend NumPy
 pip install lectura-g2p-unifie[onnx]       # backend ONNX Runtime (le plus rapide)
 ```
 
-### Utilisation minimale
+### Utilisation minimale (ONNX — recommande)
 
 ```python
-from lectura_nlp.inference_numpy import NumpyInferenceEngine
+from lectura_nlp import get_model_path
+from lectura_nlp.inference_onnx import OnnxInferenceEngine
 from lectura_nlp.tokeniseur import tokeniser
-from lectura_nlp.posttraitement import charger_corrections, corriger_g2p
 
-# Charger le modèle
-engine = NumpyInferenceEngine("modeles/unifie_weights.json",
-                              "modeles/unifie_vocab.json")
+engine = OnnxInferenceEngine(get_model_path("unifie_int8.onnx"),
+                              get_model_path("unifie_vocab.json"))
 
-# Charger les corrections G2P (optionnel, +0.1% accuracy)
-charger_corrections("modeles/g2p_corrections_unifie.json")
-
-# Analyser une phrase
-tokens = tokeniser("Les enfants sont arrivés à la maison.")
+tokens = tokeniser("Les enfants sont arrives a la maison.")
 result = engine.analyser(tokens)
 
-# Résultats
 print(result["g2p"])      # ['le', 'ɑ̃fɑ̃', 'sɔ̃', 'aʁive', 'a', 'la', 'mɛzɔ̃']
 print(result["pos"])      # ['ART:def', 'NOM', 'AUX', 'VER', 'PRE', 'ART:def', 'NOM']
 print(result["liaison"])  # ['Lz', 'none', 'Lt', 'none', 'none', 'none', 'none']
 print(result["morpho"])   # {'Number': ['Plur', ...], 'Gender': [...], ...}
 ```
 
-## Contenu de l'archive
+## Poids NumPy / Pure Python (optionnel)
 
+Le package pip inclut uniquement le modele ONNX INT8 (1.8 Mo).
+Pour utiliser les backends **NumPy** ou **Pure Python**, il faut telecharger
+le fichier de poids JSON (18 Mo) depuis GitHub :
+
+```bash
+# Telecharger les poids NumPy/Pure
+curl -L -o unifie_weights.json \
+  https://github.com/maxcarriere/lectura-dev/raw/main/G2P/modeles_numpy/unifie_weights.json
 ```
-├── pyproject.toml              Packaging Python (pip install)
-├── README.md                   Ce fichier
-├── LICENCE.txt                 CC BY-SA 4.0
-├── ATTRIBUTION.md              Crédits (GLAFF, Lexique, UD-GSD)
-├── CHANGELOG.md                Historique des versions
-├── EVALUATION.md               Benchmarks détaillés
-├── demo_cli.py                 CLI interactive
-├── exemples/
-│   ├── exemple_basique.py      G2P + POS sur une phrase
-│   └── exemple_integration.py  Pipeline complet avec liaisons
-├── src/lectura_nlp/            Package Python
-│   ├── __init__.py             API publique
-│   ├── inference_onnx.py       Backend ONNX Runtime
-│   ├── inference_numpy.py      Backend NumPy
-│   ├── inference_pure.py       Backend pur Python
-│   ├── tokeniseur.py           Tokenisation française
-│   ├── posttraitement.py       Corrections G2P + liaison
-│   ├── modele.py               Définition PyTorch (entraînement)
-│   └── utils/                  Utilitaires (aligneur, IPA, labels)
-├── modeles/
-│   ├── unifie_int8.onnx        Modèle ONNX INT8 (1.8 Mo)
-│   ├── unifie_vocab.json       Vocabulaire (5 Ko)
-│   ├── unifie_weights.json     Poids JSON pour backends NumPy/Pure
-│   ├── g2p_corrections_unifie.json  Table de corrections
-│   └── metrics_test.json       Métriques d'évaluation
-├── entrainement/               Scripts d'entraînement
-├── tests/                      Tests unitaires et d'intégration
-├── evaluation/                 Rapports d'évaluation détaillés
-└── vitrine/                    Model cards GitHub/HuggingFace + Gradio
+
+```python
+from lectura_nlp.inference_numpy import NumpyInferenceEngine
+from lectura_nlp import get_model_path
+
+engine = NumpyInferenceEngine("unifie_weights.json",
+                              get_model_path("unifie_vocab.json"))
+result = engine.analyser(tokeniser("Bonjour le monde."))
 ```
 
 ## Backends d'inférence
@@ -157,4 +138,8 @@ Phrase → Char Embedding (64d) → Shared BiLSTM (2×160h → 320d)
 
 ## Licence
 
-CC BY-SA 4.0 — Voir [LICENCE.txt](LICENCE.txt) et [ATTRIBUTION.md](ATTRIBUTION.md).
+Double licence :
+- **AGPL-3.0** — usage libre (voir [LICENCE.txt](LICENCE.txt))
+- **Licence commerciale** — usage proprietaire (voir [LICENCE-COMMERCIALE.md](LICENCE-COMMERCIALE.md))
+
+Voir aussi [ATTRIBUTION.md](ATTRIBUTION.md) pour les credits.

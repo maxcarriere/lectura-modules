@@ -23,16 +23,27 @@ htmlcov/
 venv/
 env/
 
-# Donnees d'entrainement (privees — vendues separement)
-**/entrainement/donnees/
-**/entrainement/donnees_brutes/
+# Entrainement (scripts + donnees — prives)
+**/entrainement/
+
+# Vitrine / showcases (pas pour GitHub)
+**/vitrine/
+
+# Modeles numpy intermediaires (trop lourds pour le git local, copies par exporter.py)
+**/modeles_numpy/
 
 # Modeles intermediaires (ne garder que les versions finales)
 *.pt
 **/*.pt
 
+# Archive (modeles anciens, donnees entrainement, fichiers redondants)
+_archive_modules/
+
 # Dossier legacy (anciennes versions)
 _Outils-NLP/
+
+# Claude Code
+.claude/
 
 # OS
 .DS_Store

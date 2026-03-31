@@ -20,50 +20,40 @@ pip install lectura-p2g-unifie[numpy]      # backend NumPy
 pip install lectura-p2g-unifie[onnx]       # backend ONNX Runtime (le plus rapide)
 ```
 
-### Utilisation minimale
+### Utilisation minimale (ONNX — recommande)
 
 ```python
+from lectura_p2g import get_model_path
 from lectura_p2g.inference_onnx import OnnxInferenceEngine
 
-# Charger le modèle
-engine = OnnxInferenceEngine("modeles/unifie_p2g_v2_int8.onnx",
-                              "modeles/unifie_p2g_v2_vocab.json")
+engine = OnnxInferenceEngine(get_model_path("unifie_p2g_v2_int8.onnx"),
+                              get_model_path("unifie_p2g_v2_vocab.json"))
 
-# Analyser une phrase IPA
 result = engine.analyser(["le", "ɑ̃fɑ̃", "sɔ̃", "aʁive", "a", "la", "mɛzɔ̃"])
 
-# Résultats
-print(result["ortho"])   # ['les', 'enfants', 'sont', 'arrivés', 'à', 'la', 'maison']
+print(result["ortho"])   # ['les', 'enfants', 'sont', 'arrives', 'a', 'la', 'maison']
 print(result["pos"])     # ['ART:def', 'NOM', 'AUX', 'VER', 'PRE', 'ART:def', 'NOM']
 print(result["morpho"])  # {'Number': ['Plur', 'Plur', ...], 'Gender': [...], ...}
 ```
 
-## Contenu de l'archive
+## Poids NumPy / Pure Python (optionnel)
 
+Le package pip inclut uniquement le modele ONNX INT8 (2.6 Mo).
+Pour utiliser les backends **NumPy** ou **Pure Python**, il faut telecharger
+le fichier de poids JSON (26 Mo) depuis GitHub :
+
+```bash
+curl -L -o unifie_p2g_v2_weights.json \
+  https://github.com/maxcarriere/lectura-dev/raw/main/P2G/modeles_numpy/unifie_p2g_v2_weights.json
 ```
-├── pyproject.toml              Packaging Python (pip install)
-├── README.md                   Ce fichier
-├── LICENCE.txt                 CC BY-SA 4.0
-├── ATTRIBUTION.md              Crédits (GLAFF, Lexique, UD-GSD)
-├── CHANGELOG.md                Historique des versions
-├── EVALUATION.md               Benchmarks détaillés
-├── demo_cli.py                 CLI interactive
-├── src/lectura_p2g/            Package Python
-│   ├── __init__.py             API publique
-│   ├── inference_onnx.py       Backend ONNX Runtime
-│   ├── inference_numpy.py      Backend NumPy
-│   ├── inference_pure.py       Backend pur Python
-│   ├── tokeniseur.py           Tokenisation IPA
-│   ├── posttraitement.py       Post-traitement contextuel + morpho
-│   ├── modele.py               Définition PyTorch (entraînement)
-│   └── utils/                  Utilitaires (aligneur, IPA, labels P2G)
-├── modeles/
-│   ├── unifie_p2g_v2_int8.onnx    Modèle ONNX INT8 (2.6 Mo)
-│   ├── unifie_p2g_v2_vocab.json   Vocabulaire (20 Ko)
-│   ├── unifie_p2g_v2_weights.json Poids JSON pour backends NumPy/Pure
-│   └── metrics_p2g_test.json      Métriques d'évaluation
-├── entrainement/               Scripts d'entraînement
-└── tests/                      Tests unitaires
+
+```python
+from lectura_p2g.inference_numpy import NumpyInferenceEngine
+from lectura_p2g import get_model_path
+
+engine = NumpyInferenceEngine("unifie_p2g_v2_weights.json",
+                              get_model_path("unifie_p2g_v2_vocab.json"))
+result = engine.analyser(["bɔ̃ʒuʁ", "lə", "mɔ̃d"])
 ```
 
 ## Backends d'inférence
@@ -143,4 +133,8 @@ Phrase IPA → Char Embedding (64d) → Shared BiLSTM (2×160h → 320d)
 
 ## Licence
 
-CC BY-SA 4.0 — Voir [LICENCE.txt](LICENCE.txt) et [ATTRIBUTION.md](ATTRIBUTION.md).
+Double licence :
+- **AGPL-3.0** — usage libre (voir [LICENCE.txt](LICENCE.txt))
+- **Licence commerciale** — usage proprietaire (voir [LICENCE-COMMERCIALE.md](LICENCE-COMMERCIALE.md))
+
+Voir aussi [ATTRIBUTION.md](ATTRIBUTION.md) pour les credits.
