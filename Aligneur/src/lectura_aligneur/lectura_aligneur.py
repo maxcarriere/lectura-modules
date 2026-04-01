@@ -1,14 +1,15 @@
-"""Lectura Syllabeur Complet — Analyseur syllabique du français avec groupes de lecture.
+"""Lectura Aligneur-Syllabeur — Aligneur grapheme-phoneme et syllabeur phonologique du francais.
 
-Fichier unique, autonome, zéro dépendance Python.
-Phonémiseur pluggable avec backend eSpeak-NG par défaut.
+Fichier unique, autonome, zero dependance Python.
+Phonemiseur pluggable avec backend eSpeak-NG par defaut.
 
-Architecture en 2 étapes :
-    E1 : Groupes de lecture (élisions, liaisons, enchaînements)
-    E2 : Syllabation sur les groupes avec alignement formules
+Architecture en 3 couches :
+    Alignement : correspondance lettre-par-lettre orthographe <-> IPA (DFS)
+    E1 : Groupes de lecture (elisions, liaisons, enchainements)
+    E2 : Syllabation sur les groupes avec decomposition attaque/noyau/coda
 
 Usage rapide :
-    from lectura_syllabeur import LecturaSyllabeur
+    from lectura_aligneur import LecturaSyllabeur
 
     syl = LecturaSyllabeur()                        # eSpeak par défaut
     result = syl.analyze("chocolat")
@@ -16,7 +17,7 @@ Usage rapide :
         print(f"{s.ortho} -> /{s.phone}/")
 
 Usage complet (avec groupes de lecture) :
-    from lectura_syllabeur import LecturaSyllabeur, MotAnalyse, OptionsGroupes
+    from lectura_aligneur import LecturaSyllabeur, MotAnalyse, OptionsGroupes
 
     mots = [
         MotAnalyse(token=..., phone="lez", liaison="Lz"),

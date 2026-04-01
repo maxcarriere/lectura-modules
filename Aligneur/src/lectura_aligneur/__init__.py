@@ -1,14 +1,19 @@
-"""Lectura Syllabeur — Analyseur syllabique du français avec groupes de lecture.
+"""Lectura Aligneur-Syllabeur — Aligneur grapheme-phoneme et syllabeur phonologique du francais.
 
-Module autonome, zéro dépendance Python.
-Phonémiseur pluggable avec backend eSpeak-NG par défaut.
+Pivot central du pipeline Lectura. Realise l'alignement lettre-par-lettre
+entre orthographe et phonetique, construit les groupes de lecture (elisions,
+liaisons, enchainements), et decompose chaque syllabe en attaque/noyau/coda
+avec correspondance grapheme-phoneme.
+
+Module autonome, zero dependance Python.
+Phonemiseur pluggable avec backend eSpeak-NG par defaut.
 
 Copyright (C) 2025 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
 Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 """
 
-from lectura_syllabeur.lectura_syllabeur import (
+from lectura_aligneur.lectura_aligneur import (
     # Fonctions utilitaires phonologiques
     iter_phonemes,
     est_voyelle,
@@ -40,4 +45,4 @@ from lectura_syllabeur.lectura_syllabeur import (
     Span,
 )
 
-__version__ = "2.0.0"
+__version__ = "2.2.0"

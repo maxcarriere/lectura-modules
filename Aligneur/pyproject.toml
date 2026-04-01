@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lectura-syllabeur"
-version = "2.0.0"
-description = "Analyseur syllabique complet du français — groupes de lecture, élisions, liaisons, enchaînements"
+name = "lectura-aligneur"
+version = "2.2.0"
+description = "Aligneur graphème-phonème et syllabeur phonologique du français — alignement, groupes de lecture, élisions, liaisons, enchaînements, attaque/noyau/coda"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
-keywords = ["syllabeur", "french", "nlp", "syllabation", "phonétique"]
+keywords = ["syllabeur", "aligneur", "alignment", "grapheme-phoneme", "french", "nlp", "syllabation", "phonétique", "liaison", "lecture"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -27,11 +27,11 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
-Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Syllabeur"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Aligneur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_syllabeur = ["py.typed"]
+lectura_aligneur = ["py.typed"]

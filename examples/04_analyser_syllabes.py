@@ -1,9 +1,9 @@
 """Exemple 4 — Analyse syllabique et groupes de lecture.
 
-pip install lectura-syllabeur
+pip install lectura-aligneur
 """
 
-from lectura_syllabeur import (
+from lectura_aligneur import (
     LecturaSyllabeur,
     EspeakPhonemizer,
     OptionsGroupes,

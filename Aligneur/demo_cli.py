@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from lectura_syllabeur import (
+from lectura_aligneur import (
     LecturaSyllabeur, MotAnalyse, OptionsGroupes,
 )
 
