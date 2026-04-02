@@ -573,8 +573,8 @@ class TestTokenTypes:
         assert FormuleType.MATHS.value == "maths"
 
     def test_formule_type_all_members(self):
-        """L'enum FormuleType a exactement 9 membres."""
-        assert len(FormuleType) == 9
+        """L'enum FormuleType a exactement 15 membres."""
+        assert len(FormuleType) == 15
 
     # -- Span type alias --
 

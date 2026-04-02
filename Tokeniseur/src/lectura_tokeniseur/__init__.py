@@ -2,31 +2,29 @@
 
 Module autonome, zéro dépendance externe.
 Détecte les formules (nombres, sigles, dates, téléphones, numéros,
-ordinaux, fractions, notations scientifiques, expressions mathématiques).
+ordinaux, fractions, notations scientifiques, expressions mathématiques,
+heures, monnaies, pourcentages, intervalles, GPS, pages/chapitres).
 
 Copyright (C) 2025 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
 Licence commerciale disponible — voir LICENCE-COMMERCIALE.md
 """
 
-from lectura_tokeniseur.lectura_tokeniseur import (
-    # Enums
+from lectura_tokeniseur.models import (
+    Span,
     TokenType,
     FormuleType,
-    # Dataclasses
     Token,
     Mot,
     Ponctuation,
     Separateur,
     Formule,
-    ResultatTokenisation,
-    # Fonctions
-    normalise,
+)
+from lectura_tokeniseur.normalisation import normalise
+from lectura_tokeniseur.pipeline import (
     tokenise,
-    # Classe principale
+    ResultatTokenisation,
     LecturaTokeniseur,
-    # Type alias
-    Span,
 )
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
