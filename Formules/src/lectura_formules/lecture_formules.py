@@ -3,7 +3,7 @@
 Fournit 3 facettes :
   - Tokeniseur : identification du type + display_fr
   - G2P : transcription phonétique IPA
-  - Syllabeur/Aligneur : events décomposés avec groupement par composant
+  - Aligneur : events décomposés avec groupement par composant
 
 Zéro dépendance externe. Embarque les tables numReader comme dicts Python
 pour la lecture de nombres, sigles, dates, téléphones, ordinaux, fractions,
@@ -38,6 +38,8 @@ class EventFormuleLecture:
     sound_id: str = ""
     span_fr: Span = (0, 0)
     span_num: Span = (0, 0)
+    span_num_extra: Span = (0, 0)
+    span_rom: Span = (0, 0)
 
 
 @dataclass
@@ -65,7 +67,7 @@ class OptionsLecture:
     """Options pour la lecture des formules."""
     fraction_mode: str = "hybride"   # "hybride", "ordinal", "standard"
     decimal_method: str = "m2"       # "m1" (groupes de 3), "m2" (nombre entier)
-    heure_mot_minutes: bool = True   # dire "minutes" quand format h/colon
+    heure_mot_minutes: bool = False  # dire "minutes" quand format h/colon
     monnaie_dire_centimes: bool = True  # inclure les centimes
     romain_actif: bool = True        # calculer display_rom pour les nombres
 
@@ -259,6 +261,12 @@ _ORDINAUX: dict[str, tuple[str, str]] = {
     "million":    ("millionième",   "miljɔnjɛm"),
     "milliard":   ("milliardième",  "miljaʁdjɛm"),
     "billion":    ("billionième",   "biljɔnjɛm"),
+    # Formes composées et pluralisées
+    "et un":      ("et unième",   "e ynjɛm"),
+    "et une":     ("et unième",   "e ynjɛm"),
+    "et onze":    ("et onzième",  "e ɔ̃zjɛm"),
+    "vingts":     ("vingtième",   "vɛ̃tjɛm"),
+    "cents":      ("centième",    "sɑ̃tjɛm"),
     # Formes spéciales
     "_premier_m":  ("premier",  "pʁømje"),
     "_premier_f":  ("première", "pʁømjɛʁ"),
@@ -355,7 +363,7 @@ def _bloc_0_999(n: int, feminin: bool = False) -> list[tuple[str, str]]:
             parts.append(_u(str(dizaine)))
         elif unite == 1:
             # vingt-et-un, trente-et-un, etc.
-            parts.append(_u(str(dizaine)))
+            parts.append(_u("20t" if dizaine == 20 else str(dizaine)))
             if feminin:
                 parts.append(_u("et_1_fem"))
             else:
@@ -365,7 +373,7 @@ def _bloc_0_999(n: int, feminin: bool = False) -> list[tuple[str, str]]:
             parts.append(_u("60"))
             parts.append(_u("et_11"))
         else:
-            parts.append(_u(str(dizaine)))
+            parts.append(_u("20t" if dizaine == 20 else str(dizaine)))
             if unite == 1 and feminin:
                 parts.append(_u("1_fem"))
             else:
@@ -390,7 +398,7 @@ def _bloc_0_999(n: int, feminin: bool = False) -> list[tuple[str, str]]:
     elif reste <= 99:
         # 81–99 : quatre-vingt-un, quatre-vingt-dix, etc.
         parts.append(_u("4"))
-        parts.append(_u("20"))  # pas de s car suivi d'unité
+        parts.append(_u("20"))  # vingt sans liaison dans quatre-vingt-X
         unite99 = reste - 80
         if unite99 <= 16:
             if unite99 == 1 and feminin:
@@ -491,6 +499,513 @@ def _nombre_vers_francais(
 # Utilitaires de construction d'events
 # ══════════════════════════════════════════════════════════════════════════════
 
+
+def _compute_span_rom(
+    events: list[EventFormuleLecture],
+    n: int,
+    display_rom: str,
+) -> None:
+    """Calcule span_rom pour chaque event en alignant français ↔ romain.
+
+    Décompose le nombre en groupes positionnels (milliers, centaines,
+    dizaines+unités), calcule la portion romaine de chaque groupe,
+    puis assigne les spans correspondants.  Pour les dizaines+unités
+    simples (1-69), une décomposition plus fine est appliquée.
+    """
+    if not events or not display_rom or n <= 0:
+        return
+
+    try:
+        from lectura_formules.romains import int_to_roman
+    except ImportError:
+        return
+
+    # ── 1. Découpage positionnel du romain ──────────────────────────────
+    thousands = n // 1000
+    hundreds = (n % 1000) // 100
+    tens_units = n % 100
+
+    rom_spans: dict[str, Span] = {}
+    pos = 0
+
+    for group_val, group_name in [
+        (thousands * 1000, "th"),
+        (hundreds * 100, "h"),
+        (tens_units, "tu"),
+    ]:
+        if group_val > 0:
+            rom_str = int_to_roman(group_val)
+            rom_spans[group_name] = (pos, pos + len(rom_str))
+            pos += len(rom_str)
+
+    # ── 2. Répartir les events dans les groupes ─────────────────────────
+    # Chercher les mots-clés structurels pour identifier les frontières
+    mille_idx = -1
+    cent_idx = -1
+
+    for i, evt in enumerate(events):
+        if evt.ortho == "mille":
+            mille_idx = i
+            break
+
+    start = mille_idx + 1 if mille_idx >= 0 else 0
+    for i in range(start, len(events)):
+        if events[i].ortho in ("cent", "cents"):
+            cent_idx = i
+            break
+
+    for i, evt in enumerate(events):
+        if mille_idx >= 0 and i <= mille_idx:
+            group = "th"
+        elif cent_idx >= 0 and i <= cent_idx:
+            group = "h"
+        else:
+            group = "tu"
+        if group in rom_spans:
+            evt.span_rom = rom_spans[group]
+
+    # ── 3. Affinage pour les dizaines+unités simples (1-69) ─────────────
+    if tens_units == 0 or "tu" not in rom_spans:
+        return
+
+    tu_span = rom_spans["tu"]
+    tu_events = [evt for evt in events if evt.span_rom == tu_span]
+
+    if len(tu_events) <= 1:
+        return
+
+    # Table inverse : ortho → valeur faciale
+    _val_by_ortho: dict[str, int] = {}
+    for _k, (t, _p, v) in _UNITES.items():
+        _val_by_ortho[t] = v
+
+    tu_base = tu_span[0]
+
+    if tens_units <= 69:
+        # Pour 1-69, la valeur cumulée produit un préfixe romain cohérent.
+        cumul = 0
+        prev_len = 0
+        for evt in tu_events:
+            face_val = _val_by_ortho.get(evt.ortho, 0)
+            cumul += face_val
+            if cumul <= 0:
+                continue
+            try:
+                rom_cumul = int_to_roman(cumul)
+                cur_len = len(rom_cumul)
+            except ValueError:
+                cur_len = prev_len
+            evt.span_rom = (tu_base + prev_len, tu_base + cur_len)
+            prev_len = cur_len
+        return
+
+    # ── 70-99 : décomposition préfixe/suffixe ────────────────────────
+    # 70/80/90 atomiques (tous les events ont déjà le même tu_span)
+    if tens_units % 10 == 0:
+        return
+
+    # Dernier event = groupe unités, le reste = groupe dizaines
+    last_evt = tu_events[-1]
+    face_val = _val_by_ortho.get(last_evt.ortho, 0)
+    tu_rom = display_rom[tu_span[0]:tu_span[1]]
+    split_len = -1
+
+    # Essai 1 : n − valeur_faciale_dernier_event (fonctionne pour 70-89)
+    tens_try = tens_units - face_val
+    if 0 < tens_try < tens_units:
+        try:
+            tens_rom = int_to_roman(tens_try)
+            if tu_rom.startswith(tens_rom):
+                split_len = len(tens_rom)
+        except ValueError:
+            pass
+
+    # Essai 2 : arrondi à la dizaine inférieure (fallback pour 91-99)
+    if split_len < 0:
+        tens_try2 = (tens_units // 10) * 10
+        if tens_try2 > 0:
+            try:
+                tens_rom = int_to_roman(tens_try2)
+                if tu_rom.startswith(tens_rom):
+                    split_len = len(tens_rom)
+            except ValueError:
+                pass
+
+    if split_len < 0:
+        return  # pas de découpage trouvé, laisser atomique
+
+    tens_span_rom = (tu_span[0], tu_span[0] + split_len)
+    units_span_rom = (tu_span[0] + split_len, tu_span[1])
+    for evt in tu_events[:-1]:
+        evt.span_rom = tens_span_rom
+    tu_events[-1].span_rom = units_span_rom
+
+
+def _format_display_num(n_str: str) -> str:
+    """Formate un nombre avec des apostrophes (séparateur de milliers) si >= 5 chiffres."""
+    sign = ""
+    digits = n_str
+    if digits and digits[0] in "-−":
+        sign = digits[0]
+        digits = digits[1:]
+    if len(digits) < 5 or not digits.isdigit():
+        return n_str
+    parts: list[str] = []
+    while digits:
+        if len(digits) > 3:
+            parts.insert(0, digits[-3:])
+            digits = digits[:-3]
+        else:
+            parts.insert(0, digits)
+            digits = ""
+    return sign + "'".join(parts)
+
+
+def _adjust_spans_for_apostrophes(
+    events: list[EventFormuleLecture],
+    plain: str,
+    formatted: str,
+) -> None:
+    """Ajuste span_num après formatage avec apostrophes.
+
+    Les mots de magnitude (mille, million, milliard) reçoivent le span
+    de l'apostrophe. Les autres events voient leur span converti
+    des positions chiffres vers les positions caractères formatées.
+    """
+    # Mapping chiffre → position caractère dans la chaîne formatée
+    d2c: list[int] = []
+    apos_chars: list[int] = []
+    for i, c in enumerate(formatted):
+        if c == "'":
+            apos_chars.append(i)
+        else:
+            d2c.append(i)
+
+    if not apos_chars:
+        return
+
+    # Mapping mot magnitude → apostrophe (depuis la droite)
+    mag_to_apos: dict[str, int] = {}
+    if len(apos_chars) >= 1:
+        mag_to_apos["mille"] = apos_chars[-1]
+    if len(apos_chars) >= 2:
+        mag_to_apos["million"] = mag_to_apos["millions"] = apos_chars[-2]
+    if len(apos_chars) >= 3:
+        mag_to_apos["milliard"] = mag_to_apos["milliards"] = apos_chars[-3]
+
+    for evt in events:
+        s, e = evt.span_num
+        if s >= e:
+            continue
+
+        ortho_lower = evt.ortho.lower()
+        if ortho_lower in mag_to_apos:
+            apos = mag_to_apos[ortho_lower]
+            evt.span_num = (apos, apos + 1)
+        else:
+            if 0 <= s < len(d2c) and 0 < e <= len(d2c):
+                evt.span_num = (d2c[s], d2c[e - 1] + 1)
+
+
+def _compute_span_num(
+    events: list[EventFormuleLecture],
+    display_num: str,
+) -> None:
+    """Calcule span_num pour chaque event d'un nombre.
+
+    Décompose le nombre en groupes de magnitude (milliards, millions,
+    milliers, unités), puis en sous-groupes (centaines, dizaines+unités).
+    Gère aussi les décimaux (virgule) et le signe négatif.
+    """
+    if not events or not display_num:
+        return
+
+    # ── Décimaux : séparer à "virgule" ──────────────────────────────────
+    dot_pos = -1
+    for c in (".", ","):
+        if c in display_num:
+            dot_pos = display_num.index(c)
+            break
+
+    virgule_idx = -1
+    for i, evt in enumerate(events):
+        if evt.ortho == "virgule":
+            virgule_idx = i
+            break
+
+    if virgule_idx >= 0 and dot_pos >= 0:
+        # Partie entière
+        int_events = events[:virgule_idx]
+        int_str = display_num[:dot_pos]
+        _assign_span_num_integer(int_events, int_str, offset=0)
+        # Virgule
+        events[virgule_idx].span_num = (dot_pos, dot_pos + 1)
+        # Partie décimale
+        dec_events = events[virgule_idx + 1:]
+        dec_str = display_num[dot_pos + 1:]
+        if dec_events:
+            _assign_span_num_decimal(dec_events, dec_str, offset=dot_pos + 1)
+        return
+
+    # ── Entier pur ──────────────────────────────────────────────────────
+    _assign_span_num_integer(events, display_num, offset=0)
+
+
+def _assign_span_num_decimal(
+    events: list[EventFormuleLecture],
+    dec_str: str,
+    offset: int,
+) -> None:
+    """Assigne span_num pour la partie décimale (après la virgule)."""
+    if not events:
+        return
+    if len(events) == 1:
+        events[0].span_num = (offset, offset + len(dec_str))
+        return
+    # Plusieurs events = lecture chiffre par chiffre
+    pos = 0
+    for i, evt in enumerate(events):
+        if pos < len(dec_str):
+            end = pos + 1 if i < len(events) - 1 else len(dec_str)
+            evt.span_num = (offset + pos, offset + end)
+            pos = end
+
+
+def _assign_span_num_integer(
+    events: list[EventFormuleLecture],
+    num_str: str,
+    offset: int,
+) -> None:
+    """Assigne span_num pour un nombre entier (sans virgule)."""
+    if not events or not num_str:
+        return
+
+    # Ignorer le signe "moins"
+    start_evt = 0
+    if events and events[0].ortho == "moins":
+        start_evt = 1
+    evts = events[start_evt:]
+
+    if not evts:
+        return
+
+    # Un seul event ou un seul chiffre → tout surligner
+    if len(evts) == 1 or len(num_str) <= 1:
+        for e in evts:
+            e.span_num = (offset, offset + len(num_str))
+        return
+
+    # Valeur absolue
+    try:
+        abs_n = abs(int(num_str))
+    except ValueError:
+        for e in evts:
+            e.span_num = (offset, offset + len(num_str))
+        return
+
+    # ── Groupes de magnitude (depuis la droite) ────────────────────────
+    digits = str(abs_n)
+    total = len(digits)
+    mag_groups = []
+    r = total
+    # units (0-999)
+    u_len = min(3, r)
+    mag_groups.insert(0, ("units", r - u_len, r))
+    r -= u_len
+    # thousands
+    if r > 0:
+        t_len = min(3, r)
+        mag_groups.insert(0, ("th", r - t_len, r))
+        r -= t_len
+    # millions
+    if r > 0:
+        m_len = min(3, r)
+        mag_groups.insert(0, ("mil", r - m_len, r))
+        r -= m_len
+    # milliards
+    if r > 0:
+        mag_groups.insert(0, ("mrd", 0, r))
+
+    # Convertir en positions absolues dans display_num
+    for i in range(len(mag_groups)):
+        name, s, e = mag_groups[i]
+        mag_groups[i] = (name, offset + s, offset + e)
+
+    mag_spans = {name: (s, e) for name, s, e in mag_groups}
+
+    # Étendre les groupes quand les groupes inférieurs sont tous à zéro
+    # (ex: 2000 → th=(0,1) étendu à (0,4) car units=0)
+    extended_groups: set[str] = set()
+    mag_order = [n for n, _, _ in mag_groups]
+    full_end = offset + len(num_str)
+    for i, gn in enumerate(mag_order):
+        # Valeur des groupes suivants (plus bas)
+        remainder = abs_n
+        if gn == "mrd":
+            remainder = abs_n % 1_000_000_000
+        elif gn == "mil":
+            remainder = abs_n % 1_000_000
+        elif gn == "th":
+            remainder = abs_n % 1_000
+        else:
+            continue  # units = dernier groupe, rien à étendre
+        if remainder == 0 and total < 5:
+            mag_spans[gn] = (mag_spans[gn][0], full_end)
+            extended_groups.add(gn)
+
+    # ── Répartir les events dans les groupes de magnitude ───────────────
+    # Chercher les mots-clés frontières : milliard(s), million(s), mille
+    boundary_indices: dict[str, int] = {}
+    for i, evt in enumerate(evts):
+        o = evt.ortho.lower().rstrip("s")
+        if o == "milliard" and "mrd" not in boundary_indices:
+            boundary_indices["mrd"] = i
+        elif o == "million" and "mil" not in boundary_indices:
+            boundary_indices["mil"] = i
+        elif o == "mille" and "th" not in boundary_indices:
+            boundary_indices["th"] = i
+
+    # Assigner chaque event à un groupe de magnitude
+    evt_groups: dict[str, list[int]] = {}
+    for i, evt in enumerate(evts):
+        if "mrd" in boundary_indices and i <= boundary_indices["mrd"]:
+            g = "mrd"
+        elif "mil" in boundary_indices and i <= boundary_indices["mil"]:
+            g = "mil"
+        elif "th" in boundary_indices and i <= boundary_indices["th"]:
+            g = "th"
+        else:
+            g = "units"
+        evt_groups.setdefault(g, []).append(i)
+
+    # ── Dans chaque groupe, décomposer centaines / dizaines+unités ──────
+    _MAGNITUDE_WORDS = {"mille", "million", "millions", "milliard", "milliards"}
+
+    for gname, indices in evt_groups.items():
+        if gname not in mag_spans:
+            continue
+        gspan = mag_spans[gname]
+        g_len = gspan[1] - gspan[0]
+
+        # Séparer les mots-clés de magnitude (mille/million/milliard)
+        # qui gardent toujours le span du groupe entier
+        mag_indices = [idx for idx in indices if evts[idx].ortho.lower() in _MAGNITUDE_WORDS]
+        val_indices = [idx for idx in indices if idx not in mag_indices]
+
+        for idx in mag_indices:
+            evts[idx].span_num = gspan
+
+        # Valeur du groupe (0-999)
+        if gname == "mrd":
+            gval = abs_n // 1_000_000_000
+        elif gname == "mil":
+            gval = (abs_n % 1_000_000_000) // 1_000_000
+        elif gname == "th":
+            gval = (abs_n % 1_000_000) // 1_000
+        else:
+            gval = abs_n % 1_000
+
+        # Span effectif : sauter les zéros internes non prononcés
+        # (ex: "025" → "25" pour 1025, "005" → "5" pour 1005)
+        # Ne pas toucher les groupes étendus (ex: "2000" pour 2000)
+        val_span = gspan
+        is_extended = gname in extended_groups
+        if not is_extended and gval > 0:
+            sig = len(str(gval))
+            if sig < g_len:
+                val_span = (gspan[1] - sig, gspan[1])
+        val_len = val_span[1] - val_span[0]
+
+        if val_len <= 1 or len(val_indices) <= 1:
+            # Groupe d'un seul chiffre ou un seul event → atomique
+            for idx in val_indices:
+                evts[idx].span_num = val_span
+            continue
+
+        # Chercher "cent(s)" dans ce groupe
+        cent_idx_local = -1
+        for idx in val_indices:
+            if evts[idx].ortho.lower().rstrip("s") == "cent":
+                cent_idx_local = idx
+                break
+
+        if cent_idx_local < 0:
+            # Pas de "cent" → tout est dizaines+unités
+            _assign_tens_units(evts, val_indices, val_span, abs_n, gname)
+            continue
+
+        # Séparer centaines / dizaines+unités
+        h_indices = [idx for idx in val_indices if idx <= cent_idx_local]
+        tu_indices = [idx for idx in val_indices if idx > cent_idx_local]
+
+        if not tu_indices:
+            # Rien après cent (ex: 200, 100) → atomique
+            for idx in h_indices:
+                evts[idx].span_num = val_span
+        else:
+            # Centaines = premier chiffre, dizaines+unités = reste
+            h_span = (val_span[0], val_span[0] + 1)
+            tu_span_local = (val_span[0] + 1, val_span[1])
+            # Sauter le zéro de dizaine dans tu_span (ex: "05" → "5")
+            tu_val = gval % 100
+            if tu_val > 0:
+                tu_sig = len(str(tu_val))
+                tu_len = tu_span_local[1] - tu_span_local[0]
+                if tu_sig < tu_len:
+                    tu_span_local = (tu_span_local[1] - tu_sig, tu_span_local[1])
+            for idx in h_indices:
+                evts[idx].span_num = h_span
+            _assign_tens_units(evts, tu_indices, tu_span_local, abs_n, gname)
+
+
+def _assign_tens_units(
+    evts: list[EventFormuleLecture],
+    indices: list[int],
+    span: Span,
+    abs_n: int,
+    gname: str,
+) -> None:
+    """Assigne span_num pour un sous-groupe dizaines+unités (0-99).
+
+    Règles :
+    - Chiffre d'unité = 0 (10, 20, …, 90) → atomique
+    - Sinon : dernier event = chiffre d'unité, le reste = chiffre de dizaine
+    """
+    s_len = span[1] - span[0]
+    if s_len <= 1 or len(indices) <= 1:
+        for idx in indices:
+            evts[idx].span_num = span
+        return
+
+    # Déterminer la valeur du sous-groupe
+    if gname == "mrd":
+        tu_val = abs_n // 1_000_000_000
+    elif gname == "mil":
+        tu_val = (abs_n % 1_000_000_000) // 1_000_000
+    elif gname == "th":
+        tu_val = (abs_n % 1_000_000) // 1_000
+    else:
+        tu_val = abs_n % 1_000
+    tu_val = tu_val % 100  # juste les dizaines+unités
+
+    # Chiffre d'unité = 0 → atomique (70, 80, 90, etc.)
+    if tu_val % 10 == 0:
+        for idx in indices:
+            evts[idx].span_num = span
+        return
+
+    # 2 chiffres : dernier event = unité, le reste = dizaine
+    if s_len == 2:
+        tens_span = (span[0], span[0] + 1)
+        units_span = (span[0] + 1, span[1])
+        for idx in indices[:-1]:
+            evts[idx].span_num = tens_span
+        evts[indices[-1]].span_num = units_span
+    else:
+        for idx in indices:
+            evts[idx].span_num = span
+
+
 def _make_result(
     events: list[EventFormuleLecture],
     display_num: str = "",
@@ -505,6 +1020,25 @@ def _make_result(
     for evt in events:
         evt.span_fr = (offset, offset + len(evt.ortho))
         offset += len(evt.ortho) + 1  # +1 pour le "-"
+    # Calculer span_num à partir de span_source (si pas déjà calculé)
+    # span_source contient les positions dans le texte source ;
+    # display_num ≈ texte source → on soustrait l'offset de base.
+    # _compute_span_num() peut avoir déjà assigné les spans → ne pas écraser.
+    if display_num and events:
+        already_computed = any(
+            e.span_num and e.span_num != (0, 0) for e in events
+        )
+        if not already_computed:
+            valid = [e.span_source for e in events
+                     if e.span_source and e.span_source[0] < e.span_source[1]]
+            if valid:
+                base = min(s[0] for s in valid)
+                num_len = len(display_num)
+                for evt in events:
+                    ss = evt.span_source
+                    if ss and ss[0] < ss[1]:
+                        evt.span_num = (max(0, ss[0] - base),
+                                        min(ss[1] - base, num_len))
     return LectureFormuleResult(
         display_fr=display, phone=phone, events=events,
         display_num=display_num, display_rom=display_rom, valeur=valeur,
@@ -581,33 +1115,59 @@ def lire_nombre(
     if "," in text_clean or "." in text_clean:
         return _lire_decimal(text_clean, span, options)
 
-    # Nombre négatif ?
+    # Signe ?
     negatif = text_clean.startswith("-") or text_clean.startswith("−")
+    positif = not negatif and text_clean.startswith("+")
     if negatif:
         text_clean = text_clean.lstrip("-−")
+    elif positif:
+        text_clean = text_clean.lstrip("+")
 
     try:
         n = int(text_clean)
     except ValueError:
-        # Fallback : épeler les caractères
         return _epeler_texte(text, span)
 
-    if negatif:
-        n = -n
+    val = -n if negatif else n
 
-    parts = _nombre_vers_francais(n, feminin=feminin)
+    # Lecture en français (valeur absolue, signe ajouté manuellement)
+    parts: list[tuple[str, str]] = []
+    if negatif:
+        parts.append(_SYMBOLES["-"])
+    elif positif:
+        parts.append(_SYMBOLES["+"])
+    parts.extend(_nombre_vers_francais(n, feminin=feminin))
     events = _events_from_parts(parts, span, text, composant=0)
 
-    # Chiffres romains
+    # Chiffres romains : uniquement pour les entiers positifs sans signe
     display_rom = ""
-    if options.romain_actif and isinstance(n, int) and 1 <= abs(n) <= 39999:
+    if options.romain_actif and not negatif and not positif and 1 <= n <= 39999:
         try:
             from lectura_formules.romains import int_to_roman
-            display_rom = int_to_roman(abs(n))
+            display_rom = int_to_roman(n)
+            _compute_span_rom(events, n, display_rom)
         except (ImportError, ValueError):
             pass
 
-    return _make_result(events, display_num=text_clean, display_rom=display_rom, valeur=n)
+    _compute_span_num(events, text_clean)
+    formatted = _format_display_num(text_clean)
+    if formatted != text_clean:
+        _adjust_spans_for_apostrophes(events, text_clean, formatted)
+
+    # Ajouter le signe au display_num et ajuster les spans
+    if negatif or positif:
+        sign_char = "-" if negatif else "+"
+        formatted = sign_char + formatted
+        for evt in events:
+            if evt.ortho in ("moins", "plus"):
+                evt.span_num = (0, 1)
+                break
+        for evt in events:
+            if evt.ortho not in ("moins", "plus") and evt.span_num and evt.span_num != (0, 0):
+                s, e = evt.span_num
+                evt.span_num = (s + 1, e + 1)
+
+    return _make_result(events, display_num=formatted, display_rom=display_rom, valeur=val)
 
 
 def _lire_decimal(
@@ -644,6 +1204,7 @@ def _lire_decimal(
         valeur = text_clean
 
     events = _events_from_parts(parts, span, text_clean, composant=0)
+    _compute_span_num(events, text_clean)
     return _make_result(events, display_num=text_clean, valeur=valeur)
 
 
@@ -782,7 +1343,7 @@ def lire_sigle(
             # Ignorer les caractères non alpha-numériques (points dans W.W.F.)
             i += 1
 
-    return _make_result(events)
+    return _make_result(events, display_num=text)
 
 
 # -- DATE ----------------------------------------------------------------------
@@ -853,7 +1414,20 @@ def lire_date(
     events.extend(_events_from_parts(parts_annee, (annee_start, annee_end), annee_str,
                                      composant=2))
 
-    return _make_result(events)
+    # -- span_num par composant (positions dans display_num) --
+    display = text.strip()
+    j_s, j_e = m.start(1), m.end(1)
+    mo_s, mo_e = m.start(2), m.end(2)
+    a_s, a_e = m.start(3), m.end(3)
+    for e in events:
+        if e.composant == 0:
+            e.span_num = (j_s, j_e)
+        elif e.composant == 1:
+            e.span_num = (mo_s, mo_e)
+        elif e.composant == 2:
+            e.span_num = (a_s, a_e)
+
+    return _make_result(events, display_num=display)
 
 
 # -- TELEPHONE -----------------------------------------------------------------
@@ -867,70 +1441,74 @@ def lire_telephone(
     children: list[object] | None = None,
     **_kw: object,
 ) -> LectureFormuleResult:
-    """Lit un numéro de téléphone par paires de chiffres.
+    """Lit un numéro de téléphone par groupes de chiffres.
 
-    Composants : 1 composant par paire de chiffres.
-    Ex: "06 12 34 56 78" → 5 composants.
+    Respecte le groupement original (espaces, points, tirets).
+    Composants : 1 composant par groupe de chiffres.
     """
     events: list[EventFormuleLecture] = []
     src_start = span[0]
-
-    # Extraire les chiffres avec leurs positions dans le texte source
-    digits: list[tuple[str, int]] = []
-    for i, ch in enumerate(text):
-        if ch.isdigit():
-            digits.append((ch, src_start + i))
-
-    # Lire par paires
-    i = 0
     comp_idx = 0
-    while i < len(digits):
-        if i + 1 < len(digits):
-            d0, pos0 = digits[i]
-            d1, pos1 = digits[i + 1]
-            pair_start = pos0
-            pair_end = pos1 + 1
+    i = 0
 
-            if d0 == "0":
-                # Paire avec zéro initial : lire chiffre par chiffre
-                t0, p0 = _u(d0)
+    # Préfixe "+"
+    stripped = text.lstrip()
+    if stripped.startswith("+"):
+        plus_pos = text.index("+")
+        events.append(EventFormuleLecture(
+            ortho="plus", phone="plys",
+            span_source=(src_start + plus_pos, src_start + plus_pos + 1),
+            composant=comp_idx,
+        ))
+        events[-1].span_num = (plus_pos, plus_pos + 1)
+        i = plus_pos + 1
+
+    # Parcourir le texte par groupes de chiffres contigus
+    while i < len(text):
+        ch = text[i]
+        if ch.isdigit():
+            # Extraire le groupe de chiffres contigus
+            j = i
+            while j < len(text) and text[j].isdigit():
+                j += 1
+            group = text[i:j]
+            grp_start = i
+            grp_end = j
+
+            # Lire les zéros initiaux individuellement
+            k = 0
+            while k < len(group) - 1 and group[k] == "0":
+                d_pos = grp_start + k
+                t0, p0 = _u("0")
                 events.append(EventFormuleLecture(
                     ortho=t0, phone=p0,
-                    span_source=(pos0, pos0 + 1),
+                    span_source=(src_start + d_pos, src_start + d_pos + 1),
                     composant=comp_idx,
                 ))
-                t1, p1 = _u(d1)
-                events.append(EventFormuleLecture(
-                    ortho=t1, phone=p1,
-                    span_source=(pos1, pos1 + 1),
-                    composant=comp_idx,
-                ))
-            else:
-                # Paire normale : lire comme nombre
-                n = int(d0 + d1)
+                events[-1].span_num = (d_pos, d_pos + 1)
+                k += 1
+
+            # Lire le reste comme un nombre
+            remainder = group[k:]
+            if remainder:
+                rem_start = grp_start + k
+                rem_end = grp_end
+                n = int(remainder)
                 parts = _nombre_vers_francais(n)
                 for p_ortho, p_phone in parts:
                     events.append(EventFormuleLecture(
                         ortho=p_ortho, phone=p_phone,
-                        span_source=(pair_start, pair_end),
+                        span_source=(src_start + rem_start, src_start + rem_end),
                         composant=comp_idx,
                     ))
+                    events[-1].span_num = (rem_start, rem_end)
+
             comp_idx += 1
-            i += 2
+            i = j
         else:
-            # Chiffre isolé en fin
-            d = digits[i][0]
-            d_pos = digits[i][1]
-            t, p = _u(d)
-            events.append(EventFormuleLecture(
-                ortho=t, phone=p,
-                span_source=(d_pos, d_pos + 1),
-                composant=comp_idx,
-            ))
-            comp_idx += 1
             i += 1
 
-    return _make_result(events)
+    return _make_result(events, display_num=text)
 
 
 # -- ORDINAL ------------------------------------------------------------------
@@ -1018,7 +1596,7 @@ def lire_ordinal(
                 composant=1,
             ))
 
-    return _make_result(events)
+    return _make_result(events, display_num=text.strip())
 
 
 # -- FRACTION ------------------------------------------------------------------
@@ -1075,7 +1653,7 @@ def lire_fraction(
         events = _fraction_ordinal(num, den, num_start, num_end, den_start, den_end,
                                    m.group(1), m.group(2))
 
-    return _make_result(events)
+    return _make_result(events, display_num=text.strip())
 
 
 def _fraction_hybride(
@@ -1252,7 +1830,7 @@ def lire_scientifique(
             composant=2,
         ))
 
-    return _make_result(events)
+    return _make_result(events, display_num=text.strip())
 
 
 # -- MATHS ---------------------------------------------------------------------
@@ -1280,6 +1858,8 @@ def lire_maths(
     src = span[0]
     i = 0
     comp_idx = 0
+
+    func_paren_stack: list[int] = []  # pile des indices d'événements "de"
 
     while i < len(text):
         ch = text[i]
@@ -1379,7 +1959,20 @@ def lire_maths(
 
         # Opérateurs maths
         if ch in _MATHS_OPS:
-            if ch in _SYMBOLES:
+            if ch == "√":
+                # Racine carrée → 2 événements : "racine carrée" + "de"
+                events.append(EventFormuleLecture(
+                    ortho="racine carrée", phone="ʁasin kaʁe",
+                    span_source=(pos, pos + 1),
+                    composant=comp_idx,
+                ))
+                events.append(EventFormuleLecture(
+                    ortho="de", phone="də",
+                    span_source=(pos, pos + 1),
+                    composant=comp_idx,
+                ))
+                comp_idx += 1
+            elif ch in _SYMBOLES:
                 t_sym, p_sym = _SYMBOLES[ch]
                 events.append(EventFormuleLecture(
                     ortho=t_sym, phone=p_sym,
@@ -1392,7 +1985,20 @@ def lire_maths(
 
         # Parenthèses/crochets
         if ch in _MATHS_BRACKETS:
-            if ch in _SYMBOLES:
+            if ch == "(" and i > 0 and text[i - 1].isalpha():
+                # Notation fonctionnelle f(x) → "de"
+                events.append(EventFormuleLecture(
+                    ortho="de", phone="də",
+                    span_source=(pos, pos + 1),
+                    composant=comp_idx,
+                ))
+                func_paren_stack.append(len(events) - 1)
+                comp_idx += 1
+            elif ch == ")" and func_paren_stack:
+                # Fermeture de parenthèse fonctionnelle → span_num_extra pour ")"
+                de_idx = func_paren_stack.pop()
+                events[de_idx].span_num_extra = (i, i + 1)
+            elif ch in _SYMBOLES:
                 t_sym, p_sym = _SYMBOLES[ch]
                 events.append(EventFormuleLecture(
                     ortho=t_sym, phone=p_sym,
@@ -1445,7 +2051,7 @@ def lire_maths(
         # Caractère inconnu → ignorer
         i += 1
 
-    return _make_result(events)
+    return _make_result(events, display_num=text)
 
 
 # -- NUMERO --------------------------------------------------------------------
@@ -1467,9 +2073,20 @@ def lire_numero(
     events: list[EventFormuleLecture] = []
     src = span[0]
     comp_idx = 0
+    i = 0
+
+    # Préfixe "N°" ou "n°"
+    if len(text) >= 2 and text[0] in ("N", "n") and text[1] == "°":
+        events.append(EventFormuleLecture(
+            ortho="numéro", phone="nymeʁo",
+            span_source=(src, src + 2),
+            composant=comp_idx,
+        ))
+        events[-1].span_num = (0, 2)
+        comp_idx += 1
+        i = 2
 
     # On parcourt le texte en segments alpha/digit/séparateur
-    i = 0
     while i < len(text):
         ch = text[i]
         pos = src + i
@@ -1485,8 +2102,11 @@ def lire_numero(
             group = text[i:j]
             n = int(group)
             parts = _nombre_vers_francais(n)
-            events.extend(_events_from_parts(parts, (pos, src + j), group,
-                                             composant=comp_idx))
+            evts = _events_from_parts(parts, (pos, src + j), group,
+                                      composant=comp_idx)
+            for evt in evts:
+                evt.span_num = (i, j)
+            events.extend(evts)
             comp_idx += 1
             i = j
         elif ch.isalpha():
@@ -1502,12 +2122,13 @@ def lire_numero(
                     span_source=(src + k, src + k + 1),
                     composant=comp_idx,
                 ))
+                events[-1].span_num = (k, k + 1)
             comp_idx += 1
             i = j
         else:
             i += 1
 
-    return _make_result(events)
+    return _make_result(events, display_num=text)
 
 
 # -- FALLBACK ------------------------------------------------------------------
@@ -1534,7 +2155,7 @@ def _epeler_texte(text: str, span: Span) -> LectureFormuleResult:
             ortho=t, phone=p,
             span_source=(pos, pos + 1),
         ))
-    return _make_result(events)
+    return _make_result(events, display_num=text)
 
 
 # -- HEURE ---------------------------------------------------------------------
@@ -1672,6 +2293,29 @@ def lire_heure(
         ))
 
     display_num = text.strip()
+
+    # -- span_num par composant (positions dans display_num) --
+    _H_LABELS = {"heure", "heures", "minute", "minutes", "seconde", "secondes"}
+    digit_groups = list(re.finditer(r'\d+', display_num))
+    for e in events:
+        comp = e.composant
+        if comp < len(digit_groups):
+            g = digit_groups[comp]
+            if e.ortho in _H_LABELS:
+                # Mot temporel → surligne le séparateur (h, min, s, :)
+                sep_start = g.end()
+                if comp + 1 < len(digit_groups):
+                    sep_end = digit_groups[comp + 1].start()
+                else:
+                    sep_end = len(display_num)
+                if sep_start < sep_end:
+                    e.span_num = (sep_start, sep_end)
+                else:
+                    e.span_num = (g.start(), g.end())
+            else:
+                # Mot numérique → surligne les chiffres
+                e.span_num = (g.start(), g.end())
+
     return _make_result(events, display_num=display_num, valeur=display_num)
 
 
@@ -1813,18 +2457,53 @@ def lire_monnaie(
             ortho=t_min, phone=p_min, span_source=span, composant=2,
         ))
 
-    # display_num
+    # display_num + span_num
+    major_str = str(major)
+    major_end = len(major_str)
     sym = cur.get("symbole")
     if sym:
         if minor > 0:
             display_num = f"{major},{minor:02d}{sym}"
+            minor_start = major_end + 1  # après la virgule
+            minor_end = minor_start + 2
+            sym_start = minor_end
+            sym_end = sym_start + len(sym)
         else:
             display_num = f"{major}{sym}"
+            minor_start = minor_end = 0
+            sym_start = major_end
+            sym_end = sym_start + len(sym)
     else:
         if minor > 0:
             display_num = f"{major},{minor:02d} {currency}"
+            minor_start = major_end + 1
+            minor_end = minor_start + 2
+            sym_start = minor_end + 1  # espace
+            sym_end = sym_start + len(currency)
         else:
             display_num = f"{major} {currency}"
+            minor_start = minor_end = 0
+            sym_start = major_end + 1
+            sym_end = sym_start + len(currency)
+
+    # Assigner span_num à chaque événement
+    cur_maj_label = cur["majeur"][0 if major == 1 else 1]
+    cur_min_label = cur["mineur"][0 if minor == 1 else 1] if cur.get("mineur") else ""
+    cur_suf_label = cur["suffixe"][0] if "suffixe" in cur else ""
+    for evt in events:
+        if evt.composant == 0:
+            if evt.ortho in (cur_maj_label, cur_suf_label):
+                evt.span_num = (sym_start, sym_end)
+            else:
+                evt.span_num = (0, major_end)
+        elif evt.composant == 1:
+            # "et" → virgule
+            evt.span_num = (major_end, major_end + 1)
+        elif evt.composant == 2:
+            if evt.ortho == cur_min_label:
+                evt.span_num = (sym_start, sym_end)
+            else:
+                evt.span_num = (minor_start, minor_end)
 
     valeur = major + minor / 100 if minor else major
     return _make_result(events, display_num=display_num, valeur=valeur)
