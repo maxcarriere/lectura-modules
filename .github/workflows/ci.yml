@@ -34,10 +34,10 @@ jobs:
           PYTHONPATH: Formules/src:Tokeniseur/src
         run: pytest Formules/tests/ -v
 
-      - name: Tests Syllabeur
+      - name: Tests Aligneur
         env:
-          PYTHONPATH: Syllabeur/src:Formules/src:Tokeniseur/src
-        run: pytest Syllabeur/tests/ -v
+          PYTHONPATH: Aligneur/src:Formules/src:Tokeniseur/src
+        run: pytest Aligneur/tests/ -v
 
       - name: Tests G2P
         env:

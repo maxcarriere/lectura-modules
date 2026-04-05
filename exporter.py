@@ -29,6 +29,11 @@ EXCLUDE = [
     "exporter.py",
 ]
 
+# Dossiers a exclure (modules pas encore prets)
+EXCLUDE_DIRS = [
+    "Correcteur",
+]
+
 
 def get_git_files(repo_root: Path) -> list[str]:
     """Renvoie la liste des fichiers trackes par git."""
@@ -84,8 +89,12 @@ def main():
     # Fusionner sans doublons, en gardant l'ordre
     all_files = list(dict.fromkeys(git_files + extra_files))
 
-    # Exclure les fichiers internes
-    all_files = [f for f in all_files if f not in EXCLUDE]
+    # Exclure les fichiers internes et les dossiers pas prets
+    all_files = [
+        f for f in all_files
+        if f not in EXCLUDE
+        and not any(f.startswith(d + "/") for d in EXCLUDE_DIRS)
+    ]
 
     # Verifier que tous les fichiers existent
     missing = [f for f in all_files if not (repo_root / f).exists()]

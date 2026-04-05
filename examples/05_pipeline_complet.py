@@ -3,7 +3,7 @@
 Cet exemple montre comment enchainer les modules Lectura pour un
 traitement complet du francais.
 
-pip install lectura-tokeniseur lectura-formules lectura-g2p[onnx] lectura-syllabeur
+pip install lectura-tokeniseur lectura-formules lectura-g2p[onnx] lectura-aligneur
 """
 
 from pathlib import Path

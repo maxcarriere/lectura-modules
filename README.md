@@ -11,12 +11,12 @@ ou chaque module independamment.
 | **[Tokeniseur](Tokeniseur/)** | Normalisation et tokenisation du francais, detection de formules | 2.0.0 | `pip install lectura-tokeniseur` |
 | **[G2P](G2P/)** | Grapheme-to-Phoneme unifie + POS + Morpho + Liaison | 1.0.0 | `pip install lectura-g2p` |
 | **[P2G](P2G/)** | Phoneme-to-Grapheme unifie + POS + Morpho (IPA vers orthographe) | 1.0.0 | `pip install lectura-p2g` |
-| **[Syllabeur](Syllabeur/)** | Analyse syllabique avec groupes de lecture | 2.0.0 | `pip install lectura-syllabeur` |
+| **[Aligneur-Syllabeur](Aligneur/)** | Alignement grapheme-phoneme, groupes de lecture, syllabation | 2.2.0 | `pip install lectura-aligneur` |
 | **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 2.0.0 | `pip install lectura-formules` |
 
 ## Caracteristiques
 
-- **Zero dependance** sur les modules de base (Tokeniseur, Formules, Syllabeur)
+- **Zero dependance** sur les modules de base (Tokeniseur, Formules, Aligneur)
 - **3 backends d'inference** pour G2P/P2G : ONNX Runtime, NumPy, Pure Python
 - **Type hints complets** (Python 3.10+, PEP-561)
 - **Modeles compacts** : G2P = 1.8 Mo, P2G = 2.6 Mo (ONNX INT8)
