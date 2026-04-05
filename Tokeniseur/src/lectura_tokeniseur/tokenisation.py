@@ -178,6 +178,19 @@ def _merge_locutions(tokens: list[Token]) -> list[Token]:
     return result
 
 
+def _inside_brackets(text: str, pos: int) -> bool:
+    """Vérifie si *pos* est à l'intérieur de crochets ou accolades ouverts."""
+    depth = 0
+    for k in range(pos - 1, -1, -1):
+        if text[k] in "]})":
+            depth += 1
+        elif text[k] in "[{(":
+            if depth == 0:
+                return True
+            depth -= 1
+    return False
+
+
 def _scan_tokens(text: str) -> list[Token]:
     """Passe 1 : découpe le texte en tokens bruts (MOT, PONCTUATION, SEPARATEUR, FORMULE brut).
 
@@ -198,10 +211,17 @@ def _scan_tokens(text: str) -> list[Token]:
         if ch.isdigit():
             start = i
             while i < n and (text[i].isdigit() or text[i] in (".", "'", ",")):
+                # Ne pas absorber la virgule si on est dans un contexte ensemble/intervalle
+                if text[i] == "," and _inside_brackets(text, start):
+                    break
                 i += 1
             # Reculer si on finit par . ou ' ou , (ponctuation)
             while i > start and text[i - 1] in (".", "'", ","):
                 i -= 1
+            # 3'25" → ne pas absorber l'apostrophe (minutes/secondes d'arc)
+            scanned = text[start:i]
+            if "'" in scanned and i < n and text[i] == '"':
+                i = start + scanned.index("'")
             tok = Formule(
                 type=TokenType.FORMULE,
                 text=text[start:i],
@@ -264,6 +284,18 @@ def _scan_tokens(text: str) -> list[Token]:
                 text=" ",
                 span=(i, i + 1),
                 sep_type="space",
+            )
+            tokens.append(tok)
+            i += 1
+            continue
+
+        # ── √ → Formule MATHS (pour permettre le merge avec le nombre adjacent) ──
+        if ch == "√":
+            tok = Formule(
+                type=TokenType.FORMULE,
+                text="√",
+                span=(i, i + 1),
+                formule_type=FormuleType.MATHS,
             )
             tokens.append(tok)
             i += 1

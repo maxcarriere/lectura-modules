@@ -77,8 +77,8 @@ def _detect_fraction(text: str) -> bool:
 
 # ── ORDINAL ──
 _ORDINAL_SUFFIXES = (
-    "ième", "ième", "ème", "ère", "er", "re", "nd", "nde",
-    "ièmes", "èmes", "ères", "ers", "nds", "ndes",
+    "ième", "ème", "eme", "ère", "er", "re", "nd", "nde",
+    "ièmes", "èmes", "emes", "ères", "ers", "nds", "ndes",
 )
 # Version avec juste "e" en fin (1e, 2e, etc.) — prudent, seulement après chiffre
 _ORDINAL_SUFFIX_E = "e"
@@ -94,18 +94,22 @@ def _detect_ordinal(text: str) -> bool:
                 return True
             if _is_roman(prefix):
                 return True
-    # Cas spécial : "e" seul (1e, 2e, etc.)
+    # Cas spécial : "e" seul (1e, 2e, IIe, XXe, etc.)
     if text_lower.endswith("e") and len(text) > 1:
         prefix = text[:-1]
         if prefix.isdigit():
             return True
-        if _is_roman(prefix):
+        # Pour les romains + "e", exiger au moins 2 caractères de préfixe
+        # pour éviter les faux positifs (Le, Ce, De, Me...)
+        if len(prefix) >= 2 and _is_roman(prefix):
             return True
     return False
 
 
 # ── MATHS ──
-_MATHS_OPERATORS = set("+-=×*÷^√<>≤≥≠≈∞∑∏∫∂∇±")
+_MATHS_OPERATORS = set("+-−=×*÷/^√<>≤≥≠≈≃≡∞∑∏∫∂∇±∈∉⊂∪∩→←↔⇒⇔°%‰")
+# Opérateurs qui sont *toujours* mathématiques (pas ambigus comme +, -, <, >)
+_MATHS_SPECIAL = set("∈∉⊂∪∩→←↔⇒⇔≈≃≡∑∏∫∂∇")
 _MATHS_SUPERSCRIPTS = set("⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ")
 _MATHS_FUNCTIONS = {
     "sin", "cos", "tan", "log", "ln", "exp", "sqrt", "abs",
@@ -116,7 +120,11 @@ _GREEK_LETTERS = set("αβγδεζηθικλμνξοπρστυφχψωΓΔΘΛΞ
 
 
 def _detect_maths(text: str) -> bool:
-    """Détecte une expression mathématique (2x+3=5, sin(x), x², etc.)."""
+    """Détecte une expression mathématique (2x+3=5, sin(x), x², √9, etc.)."""
+    # √ suivi de quelque chose → toujours maths
+    if "√" in text and len(text) > 1:
+        return True
+
     has_digit = any(c.isdigit() for c in text)
     has_letter = any(c.isalpha() for c in text)
     has_operator = any(c in _MATHS_OPERATORS for c in text)
@@ -147,17 +155,41 @@ def _detect_maths(text: str) -> bool:
         if non_op >= 2:
             return True
 
+    # Opérateur spécial (∈, ∪, →…) + lettres — toujours maths, même sans chiffre
+    # "x∈A", "A∪B", "P→Q"
+    has_special_op = any(c in _MATHS_SPECIAL for c in text)
+    if has_special_op and has_letter:
+        return True
+
+    # ± devant un nombre → toujours maths
+    if "±" in text and has_digit:
+        return True
+
+    # Factorielle : nombre ou lettre + !
+    if "!" in text and (has_digit or has_letter):
+        return True
+
+    # Notation dérivée : f'(x), g''(x), sin'(x), etc.
+    if has_parens and ("'" in text or "\u2032" in text):
+        if re.search(r"[a-zA-Z]['\u2032]+\(", text):
+            return True
+
+    # lettre + parenthèses → maths : f(x), g(x+1)
+    if has_parens and has_letter:
+        if re.search(r'[a-zA-Z]\(', text):
+            return True
+
     return False
 
 
 # ── NUMERO ──
-_NUMERO_SPLIT_RE = re.compile(r"[\s.]+")
+_NUMERO_SPLIT_RE = re.compile(r"[\s.\-]+")
 
 
 def _detect_numero(text: str) -> bool:
-    """Détecte un numéro composé (654 001 45, AB.123.CD).
+    """Détecte un numéro composé (654 001 45, AB.123.CD, CL-067-TS).
 
-    2+ groupes alphanumériques séparés par espaces ou points.
+    2+ groupes alphanumériques séparés par espaces, points ou tirets.
     Pas un nombre décimal (X.Y purement numérique avec 1 seul point).
     """
     parts = _NUMERO_SPLIT_RE.split(text.strip())
@@ -170,6 +202,23 @@ def _detect_numero(text: str) -> bool:
     # Pas un nombre décimal simple (ex: 3.14 = 2 parties numériques avec 1 point)
     if len(parts) == 2 and all(p.isdigit() for p in parts) and "." in text and " " not in text:
         return False
+    # Avec tirets : règles strictes pour éviter confusion avec MATHS
+    if "-" in text:
+        has_letters = any(c.isalpha() for c in text)
+        has_digits = any(c.isdigit() for c in text)
+        if not has_digits:
+            # x-y, a-b-c → pas un numéro
+            return False
+        if has_letters:
+            # Lettres minuscules → MATHS (a-3-5b), majuscules → NUMERO (A-3-5B)
+            letters = [c for c in text if c.isalpha()]
+            if any(c.islower() for c in letters):
+                return False
+        else:
+            # Tout-chiffres avec tirets : NUMERO si un groupe a un zéro initial
+            # (0800-350-58 → numéro), sinon MATHS (800-350-58 → soustraction)
+            if not any(len(p) > 1 and p[0] == "0" for p in parts):
+                return False
     return True
 
 
@@ -192,8 +241,7 @@ def _detect_sigle(text: str) -> bool:
         return False
     # Pas un nombre romain pur
     if _is_roman(text) and _ROMAN_VALID_RE.match(text.upper()):
-        return True  # Romains valides ne sont PAS des sigles — retourner False
-        # Correction : les romains valides sont traités comme des mots, pas des sigles
+        return False  # Romains valides ne sont pas des sigles
     if all(c in "IVXLCDM" for c in text.upper()) and _ROMAN_VALID_RE.match(text.upper()):
         return False
     # Doit avoir au moins 2 majuscules consécutives OU mélange lettre+chiffre
@@ -236,6 +284,7 @@ def _detect_heure(text: str) -> bool:
 _MONNAIE_RE = re.compile(
     r"^[€$£¥]\s*[0-9][0-9 ']*[.,]?\d*$"
     r"|^[0-9][0-9 ']*[.,]?\d*\s*[€$£¥]$"
+    r"|^[0-9][0-9 ']*[0-9]*[€$£¥]\d{1,2}$"
     r"|^[0-9][0-9 ']*[.,]?\d*\s*(?:EUR|USD|GBP|CHF|JPY)$"
     r"|^(?:EUR|USD|GBP|CHF|JPY)\s*[0-9][0-9 ']*[.,]?\d*$",
     re.IGNORECASE,

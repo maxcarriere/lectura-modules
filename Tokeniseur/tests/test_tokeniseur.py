@@ -26,6 +26,7 @@ from lectura_tokeniseur import (
     FormuleType,
     Formule,
     LecturaTokeniseur,
+    MathToken,
     Mot,
     Ponctuation,
     ResultatTokenisation,
@@ -35,6 +36,7 @@ from lectura_tokeniseur import (
     TokenType,
     normalise,
     tokenise,
+    tokenize_maths,
 )
 
 
@@ -934,3 +936,106 @@ class TestEdgeCases:
         assert result.nb_tokens == len(result.tokens)
         # words() retourne le meme nombre que nb_mots
         assert len(result.words()) == result.nb_mots
+
+
+# ============================================================================
+# Tokenisation maths (maths.py)
+# ============================================================================
+
+
+class TestMathsTokenization:
+    """Tests de tokenize_maths() et de la detection maths enrichie."""
+
+    def test_tokenize_basic(self):
+        toks = tokenize_maths("2x+3")
+        assert [t.math_type for t in toks] == ["number", "variable", "operator", "number"]
+
+    def test_tokenize_function(self):
+        toks = tokenize_maths("sin(x)")
+        assert toks[0] == MathToken("sin", "function")
+
+    def test_tokenize_unit_space(self):
+        toks = tokenize_maths("5 km")
+        assert toks[1].math_type == "unit"
+
+    def test_tokenize_unit_single(self):
+        toks = tokenize_maths("5 m")
+        assert toks[1].math_type == "unit"
+
+    def test_tokenize_sqrt(self):
+        toks = tokenize_maths("√9")
+        assert toks[0] == MathToken("√", "operator")
+
+    def test_tokenize_superscript(self):
+        toks = tokenize_maths("x²")
+        assert toks[0] == MathToken("x", "variable")
+        assert toks[1].math_type == "superscript"
+        assert toks[1].extra == "2"
+
+    def test_tokenize_subscript(self):
+        toks = tokenize_maths("x₁")
+        assert toks[1].math_type == "subscript"
+        assert toks[1].extra == "1"
+
+    def test_tokenize_greek(self):
+        toks = tokenize_maths("α+β")
+        assert toks[0] == MathToken("α", "greek")
+        assert toks[2] == MathToken("β", "greek")
+
+    def test_tokenize_factorial(self):
+        toks = tokenize_maths("5!")
+        assert toks[1] == MathToken("!", "factorial")
+
+    def test_tokenize_prime(self):
+        toks = tokenize_maths("f'")
+        assert toks[1] == MathToken("'", "prime")
+
+    def test_tokenize_unit_requalify(self):
+        """km/h : h requalifie en unite."""
+        toks = tokenize_maths("km/h")
+        types = [t.math_type for t in toks]
+        assert types == ["unit", "operator", "unit"]
+
+    def test_mathtoken_tuple_compat(self):
+        """MathToken est un NamedTuple, indexable comme un tuple."""
+        mt = MathToken("x", "variable")
+        assert mt[0] == "x"
+        assert mt[1] == "variable"
+        assert mt[2] == ""
+
+    def test_detect_fx(self):
+        tok = LecturaTokeniseur()
+        result = tok.analyze("f(x)")
+        formules = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        assert len(formules) > 0
+
+    def test_detect_sqrt(self):
+        tok = LecturaTokeniseur()
+        result = tok.analyze("√9")
+        formules = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        assert len(formules) > 0
+
+    def test_detect_number_unit(self):
+        tok = LecturaTokeniseur()
+        result = tok.analyze("5 km")
+        formules = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        assert len(formules) > 0
+
+    def test_detect_degres(self):
+        tok = LecturaTokeniseur()
+        result = tok.analyze("36.5 °C")
+        formules = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        assert len(formules) > 0
+
+    def test_maths_children_enriched(self):
+        """Les children d'une formule MATHS utilisent tokenize_maths."""
+        tok = LecturaTokeniseur()
+        result = tok.analyze("2x+3")
+        maths = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        assert len(maths) == 1
+        children = maths[0].children
+        # Doit avoir des enfants typés (nombre, mot, ponctuation)
+        assert len(children) >= 4
+        # Premier enfant = nombre "2"
+        assert isinstance(children[0], Formule)
+        assert children[0].formule_type == FormuleType.NOMBRE

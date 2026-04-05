@@ -49,6 +49,9 @@ def _normalize_basic_punctuation(text: str) -> str:
     # Ponctuation forte : traiter par groupes
     def _repl_strong(match: re.Match) -> str:
         grp = match.group(1)
+        # Factorielle : ne pas ajouter d'espace autour de ! si précédé d'alphanum
+        if grp == "!" and match.start() > 0 and text[match.start() - 1].isalnum():
+            return "!"
         return f" {grp} "
 
     text = _RE_STRONG_PUNCT_GROUP.sub(_repl_strong, text)
@@ -87,6 +90,11 @@ def _normalize_numbers(text: str) -> str:
             )
             if not standard_number:
                 return raw  # Garder tel quel (probable numéro/code)
+        # Même vérification pour les groupes séparés par apostrophe (3'25 ≠ milliers)
+        if "'" in raw and " " not in raw:
+            apos_groups = raw.split("'")
+            if not all(len(g) == 3 for g in apos_groups[1:]):
+                return raw  # Pas un format de milliers standard
         if len(digits) <= 5:
             return digits
         parts: list[str] = []
@@ -161,6 +169,15 @@ def _normalize_dashes(text: str) -> str:
         # Notation scientifique / formule : chiffre-chiffre ou eE-chiffre → inchangé
         if next_.isdigit() and (prev.isdigit() or prev.lower() in ("e",)):
             continue
+        # Signe négatif devant un chiffre en début ou après opérateur : -12, (-3
+        if next_.isdigit() and (prev == "" or prev in "([:=<>≤≥≠,;"):
+            continue
+        # Signe négatif devant une variable (1 lettre seule) : -x, -a
+        # Mais pas devant un mot : -bonjour doit être normalisé
+        if next_.isalpha() and (prev == "" or prev in "([:=<>≤≥≠,;"):
+            after = chars[i + 2] if i + 2 < n else ""
+            if not after.isalpha():
+                continue
         # Opérateur dans formule : chiffre/lettre + op + chiffre/lettre (ex: 3+5, x-2)
         if (prev.isdigit() or prev.isalpha()) and (next_.isdigit() or next_.isalpha()):
             continue
@@ -172,6 +189,37 @@ def _normalize_dashes(text: str) -> str:
             chars[i] = chars[i] + " "
 
     return _normalize_spaces("".join(chars))
+
+
+# Protège les ensembles {…} et intervalles avec crochets contenant ; ou ,
+# pour que la normalisation ne les altère pas.
+_RE_BRACE_CONTENT = re.compile(r"\{[^}]*\}")
+_RE_BRACKET_INTERVAL = re.compile(r"([\[\]])([^[\]]*[;,][^[\]]*)([\[\]])")
+
+
+def _protect_sets_intervals(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """Remplace les ensembles/intervalles par des placeholders avant normalisation."""
+    placeholders: list[tuple[str, str]] = []
+    counter = 0
+
+    def _replace(m: re.Match) -> str:
+        nonlocal counter
+        original = m.group(0)
+        ph = f"\x00SET{counter}\x00"
+        placeholders.append((ph, original))
+        counter += 1
+        return ph
+
+    text = _RE_BRACE_CONTENT.sub(_replace, text)
+    text = _RE_BRACKET_INTERVAL.sub(_replace, text)
+    return text, placeholders
+
+
+def _restore_sets_intervals(text: str, placeholders: list[tuple[str, str]]) -> str:
+    """Restaure les placeholders par le texte original."""
+    for ph, original in placeholders:
+        text = text.replace(ph, original)
+    return text
 
 
 def normalise(text: str) -> str:
@@ -190,6 +238,9 @@ def normalise(text: str) -> str:
     if not text:
         return text
 
+    # Protéger les ensembles {…} et intervalles [… ; …] / ]… ; …[
+    text, placeholders = _protect_sets_intervals(text)
+
     text = _normalize_spaces(text)
     text = _normalize_apostrophes(text)
     text = _normalize_ellipsis(text)
@@ -198,5 +249,8 @@ def normalise(text: str) -> str:
     text = _normalize_quotes(text)
     text = _normalize_parentheses(text)
     text = _normalize_dashes(text)
+
+    # Restaurer les ensembles/intervalles protégés
+    text = _restore_sets_intervals(text, placeholders)
 
     return text

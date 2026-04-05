@@ -17,7 +17,9 @@ from lectura_tokeniseur.detection import (
     _detect_intervalle, _detect_gps, _detect_page_chapitre,
     _TEL_CLEAN_RE, _FRACTION_RE, _NUMERO_SPLIT_RE,
     _ROMAN_VALID_RE, _MATHS_OPERATORS, _MATHS_SUPERSCRIPTS, _GREEK_LETTERS,
+    _MATHS_FUNCTIONS, _MATHS_SPECIAL,
 )
+from lectura_tokeniseur.maths import UNIT_NAMES_LOWER as _UNIT_NAMES_LOWER
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +219,13 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
     if isinstance(first, Formule) and first.text.replace(".", "").replace("'", "").replace(",", "").isdigit():
         j = start + 1
         if j < n and isinstance(tokens[j], Ponctuation) and tokens[j].text in _CURRENCY_SYMBOLS:
+            k = j + 1
+            # 42€50 : FORMULE + PONCT(€) + FORMULE(centimes, contigu)
+            if (k < n and isinstance(tokens[k], Formule)
+                    and tokens[k].text.isdigit() and len(tokens[k].text) <= 2
+                    and tokens[k].span[0] == tokens[j].span[1]):
+                full = first.text + tokens[j].text + tokens[k].text
+                return full, k + 1, FormuleType.MONNAIE
             full = first.text + tokens[j].text
             return full, j + 1, FormuleType.MONNAIE
         # FORMULE + espace + MOT(code devise)
@@ -240,6 +249,20 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
         if j < n and isinstance(tokens[j], Formule):
             full = first.text + tokens[j].text
             return full, j + 1, FormuleType.MONNAIE
+
+    # ── Minutes/secondes d'arc : FORMULE + PONCT("'") + FORMULE + PONCT('"') ──
+    # Ex: 3'25" → MATHS (lu par lire_maths comme "3 prime 25 seconde")
+    if isinstance(first, Formule) and first.text.isdigit():
+        j = start + 1
+        if (j < n and isinstance(tokens[j], Ponctuation) and tokens[j].text == "'"
+                and tokens[j].span[0] == first.span[1]):
+            k = j + 1
+            if (k < n and isinstance(tokens[k], Formule) and tokens[k].text.isdigit()
+                    and tokens[k].span[0] == tokens[j].span[1]):
+                m = k + 1
+                if m < n and isinstance(tokens[m], Ponctuation) and tokens[m].text == '"':
+                    full = first.text + "'" + tokens[k].text + '"'
+                    return full, m + 1, FormuleType.MATHS
 
     # ── GPS : FORMULE + PONCT("°") + [FORMULE + PONCT("'")] + MOT(N/S/E/O/W) ──
     if isinstance(first, Formule) and first.text.replace(".", "").isdigit():
@@ -284,6 +307,18 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
             if _detect_intervalle(full):
                 return full, j + 1, FormuleType.INTERVALLE
 
+    # ── Ensemble : PONCT("{") + tokens internes + PONCT("}") → MATHS ──
+    if isinstance(first, Ponctuation) and first.text == "{":
+        j = start + 1
+        inner_parts = [first.text]
+        while j < n and not (isinstance(tokens[j], Ponctuation) and tokens[j].text == "}"):
+            inner_parts.append(tokens[j].text)
+            j += 1
+        if j < n and isinstance(tokens[j], Ponctuation) and tokens[j].text == "}":
+            inner_parts.append(tokens[j].text)
+            full = "".join(inner_parts)
+            return full, j + 1, FormuleType.MATHS
+
     # ── Page/Chapitre : MOT("page"/"chap"/"p"/"ch") + [PONCT(".")] + FORMULE ──
     _PAGE_WORDS = {"p", "page", "chap", "ch"}
     if isinstance(first, Mot) and first.text.lower() in _PAGE_WORDS:
@@ -323,14 +358,53 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
             if _detect_ordinal(full):
                 return full, j + 1, FormuleType.ORDINAL
 
+    # ── Nombre + espace + unité → MATHS (5 km, 36.5 °C) ──
+    if isinstance(first, Formule) and first.text.replace(".", "").replace(",", "").isdigit():
+        j = start + 1
+        if j < n and isinstance(tokens[j], Separateur) and tokens[j].sep_type == "space":
+            k = j + 1
+            # Unité simple : MOT("km"), MOT("m"), ...
+            if k < n and isinstance(tokens[k], Mot) and tokens[k].text.lower() in _UNIT_NAMES_LOWER:
+                full = first.text + " " + tokens[k].text
+                return full, k + 1, FormuleType.MATHS
+            # Unité composée : °C, °F
+            if (k + 1 < n and isinstance(tokens[k], Ponctuation) and tokens[k].text == "°"
+                    and isinstance(tokens[k + 1], Mot) and tokens[k + 1].text in ("C", "F")):
+                full = first.text + " °" + tokens[k + 1].text
+                return full, k + 2, FormuleType.MATHS
+
     # ── Sigle/Maths : séquence de tokens adjacents (lettres+chiffres+opérateurs) ──
-    _MERGE_PUNCT = _MATHS_OPERATORS | set("()[]{}^/")
-    if isinstance(first, (Formule, Mot)):
+    # Accepte aussi un signe initial (-/+) collé à un chiffre : -12.5/54, -3x+1
+    _MERGE_PUNCT = _MATHS_OPERATORS | set("()[]{}^/!")
+    can_start = isinstance(first, (Formule, Mot))
+    starts_with_sign = False
+    starts_with_pm = False  # ± (toujours maths, jamais NOMBRE)
+    starts_with_paren = False  # ( ouvrante
+    if not can_start and isinstance(first, Ponctuation) and first.text in ("-", "+", "±"):
+        nxt = start + 1
+        if nxt < n and isinstance(tokens[nxt], (Formule, Mot)) and tokens[nxt].span[0] == first.span[1]:
+            can_start = True
+            starts_with_sign = True
+            if first.text == "±":
+                starts_with_pm = True
+    # Parenthèse/crochet/accolade ouvrante : (3+5), [2x+3], {a+b}
+    if not can_start and isinstance(first, Ponctuation) and first.text in ("(", "[", "{"):
+        nxt = start + 1
+        if nxt < n and isinstance(tokens[nxt], (Formule, Mot, Ponctuation)) and tokens[nxt].span[0] == first.span[1]:
+            can_start = True
+            starts_with_paren = True
+
+    if can_start:
         j = start
         parts: list[str] = []
         has_digit = False
         has_op = False
         has_letter = False
+        has_math_op = False
+        has_func = False
+        has_prime = False
+        has_parens = False
+        bracket_depth = 0
         prev_end = first.span[0]
         while j < n:
             t = tokens[j]
@@ -346,25 +420,63 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
                     has_digit = True
                 if any(c.isalpha() for c in txt):
                     has_letter = True
+                if isinstance(t, Mot) and t.text.lower() in _MATHS_FUNCTIONS:
+                    has_func = True
+                # Formule contenant un opérateur maths (ex: √ scanné comme Formule)
+                if isinstance(t, Formule) and any(c in _MATHS_OPERATORS for c in txt):
+                    if not (j == start and starts_with_sign):
+                        has_op = True
+                        has_math_op = True
                 parts.append(txt)
                 prev_end = t.span[1]
                 j += 1
             elif isinstance(t, Ponctuation) and t.text in _MERGE_PUNCT:
-                has_op = True
+                # Le signe initial ne compte pas comme opérateur interne
+                if not (j == start and starts_with_sign):
+                    has_op = True
+                    # Vrai opérateur maths (pas juste brackets)
+                    if t.text not in "()[]{}":
+                        has_math_op = True
+                if t.text in ("(", ")"):
+                    has_parens = True
+                if t.text in "([{":
+                    bracket_depth += 1
+                elif t.text in ")]}":
+                    bracket_depth -= 1
+                parts.append(t.text)
+                prev_end = t.span[1]
+                j += 1
+            elif isinstance(t, Ponctuation) and t.text in ",;" and bracket_depth != 0:
+                # Virgule/point-virgule à l'intérieur de brackets (ensembles, intervalles)
+                parts.append(t.text)
+                prev_end = t.span[1]
+                j += 1
+            elif isinstance(t, Ponctuation) and t.text in ("'", "\u2032"):
+                # Prime / apostrophe math — accepter dans la fusion
+                has_prime = True
                 parts.append(t.text)
                 prev_end = t.span[1]
                 j += 1
             else:
                 break
 
-        if j - start >= 2 and has_digit and has_letter:
+        if j - start >= 2 and (has_digit or has_math_op or has_func
+                               or (has_prime and has_parens)
+                               or (has_letter and has_parens)):
             full = "".join(parts)
-            # Sigle en priorité (ex: FR25, K2R) — pas d'opérateur
-            if not has_op and _detect_sigle(full):
-                return full, j, FormuleType.SIGLE
-            # Maths (ex: 2x+3=0)
-            if _detect_maths(full):
-                return full, j, FormuleType.MATHS
+            # Signe + nombre seul → NOMBRE (-3.14, +42) — sauf ± qui est MATHS
+            if starts_with_sign and not has_op and not has_letter:
+                return full, j, FormuleType.NOMBRE
+            if starts_with_pm or has_letter or has_op:
+                # Sigle en priorité (ex: FR25, K2R) — pas d'opérateur, pas de signe
+                if not has_op and not starts_with_sign and _detect_sigle(full):
+                    return full, j, FormuleType.SIGLE
+                # Numéro alphanumérique avec tirets (ex: CL-067-TS)
+                if _detect_numero(full):
+                    return full, j, FormuleType.NUMERO
+                # Maths (ex: 2x+3=0, -12.5/54, sin(x), x∈A)
+                if _detect_maths(full):
+                    return full, j, FormuleType.MATHS
 
     # ── Numéro : groupes numériques séparés par espaces ──
     if isinstance(first, Formule) and first.text.isdigit():
@@ -446,6 +558,20 @@ def _classify_and_merge(tokens: list[Token]) -> list[Token]:
                     valeur=tok.text,
                 )
             result.append(tok)
+            i += 1
+            continue
+
+        # Classifie les MOT qui sont en fait des ordinaux romains (XXIème, IIe, Ier)
+        if isinstance(tok, Mot) and _detect_ordinal(tok.text):
+            formule = Formule(
+                type=TokenType.FORMULE,
+                text=tok.text,
+                span=tok.span,
+                formule_type=FormuleType.ORDINAL,
+                children=_build_formule_children(tok.text, FormuleType.ORDINAL, tok.span[0]),
+                valeur=tok.text,
+            )
+            result.append(formule)
             i += 1
             continue
 
@@ -645,78 +771,32 @@ def _build_formule_children(text: str, ftype: FormuleType, offset: int) -> list[
         return children
 
     if ftype == FormuleType.MATHS:
-        # Enfants typés : nombre, opérateur, variable, fonction, parenthèse, grec
+        from lectura_tokeniseur.maths import tokenize_maths
+        math_toks = tokenize_maths(text)
         children = []
-        i = 0
-        while i < len(text):
-            ch = text[i]
-
-            # Nombre
-            if ch.isdigit():
-                start = i
-                while i < len(text) and (text[i].isdigit() or text[i] == "."):
-                    i += 1
+        scan = 0
+        for mt in math_toks:
+            idx = text.find(mt.text, scan)
+            if idx < 0:
+                idx = scan
+            mt_span = (offset + idx, offset + idx + len(mt.text))
+            scan = idx + len(mt.text)
+            if mt.math_type == "number":
                 children.append(Formule(
-                    type=TokenType.FORMULE, text=text[start:i],
-                    span=(offset + start, offset + i),
-                    formule_type=FormuleType.NOMBRE, valeur=text[start:i],
+                    type=TokenType.FORMULE, text=mt.text,
+                    span=mt_span,
+                    formule_type=FormuleType.NOMBRE, valeur=mt.text,
                 ))
-                continue
-
-            # Opérateur
-            if ch in _MATHS_OPERATORS:
-                children.append(Ponctuation(
-                    type=TokenType.PONCTUATION, text=ch,
-                    span=(offset + i, offset + i + 1),
-                ))
-                i += 1
-                continue
-
-            # Exposant unicode
-            if ch in _MATHS_SUPERSCRIPTS:
-                children.append(Formule(
-                    type=TokenType.FORMULE, text=ch,
-                    span=(offset + i, offset + i + 1),
-                    formule_type=FormuleType.NOMBRE, valeur=ch,
-                ))
-                i += 1
-                continue
-
-            # Lettre grecque
-            if ch in _GREEK_LETTERS:
+            elif mt.math_type in ("variable", "function", "greek", "unit"):
                 children.append(Mot(
-                    type=TokenType.MOT, text=ch,
-                    span=(offset + i, offset + i + 1),
-                    ortho=ch,
+                    type=TokenType.MOT, text=mt.text,
+                    span=mt_span, ortho=mt.text.lower(),
                 ))
-                i += 1
-                continue
-
-            # Parenthèses
-            if ch in "()[]{}":
+            else:
                 children.append(Ponctuation(
-                    type=TokenType.PONCTUATION, text=ch,
-                    span=(offset + i, offset + i + 1),
+                    type=TokenType.PONCTUATION, text=mt.text,
+                    span=mt_span,
                 ))
-                i += 1
-                continue
-
-            # Variable ou fonction (lettre)
-            if ch.isalpha():
-                start = i
-                while i < len(text) and text[i].isalpha():
-                    i += 1
-                word = text[start:i]
-                children.append(Mot(
-                    type=TokenType.MOT, text=word,
-                    span=(offset + start, offset + i),
-                    ortho=word.lower(),
-                ))
-                continue
-
-            # Autre caractère
-            i += 1
-
         return children
 
     if ftype == FormuleType.NUMERO:

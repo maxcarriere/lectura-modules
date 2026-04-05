@@ -26,5 +26,6 @@ from lectura_tokeniseur.pipeline import (
     ResultatTokenisation,
     LecturaTokeniseur,
 )
+from lectura_tokeniseur.maths import MathToken, tokenize_maths
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
