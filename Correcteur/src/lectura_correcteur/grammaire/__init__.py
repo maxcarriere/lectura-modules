@@ -1,14 +1,18 @@
-"""Sous-module grammaire : regles d'accord, conjugaison et homophones."""
+"""Sous-module grammaire : regles d'accord, conjugaison, homophones, PP, negation."""
 
 from lectura_correcteur.grammaire._accord import verifier_accords
 from lectura_correcteur.grammaire._conjugaison import verifier_conjugaisons
 from lectura_correcteur.grammaire._homophones import verifier_homophones
+from lectura_correcteur.grammaire._negation import verifier_negation
+from lectura_correcteur.grammaire._participe import verifier_participes_passes
 
 __all__ = [
     "appliquer_grammaire",
     "verifier_accords",
     "verifier_conjugaisons",
     "verifier_homophones",
+    "verifier_negation",
+    "verifier_participes_passes",
 ]
 
 
@@ -30,21 +34,35 @@ def appliquer_grammaire(
     origs = originaux if originaux else mots
     corrections: list[Correction] = []
 
-    # Accords (det+nom, det+adj+nom, det+nom+ver)
+    # 1. Accords (det+nom, det+adj+nom, det+nom+ver, genre)
     result_acc, corr_acc = verifier_accords(
         result, pos_tags, morpho, lexique, origs,
     )
     result = result_acc
     corrections.extend(corr_acc)
 
-    # Conjugaisons (pronom+verbe)
+    # 2. Conjugaisons (pronom+verbe)
     result_conj, corr_conj = verifier_conjugaisons(
         result, pos_tags, morpho, lexique, origs,
     )
     result = result_conj
     corrections.extend(corr_conj)
 
-    # Homophones contextuels
+    # 3. Participes passes (auxiliaire + infinitif -> PP)
+    result_pp, corr_pp = verifier_participes_passes(
+        result, pos_tags, morpho, lexique, origs,
+    )
+    result = result_pp
+    corrections.extend(corr_pp)
+
+    # 4. Negation (inserer ne)
+    result_neg, corr_neg = verifier_negation(
+        result, pos_tags, morpho, lexique, origs,
+    )
+    result = result_neg
+    corrections.extend(corr_neg)
+
+    # 5. Homophones contextuels
     result_homo, corr_homo = verifier_homophones(
         result, pos_tags, morpho, lexique, origs,
     )

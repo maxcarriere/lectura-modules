@@ -10,13 +10,18 @@ from typing import Any
 
 from lectura_correcteur._types import MotAnalyse, TypeCorrection
 from lectura_correcteur._utils import PUNCT_RE
+from lectura_correcteur.orthographe._suggestions import suggerer
 
 
 class VerificateurOrthographe:
     """Verification orthographique mot par mot via le lexique."""
 
-    def __init__(self, lexique: Any) -> None:
+    def __init__(
+        self, lexique: Any, *, max_suggestions: int = 5, distance: int = 1,
+    ) -> None:
         self._lexique = lexique
+        self._max_suggestions = max_suggestions
+        self._distance = distance
 
     def verifier_phrase(
         self,
@@ -46,16 +51,33 @@ class VerificateurOrthographe:
 
             dans_lexique = self._lexique.existe(mot)
             type_corr = TypeCorrection.AUCUNE
+            suggestions_list: list[str] = []
+            corrige = mot
             if not dans_lexique and not PUNCT_RE.match(mot):
                 type_corr = TypeCorrection.HORS_LEXIQUE
+                suggestions_list = suggerer(
+                    mot, self._lexique,
+                    max_n=self._max_suggestions,
+                    distance=self._distance,
+                )
+                # Auto-correction: apply top suggestion when confident
+                if suggestions_list:
+                    top = suggestions_list[0]
+                    top_freq = (
+                        self._lexique.frequence(top)
+                        if hasattr(self._lexique, "frequence") else 0.0
+                    )
+                    if top_freq >= 5.0:
+                        corrige = top
 
             results.append(MotAnalyse(
                 original=mot,
-                corrige=mot,
+                corrige=corrige,
                 pos=pos,
                 morpho=morpho_dict,
                 dans_lexique=dans_lexique,
                 type_correction=type_corr,
+                suggestions=suggestions_list,
             ))
 
         return results

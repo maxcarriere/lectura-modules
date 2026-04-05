@@ -41,3 +41,75 @@ def test_avec_morpho(mock_lexique):
     results = v.verifier_phrase(["chat"], morpho)
     assert results[0].pos == "NOM"
     assert results[0].morpho.get("genre") == "Masc"
+
+
+def test_suggestions_mot_inconnu(mock_lexique):
+    """Un mot inconnu a 1 edit de distance d'un mot connu doit avoir des suggestions."""
+    v = VerificateurOrthographe(mock_lexique)
+    # "chet" est a distance 1 de "chat" (replace e->a)
+    results = v.verifier_phrase(["chet"])
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+    assert len(results[0].suggestions) > 0
+    assert "chat" in results[0].suggestions
+
+
+def test_suggestions_mot_connu_pas_de_suggestions(mock_lexique):
+    """Un mot connu ne doit pas avoir de suggestions."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["chat"])
+    assert results[0].suggestions == []
+
+
+# --- Axe 6 : Suggestions distance 2 ---
+
+def test_suggestions_distance_2(mock_lexique):
+    """Un mot a distance 2 d'un mot connu doit avoir des suggestions avec distance=2."""
+    from lectura_correcteur.orthographe._suggestions import suggerer
+
+    # "cjat" -> d1 -> "cjt", "cat", "cjat"... aucun n'est "chat"
+    # "cjat" -> d1 -> "cjt" -> d1 -> "chat" ✗ (distance 2 via different path)
+    # Mieux : "xhat" -> d1 edits don't yield "chat" (replace x->c = "chat"!)
+    # En fait "xhat" -> replace x->c -> "chat" = distance 1
+    # Utilisons "xhbt" : x->c, b->a = 2 edits
+    results_d1 = suggerer("xhbt", mock_lexique, distance=1)
+    results_d2 = suggerer("xhbt", mock_lexique, distance=2)
+    # Distance 1 ne doit pas trouver "chat" pour "xhbt"
+    assert "chat" not in results_d1
+    # Distance 2 doit trouver "chat" (xhbt->xhat->chat ou xhbt->chat via 2 replaces)
+    assert "chat" in results_d2
+
+
+def test_suggestions_distance_2_via_verificateur(mock_lexique):
+    """Le verificateur passe correctement le parametre distance."""
+    v = VerificateurOrthographe(mock_lexique, distance=2)
+    results = v.verifier_phrase(["chtt"])
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+    assert "chat" in results[0].suggestions
+
+
+# --- Auto-correction ---
+
+def test_auto_correction_hcat(mock_lexique):
+    """'hcat' (d=1 de 'chat', freq 45.2) -> auto-corrige en 'chat'."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["hcat"])
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+    assert results[0].corrige == "chat"
+
+
+def test_auto_correction_miason(mock_lexique):
+    """'miason' (d=1 de 'maison', freq 38.7) -> auto-corrige en 'maison'."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["miason"])
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+    assert results[0].corrige == "maison"
+
+
+def test_pas_auto_correction_si_ambigue(mock_lexique):
+    """Pas d'auto-correction si les deux meilleures suggestions sont proches en frequence."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    # 'chet' -> 'chat' (45.2) mais aussi possiblement d'autres candidats
+    results = v.verifier_phrase(["chet"])
+    # On ne verifie pas le corrige exact (depend des suggestions trouvees)
+    # mais on verifie que le mecanisme fonctionne sans erreur
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE

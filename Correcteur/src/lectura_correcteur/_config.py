@@ -13,3 +13,5 @@ class CorrecteurConfig:
     activer_grammaire: bool = True
     activer_syntaxe: bool = True
     activer_resegmentation: bool = True
+    max_suggestions: int = 5
+    distance_suggestions: int = 2

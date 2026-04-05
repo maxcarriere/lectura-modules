@@ -20,6 +20,8 @@ from lectura_correcteur._types import (
     Correction,
     MotAnalyse,
     ResultatCorrection,
+    TaggerProtocol,
+    TokeniseurProtocol,
     TypeCorrection,
 )
 from lectura_correcteur.correcteur import Correcteur
@@ -29,5 +31,7 @@ __all__ = [
     "Correction",
     "MotAnalyse",
     "ResultatCorrection",
+    "TaggerProtocol",
+    "TokeniseurProtocol",
     "TypeCorrection",
 ]

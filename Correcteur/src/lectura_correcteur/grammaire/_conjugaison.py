@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from lectura_correcteur._types import Correction, TypeCorrection
 from lectura_correcteur._utils import transferer_casse
-from lectura_correcteur.grammaire._donnees import PRONOM_PERSONNE, SUJETS_3PL
+from lectura_correcteur.grammaire._donnees import (
+    PRONOM_PERSONNE,
+    SUJETS_3PL,
+    generer_candidats_1pl,
+    generer_candidats_2pl,
+    generer_candidats_3pl,
+    generer_candidats_singulier,
+)
 
 # Terminaisons attendues par personne (indicatif present, 1er groupe)
 _SUFFIXES_ATTENDUS: dict[str, list[str]] = {
@@ -46,28 +53,29 @@ def verifier_conjugaisons(
         pos = pos_tags[i] if i < len(pos_tags) else ""
         curr = result[i]
 
-        # Regle 3 : ils/elles + VER en -e -> -ent
+        # Regle 3 : ils/elles + VER -> 3e pluriel
         if i > 0 and pos in ("VER", "AUX"):
             prev_is_3pl = (
                 result[i - 1].lower() in SUJETS_3PL
                 or (i - 1 < len(origs) and origs[i - 1].lower() in SUJETS_3PL)
             )
-            if (
-                prev_is_3pl
-                and curr.endswith("e")
-                and not curr.endswith(("ent", "nt"))
-            ):
-                candidate = curr + "nt"
-                if lexique is None or lexique.existe(candidate):
-                    ancien = result[i]
-                    result[i] = candidate
-                    corrections.append(Correction(
-                        index=i,
-                        original=ancien,
-                        corrige=candidate,
-                        type_correction=TypeCorrection.GRAMMAIRE,
-                        explication="ils/elles + verbe -> -ent",
-                    ))
+            if prev_is_3pl and not curr.lower().endswith(("ent", "nt")):
+                candidats = generer_candidats_3pl(curr)
+                for candidate in candidats:
+                    if lexique is None or lexique.existe(candidate):
+                        ancien = result[i]
+                        result[i] = candidate
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige=candidate,
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            explication="ils/elles + verbe -> 3pl",
+                        ))
+                        break
+                else:
+                    candidate = None
+                if candidate is not None and result[i] != curr:
                     continue
 
         # Regle 5 simplifie : Pronom sujet + VER -> correction par suffixe
@@ -122,10 +130,41 @@ def _corriger_par_suffixe(
         if lexique is None or lexique.existe(candidate):
             return candidate
 
-    # 3e pluriel : -e -> -ent (deja gere par regle 3, mais cas ou prev != ils/elles)
-    if key == "3p" and low.endswith("e") and not low.endswith(("ent", "nt")):
-        candidate = mot + "nt"
-        if lexique is None or lexique.existe(candidate):
-            return candidate
+    # Tu + verbe en -ent (3pl) -> singulariser + s
+    if key == "2" and low.endswith("ent") and len(low) > 3:
+        for candidate in generer_candidats_singulier(mot, "2"):
+            if lexique is None or lexique.existe(candidate):
+                return candidate
+
+    # Je (P1) : -ent -> singulariser, -es -> retirer s
+    if key == "1":
+        for candidate in generer_candidats_singulier(mot, "1"):
+            if lexique is None or lexique.existe(candidate):
+                return candidate
+
+    # Il/elle (P3s) : -ent -> singulariser
+    if key in ("3", "3s") and low.endswith("ent") and len(low) > 3:
+        for candidate in generer_candidats_singulier(mot, "3"):
+            if lexique is None or lexique.existe(candidate):
+                return candidate
+
+    # 3e pluriel : generer candidats (1er, 2e, 3e groupe)
+    if key == "3p" and not low.endswith(("ent", "nt")):
+        candidats = generer_candidats_3pl(mot)
+        for candidate in candidats:
+            if lexique is None or lexique.existe(candidate):
+                return candidate
+
+    # Nous (P1p) : generer candidats 1re pluriel
+    if key == "1p" and not low.endswith("ons"):
+        for candidate in generer_candidats_1pl(mot):
+            if lexique is None or lexique.existe(candidate):
+                return candidate
+
+    # Vous (P2p) : generer candidats 2e pluriel
+    if key == "2p" and not low.endswith("ez"):
+        for candidate in generer_candidats_2pl(mot):
+            if lexique is None or lexique.existe(candidate):
+                return candidate
 
     return None

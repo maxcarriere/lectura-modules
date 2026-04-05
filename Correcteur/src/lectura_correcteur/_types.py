@@ -4,6 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class TaggerProtocol(Protocol):
+    """Protocol duck-typing pour un tagger externe (CRF, BiLSTM unifie, etc.)."""
+
+    def tokenize(self, text: str) -> list[tuple[str, bool]]: ...
+
+    def tag_words(self, words: list[str]) -> list[dict]: ...
+
+
+@runtime_checkable
+class TokeniseurProtocol(Protocol):
+    """Protocol duck-typing pour un tokeniseur externe (lectura-tokeniseur, etc.)."""
+
+    def tokeniser(self, text: str) -> list: ...
 
 
 class TypeCorrection(Enum):
@@ -26,6 +43,7 @@ class MotAnalyse:
     morpho: dict[str, str] = field(default_factory=dict)
     dans_lexique: bool = False
     type_correction: TypeCorrection = TypeCorrection.AUCUNE
+    suggestions: list[str] = field(default_factory=list)
 
 
 @dataclass
