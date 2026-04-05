@@ -1,11 +1,13 @@
 """Desambiguation contextuelle des homophones grammaticaux.
 
-Paires traitees : et/est, son/sont, a/à, ou/où, on/ont, ce/se, la/là.
+Paires traitees : et/est, son/sont, a/à, ou/où, on/ont, ce/se, la/là,
+leur/leurs, ça/sa, -er/-é apres aller.
 """
 
 from __future__ import annotations
 
 from lectura_correcteur._types import Correction, TypeCorrection
+from lectura_correcteur.grammaire._donnees import ALLER_FORMES
 
 
 def verifier_homophones(
@@ -201,5 +203,94 @@ def verifier_homophones(
                 explication="'la' -> 'là' (adverbe de lieu)",
             ))
             continue
+
+        # --- leur / leurs ---
+        # "leur" + NOM pluriel -> "leurs"
+        if curr_low == "leur" and pos in ("DET", "ADJ:pos"):
+            if i + 1 < n:
+                next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                if next_pos == "NOM":
+                    next_low = result[i + 1].lower()
+                    if next_low.endswith(("s", "x", "z")):
+                        ancien = result[i]
+                        result[i] = "leurs"
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige="leurs",
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            explication="'leur' -> 'leurs' (NOM pluriel)",
+                        ))
+                        continue
+
+        # "leurs" + NOM singulier -> "leur"
+        if curr_low == "leurs" and pos in ("DET", "ADJ:pos"):
+            if i + 1 < n:
+                next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                if next_pos == "NOM":
+                    next_low = result[i + 1].lower()
+                    if not next_low.endswith(("s", "x", "z")):
+                        ancien = result[i]
+                        result[i] = "leur"
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige="leur",
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            explication="'leurs' -> 'leur' (NOM singulier)",
+                        ))
+                        continue
+
+        # --- ça / sa ---
+        # "sa" + VER -> probablement "ça"
+        if curr_low == "sa" and pos in ("ADJ:pos", "DET"):
+            if i + 1 < n:
+                next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                if next_pos in ("VER", "AUX"):
+                    ancien = result[i]
+                    result[i] = "ça"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="ça",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'sa' -> 'ça' (suivi d'un verbe)",
+                    ))
+                    continue
+
+        # "ça" + NOM -> probablement "sa"
+        if curr_low in ("ça", "ca") and pos in ("PRO:dem", "PRO:ind"):
+            if i + 1 < n:
+                next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                if next_pos == "NOM":
+                    ancien = result[i]
+                    result[i] = "sa"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="sa",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'ça' -> 'sa' (suivi d'un nom)",
+                    ))
+                    continue
+
+        # --- -er/-é apres aller ---
+        # ALLER_FORMES + mot en -é -> -er (infinitif requis apres aller)
+        if i > 0 and pos == "VER" and curr_low.endswith("é") and not curr_low.endswith("er"):
+            prev_low = result[i - 1].lower()
+            if prev_low in ALLER_FORMES:
+                # Generer l'infinitif : mangé → manger (remplacer é par er)
+                candidate = curr_low[:-1] + "er"
+                if lexique is None or lexique.existe(candidate):
+                    ancien = result[i]
+                    result[i] = candidate
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=candidate,
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="PP -> infinitif apres aller",
+                    ))
+                    continue
 
     return result, corrections

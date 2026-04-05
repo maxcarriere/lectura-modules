@@ -78,14 +78,23 @@ def verifier_conjugaisons(
                 if candidate is not None and result[i] != curr:
                     continue
 
-        # Regle 5 simplifie : Pronom sujet + VER -> correction par suffixe
+        # Regle 5 : Pronom sujet + VER -> correction conjugaison
         if i > 0 and pos in ("VER", "AUX"):
             pronom_info = _trouver_pronom_sujet(result, origs, i)
             if pronom_info is not None:
                 personne, nombre = pronom_info
-                correction = _corriger_par_suffixe(
-                    curr, personne, nombre, lexique,
-                )
+                # Essayer d'abord par lexique (imparfait/futur)
+                temps = _detecter_temps_from_suffixe(curr)
+                correction = None
+                if temps is not None:
+                    correction = _corriger_par_lexique(
+                        curr, personne, nombre, temps, lexique,
+                    )
+                # Sinon fallback sur suffixe (present)
+                if correction is None:
+                    correction = _corriger_par_suffixe(
+                        curr, personne, nombre, lexique,
+                    )
                 if correction and correction.lower() != curr.lower():
                     ancien = result[i]
                     result[i] = transferer_casse(curr, correction)
@@ -110,6 +119,232 @@ def _trouver_pronom_sujet(
         for candidate in (mot, orig):
             if candidate in PRONOM_PERSONNE:
                 return PRONOM_PERSONNE[candidate]
+    return None
+
+
+def _detecter_temps_from_suffixe(mot: str) -> str | None:
+    """Detecte le temps d'une forme verbale par son suffixe.
+
+    Retourne "Imp" (imparfait) ou "Fut" (futur) ou None.
+    """
+    low = mot.lower()
+    # Imparfait : -aient (avant -ais/-ait pour eviter collision)
+    if low.endswith("aient"):
+        return "Imp"
+    if low.endswith(("ais", "ait")) and len(low) > 3:
+        return "Imp"
+    if low.endswith(("ions", "iez")) and len(low) > 4:
+        return "Imp"
+    # Futur : -ront, -rons, -rez (avant -ra/-rai/-ras)
+    if low.endswith(("ront", "rons", "rez")) and len(low) > 4:
+        return "Fut"
+    if low.endswith(("rai", "ras")) and len(low) > 4:
+        return "Fut"
+    if low.endswith("ra") and len(low) > 3:
+        return "Fut"
+    return None
+
+
+def _lemmatiser_verbe(mot: str, temps: str) -> str | None:
+    """Retrouve l'infinitif a partir d'une forme conjuguee.
+
+    Heuristique par suffixe pour imparfait et futur.
+    """
+    low = mot.lower()
+    if temps == "Imp":
+        # Ordre : suffixes longs d'abord
+        for suf in ("aient", "ions", "iez", "ais", "ait"):
+            if low.endswith(suf) and len(low) > len(suf):
+                radical = low[:-len(suf)]
+                # 2e groupe : finissait → finiss → finir
+                if radical.endswith("iss"):
+                    return radical[:-3] + "ir"
+                # 3e groupe : dormait → dorm → dormir
+                if radical.endswith(("m", "t", "v", "n")) and not radical.endswith("e"):
+                    return radical + "ir"
+                # 1er groupe : mangeait → mange → manger
+                # radical se termine deja par 'e' (mange) → juste ajouter 'r'
+                if radical.endswith("e"):
+                    return radical + "r"
+                return radical + "er"
+    if temps == "Fut":
+        for suf in ("ront", "rons", "rez", "rai", "ras", "ra"):
+            if low.endswith(suf) and len(low) > len(suf) + 1:
+                radical = low[:-len(suf)]
+                # Le radical du futur = infinitif pour les reguliers
+                # manger(a) → radical=manger, finir(a) → radical=finir
+                if radical.endswith("er") or radical.endswith("ir"):
+                    return radical
+                # 2e groupe : finira → radical=fini → finir
+                if radical.endswith("i"):
+                    return radical + "r"
+                # 1er groupe : mangera → radical=mange → manger
+                if radical.endswith("e"):
+                    return radical + "r"
+                return radical + "er"
+    return None
+
+
+def _corriger_par_lexique(
+    mot: str, personne: str, nombre: str, temps: str, lexique,
+) -> str | None:
+    """Corrige par lookup dans lexique.conjuguer().
+
+    Cherche l'infinitif, puis la bonne forme conjuguee.
+    Gere deux formats de cles :
+    - MockLexique : "1s", "2s", "3s", "1p", "2p", "3p"
+    - Lexique reel : "1", "2", "3" (generalement une seule forme par personne)
+    """
+    if lexique is None:
+        return None
+
+    infinitif = _lemmatiser_verbe(mot, temps)
+    if infinitif is None:
+        return None
+
+    conj = lexique.conjuguer(infinitif)
+    if not conj:
+        return None
+
+    temps_key = "imparfait" if temps == "Imp" else "futur"
+    indicatif = conj.get("indicatif", {})
+    table = indicatif.get(temps_key, {})
+    if not table:
+        return None
+
+    # Essayer les cles du format MockLexique ("1s", "3p", etc.)
+    key_sn = personne + ("s" if nombre in ("", "s") else "p")
+    forme = table.get(key_sn)
+    if forme and forme.lower() != mot.lower():
+        if lexique.existe(forme):
+            return forme
+
+    # Essayer la cle simple (format reel : "1", "2", "3")
+    forme_base = table.get(personne)
+    if forme_base:
+        # La forme dans la table peut etre sing ou plur.
+        # On doit deriver la bonne forme selon le nombre.
+        candidat = _deriver_forme_nombre(forme_base, personne, nombre, temps, lexique)
+        if candidat and candidat.lower() != mot.lower():
+            return candidat
+
+    return None
+
+
+def _deriver_forme_nombre(
+    forme: str, personne: str, nombre: str, temps: str, lexique,
+) -> str | None:
+    """Derive la forme sing/plur a partir d'une forme de base du lexique.
+
+    Le lexique reel stocke souvent une seule forme par personne.
+    Par ex. imparfait P3 = "mangeaient" (3pl). Si on veut 3s, on derive "mangeait".
+    """
+    low = forme.lower()
+
+    # Determiner si la forme de base est sing ou plur
+    is_plur = low.endswith(("ent", "ons", "ez", "ont"))
+    want_plur = nombre == "p"
+
+    if is_plur == want_plur:
+        # La forme correspond deja au nombre voulu
+        if lexique is None or lexique.existe(forme):
+            return forme
+
+    if temps == "Imp":
+        if is_plur and not want_plur:
+            # 3pl -> sing : mangeaient -> mangeait (P3s), mangeais (P1/P2s)
+            if low.endswith("aient"):
+                if personne in ("1", "2"):
+                    cand = low[:-4] + "is"
+                else:
+                    cand = low[:-3] + "t"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ions"):
+                cand = low[:-4] + "ais"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+        elif not is_plur and want_plur:
+            # sing -> plur
+            if low.endswith("ait"):
+                if personne == "1":
+                    cand = low[:-3] + "ions"
+                elif personne == "2":
+                    cand = low[:-3] + "iez"
+                else:
+                    cand = low[:-1] + "ent"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ais"):
+                radical = low[:-3]
+                if personne == "1":
+                    suffixes = ["ions"]
+                elif personne == "2":
+                    suffixes = ["iez"]
+                else:
+                    suffixes = ["aient"]
+                for suf in suffixes:
+                    cand = radical + suf
+                    if lexique is None or lexique.existe(cand):
+                        return cand
+                    # 1er groupe : mangeais → mang + ions (drop 'e')
+                    if radical.endswith("e"):
+                        cand2 = radical[:-1] + suf
+                        if lexique is None or lexique.existe(cand2):
+                            return cand2
+
+    if temps == "Fut":
+        if is_plur and not want_plur:
+            # ront -> ra (P3s), rai (P1s), ras (P2s)
+            if low.endswith("ront"):
+                if personne == "1":
+                    cand = low[:-4] + "rai"
+                elif personne == "2":
+                    cand = low[:-4] + "ras"
+                else:
+                    cand = low[:-4] + "ra"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+        elif not is_plur and want_plur:
+            # sing -> plur
+            if low.endswith("ra") and not low.endswith("ira"):
+                if personne == "1":
+                    cand = low[:-1] + "ons"
+                elif personne == "2":
+                    cand = low[:-1] + "ez"
+                else:
+                    cand = low[:-2] + "ront"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ra"):
+                # For 2e groupe : finira -> finiront/finirons/finirez
+                if personne == "1":
+                    cand = low[:-1] + "ons"
+                elif personne == "2":
+                    cand = low[:-1] + "ez"
+                else:
+                    cand = low[:-2] + "ront"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("rai"):
+                if personne == "1":
+                    cand = low[:-2] + "ons"
+                elif personne == "2":
+                    cand = low[:-2] + "ez"
+                else:
+                    cand = low[:-2] + "ont"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ras"):
+                if personne == "1":
+                    cand = low[:-3] + "rons"
+                elif personne == "2":
+                    cand = low[:-3] + "rez"
+                else:
+                    cand = low[:-3] + "ront"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+
     return None
 
 

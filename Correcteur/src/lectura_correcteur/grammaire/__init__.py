@@ -4,7 +4,10 @@ from lectura_correcteur.grammaire._accord import verifier_accords
 from lectura_correcteur.grammaire._conjugaison import verifier_conjugaisons
 from lectura_correcteur.grammaire._homophones import verifier_homophones
 from lectura_correcteur.grammaire._negation import verifier_negation
-from lectura_correcteur.grammaire._participe import verifier_participes_passes
+from lectura_correcteur.grammaire._participe import (
+    verifier_participes_passes,
+    verifier_pp_accord_etre,
+)
 
 __all__ = [
     "appliquer_grammaire",
@@ -13,6 +16,7 @@ __all__ = [
     "verifier_homophones",
     "verifier_negation",
     "verifier_participes_passes",
+    "verifier_pp_accord_etre",
 ]
 
 
@@ -54,6 +58,13 @@ def appliquer_grammaire(
     )
     result = result_pp
     corrections.extend(corr_pp)
+
+    # 3b. Accord PP avec sujet quand auxiliaire = etre
+    result_ppetre, corr_ppetre = verifier_pp_accord_etre(
+        result, pos_tags, morpho, lexique, origs,
+    )
+    result = result_ppetre
+    corrections.extend(corr_ppetre)
 
     # 4. Negation (inserer ne)
     result_neg, corr_neg = verifier_negation(

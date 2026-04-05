@@ -8,6 +8,7 @@ from __future__ import annotations
 from lectura_correcteur._types import Correction, TypeCorrection
 from lectura_correcteur._utils import transferer_casse
 from lectura_correcteur.grammaire._donnees import (
+    COPULES_ALL,
     COPULES_PLURIEL,
     DET_GENRE_MAP,
     INVARIABLES,
@@ -20,6 +21,7 @@ from lectura_correcteur.grammaire._donnees import (
     generer_candidats_feminin,
     generer_candidats_masculin,
     generer_candidats_pluriel,
+    trouver_sujet_genre_nombre,
 )
 
 
@@ -268,6 +270,61 @@ def verifier_accords(
                             explication="Accord sujet pluriel -> verbe 3pl",
                         ))
                         break
+
+        # Regle 9 : Copule (etre/sembler/devenir...) + ADJ -> accord genre
+        # avec le sujet. Applique AVANT Regle 5 (nombre) pour que
+        # "elles sont petit" → petite (genre) → petites (nombre).
+        if i > 0 and pos == "ADJ" and lexique is not None:
+            prev_result_low = result[i - 1].lower()
+            if prev_result_low in COPULES_ALL:
+                # Trouver le genre du sujet
+                gn = trouver_sujet_genre_nombre(
+                    result, pos_tags, morpho, i - 1, lexique,
+                )
+                if gn is not None:
+                    s_genre, _s_nombre = gn
+                    adj_infos = lexique.info(result[i])
+                    adj_genred = [e for e in adj_infos if e.get("genre")]
+                    if s_genre == "Fem" and adj_genred and all(
+                        e.get("genre") == "m" for e in adj_genred
+                    ):
+                        for cand in generer_candidats_feminin(result[i]):
+                            c_infos = lexique.info(cand)
+                            if c_infos and any(
+                                e.get("genre") == "f" for e in c_infos
+                            ):
+                                ancien = result[i]
+                                result[i] = cand
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien,
+                                    corrige=cand,
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    explication="Accord attribut en genre (sujet fem)",
+                                ))
+                                curr = result[i]
+                                curr_low = curr.lower()
+                                break
+                    elif s_genre == "Masc" and adj_genred and all(
+                        e.get("genre") == "f" for e in adj_genred
+                    ):
+                        for cand in generer_candidats_masculin(result[i]):
+                            c_infos = lexique.info(cand)
+                            if c_infos and any(
+                                e.get("genre") == "m" for e in c_infos
+                            ):
+                                ancien = result[i]
+                                result[i] = cand
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien,
+                                    corrige=cand,
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    explication="Accord attribut en genre (sujet masc)",
+                                ))
+                                curr = result[i]
+                                curr_low = curr.lower()
+                                break
 
         # Regle 5 : Copule plurielle + ADJ -> ajouter -s/-x (attribut du sujet)
         if i > 0 and pos == "ADJ":

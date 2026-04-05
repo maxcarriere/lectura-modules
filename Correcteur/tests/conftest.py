@@ -14,11 +14,18 @@ import pytest
 class MockLexique:
     """Lexique minimal pour les tests unitaires."""
 
-    def __init__(self, formes: dict[str, list[dict[str, Any]]] | None = None):
+    def __init__(
+        self,
+        formes: dict[str, list[dict[str, Any]]] | None = None,
+        conjugaisons: dict[str, dict] | None = None,
+    ):
         if formes is None:
             formes = _DONNEES_DEFAUT()
+        if conjugaisons is None:
+            conjugaisons = _CONJUGAISONS_DEFAUT()
         self._formes = formes
         self._formes_set = frozenset(formes.keys())
+        self._conjugaisons = conjugaisons
 
     def existe(self, mot: str) -> bool:
         return mot.lower() in self._formes_set
@@ -49,6 +56,19 @@ class MockLexique:
         for entries in self._formes.values():
             for e in entries:
                 if e.get("phone") == phone:
+                    results.append(e)
+        return results
+
+    def conjuguer(self, verbe: str) -> dict[str, dict[str, dict[str, str]]]:
+        """Retourne un dict {mode: {temps: {personne: forme}}}."""
+        return self._conjugaisons.get(verbe.lower(), {})
+
+    def formes_de(self, lemme: str) -> list[dict[str, Any]]:
+        """Retourne toutes les formes associees a un lemme."""
+        results = []
+        for entries in self._formes.values():
+            for e in entries:
+                if e.get("lemme", e.get("ortho", "")).lower() == lemme.lower():
                     results.append(e)
         return results
 
@@ -409,6 +429,250 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
         # Homophones supplémentaires
         "ou": [{"ortho": "ou", "cgram": "CON", "phone": "u",
                 "freq": 200.0}],
+        # --- PP feminins/pluriels (pour PP_ETRE) ---
+        "allé": [{"ortho": "allé", "cgram": "VER", "phone": "ale",
+                  "freq": 20.0, "mode": "participe", "genre": "m", "nombre": "s"}],
+        "allée": [{"ortho": "allée", "cgram": "VER", "phone": "ale",
+                   "freq": 15.0, "mode": "participe", "genre": "f", "nombre": "s"}],
+        "allés": [{"ortho": "allés", "cgram": "VER", "phone": "ale",
+                   "freq": 10.0, "mode": "participe", "genre": "m", "nombre": "p"}],
+        "allées": [{"ortho": "allées", "cgram": "VER", "phone": "ale",
+                    "freq": 8.0, "mode": "participe", "genre": "f", "nombre": "p"}],
+        "arrivé": [{"ortho": "arrivé", "cgram": "VER", "phone": "aʁive",
+                    "freq": 15.0, "mode": "participe", "genre": "m", "nombre": "s"}],
+        "arrivée": [{"ortho": "arrivée", "cgram": "VER", "phone": "aʁive",
+                     "freq": 12.0, "mode": "participe", "genre": "f", "nombre": "s"}],
+        "arrivés": [{"ortho": "arrivés", "cgram": "VER", "phone": "aʁive",
+                     "freq": 8.0, "mode": "participe", "genre": "m", "nombre": "p"}],
+        "arrivées": [{"ortho": "arrivées", "cgram": "VER", "phone": "aʁive",
+                      "freq": 5.0, "mode": "participe", "genre": "f", "nombre": "p"}],
+        "parti": [{"ortho": "parti", "cgram": "VER", "phone": "paʁti",
+                   "freq": 15.0, "mode": "participe", "genre": "m", "nombre": "s"}],
+        "partie": [{"ortho": "partie", "cgram": "VER", "phone": "paʁti",
+                    "freq": 12.0, "mode": "participe", "genre": "f", "nombre": "s"}],
+        "partis": [{"ortho": "partis", "cgram": "VER", "phone": "paʁti",
+                    "freq": 8.0, "mode": "participe", "genre": "m", "nombre": "p"}],
+        "parties": [{"ortho": "parties", "cgram": "VER", "phone": "paʁti",
+                     "freq": 5.0, "mode": "participe", "genre": "f", "nombre": "p"}],
+        "tombé": [{"ortho": "tombé", "cgram": "VER", "phone": "tɔ̃be",
+                   "freq": 15.0, "mode": "participe", "genre": "m", "nombre": "s"}],
+        "tombée": [{"ortho": "tombée", "cgram": "VER", "phone": "tɔ̃be",
+                    "freq": 12.0, "mode": "participe", "genre": "f", "nombre": "s"}],
+        "tombés": [{"ortho": "tombés", "cgram": "VER", "phone": "tɔ̃be",
+                    "freq": 8.0, "mode": "participe", "genre": "m", "nombre": "p"}],
+        "tombées": [{"ortho": "tombées", "cgram": "VER", "phone": "tɔ̃be",
+                     "freq": 5.0, "mode": "participe", "genre": "f", "nombre": "p"}],
+        "venu": [{"ortho": "venu", "cgram": "VER", "phone": "vəny",
+                  "freq": 15.0, "mode": "participe", "genre": "m", "nombre": "s"}],
+        "venue": [{"ortho": "venue", "cgram": "VER", "phone": "vəny",
+                   "freq": 12.0, "mode": "participe", "genre": "f", "nombre": "s"}],
+        "venus": [{"ortho": "venus", "cgram": "VER", "phone": "vəny",
+                   "freq": 8.0, "mode": "participe", "genre": "m", "nombre": "p"}],
+        "venues": [{"ortho": "venues", "cgram": "VER", "phone": "vəny",
+                    "freq": 5.0, "mode": "participe", "genre": "f", "nombre": "p"}],
+        # --- Formes imparfait/futur (pour CONJ_IMP/CONJ_FUT) ---
+        "mangeais": [{"ortho": "mangeais", "cgram": "VER", "phone": "mɑ̃ʒɛ",
+                      "freq": 5.0, "personne": "1", "nombre": "s"}],
+        "mangeait": [{"ortho": "mangeait", "cgram": "VER", "phone": "mɑ̃ʒɛ",
+                      "freq": 8.0, "personne": "3", "nombre": "s"}],
+        "mangions": [{"ortho": "mangions", "cgram": "VER", "phone": "mɑ̃ʒjɔ̃",
+                      "freq": 3.0, "personne": "1", "nombre": "p"}],
+        "mangiez": [{"ortho": "mangiez", "cgram": "VER", "phone": "mɑ̃ʒje",
+                     "freq": 3.0, "personne": "2", "nombre": "p"}],
+        "mangeaient": [{"ortho": "mangeaient", "cgram": "VER", "phone": "mɑ̃ʒɛ",
+                        "freq": 5.0, "personne": "3", "nombre": "p"}],
+        "mangera": [{"ortho": "mangera", "cgram": "VER", "phone": "mɑ̃ʒʁa",
+                     "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "mangerai": [{"ortho": "mangerai", "cgram": "VER", "phone": "mɑ̃ʒʁe",
+                      "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "mangeras": [{"ortho": "mangeras", "cgram": "VER", "phone": "mɑ̃ʒʁa",
+                      "freq": 3.0, "personne": "2", "nombre": "s"}],
+        "mangerons": [{"ortho": "mangerons", "cgram": "VER", "phone": "mɑ̃ʒʁɔ̃",
+                       "freq": 3.0, "personne": "1", "nombre": "p"}],
+        "mangerez": [{"ortho": "mangerez", "cgram": "VER", "phone": "mɑ̃ʒʁe",
+                      "freq": 3.0, "personne": "2", "nombre": "p"}],
+        "mangeront": [{"ortho": "mangeront", "cgram": "VER", "phone": "mɑ̃ʒʁɔ̃",
+                       "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "finira": [{"ortho": "finira", "cgram": "VER", "phone": "finiʁa",
+                    "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "finirai": [{"ortho": "finirai", "cgram": "VER", "phone": "finiʁe",
+                     "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "finiras": [{"ortho": "finiras", "cgram": "VER", "phone": "finiʁa",
+                     "freq": 3.0, "personne": "2", "nombre": "s"}],
+        "finirons": [{"ortho": "finirons", "cgram": "VER", "phone": "finiʁɔ̃",
+                      "freq": 3.0, "personne": "1", "nombre": "p"}],
+        "finirez": [{"ortho": "finirez", "cgram": "VER", "phone": "finiʁe",
+                     "freq": 3.0, "personne": "2", "nombre": "p"}],
+        "finiront": [{"ortho": "finiront", "cgram": "VER", "phone": "finiʁɔ̃",
+                      "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "finissais": [{"ortho": "finissais", "cgram": "VER", "phone": "finisɛ",
+                       "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "finissait": [{"ortho": "finissait", "cgram": "VER", "phone": "finisɛ",
+                       "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "finissaient": [{"ortho": "finissaient", "cgram": "VER", "phone": "finisɛ",
+                         "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "dormais": [{"ortho": "dormais", "cgram": "VER", "phone": "dɔʁmɛ",
+                     "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "dormait": [{"ortho": "dormait", "cgram": "VER", "phone": "dɔʁmɛ",
+                     "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "dormaient": [{"ortho": "dormaient", "cgram": "VER", "phone": "dɔʁmɛ",
+                       "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "parlait": [{"ortho": "parlait", "cgram": "VER", "phone": "paʁlɛ",
+                     "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "parlais": [{"ortho": "parlais", "cgram": "VER", "phone": "paʁlɛ",
+                     "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "parlaient": [{"ortho": "parlaient", "cgram": "VER", "phone": "paʁlɛ",
+                       "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "chantera": [{"ortho": "chantera", "cgram": "VER", "phone": "ʃɑ̃tʁa",
+                      "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "chanterai": [{"ortho": "chanterai", "cgram": "VER", "phone": "ʃɑ̃tʁe",
+                       "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "chanteras": [{"ortho": "chanteras", "cgram": "VER", "phone": "ʃɑ̃tʁa",
+                       "freq": 3.0, "personne": "2", "nombre": "s"}],
+        "chanterons": [{"ortho": "chanterons", "cgram": "VER", "phone": "ʃɑ̃tʁɔ̃",
+                        "freq": 3.0, "personne": "1", "nombre": "p"}],
+        "chanterez": [{"ortho": "chanterez", "cgram": "VER", "phone": "ʃɑ̃tʁe",
+                       "freq": 3.0, "personne": "2", "nombre": "p"}],
+        "chanteront": [{"ortho": "chanteront", "cgram": "VER", "phone": "ʃɑ̃tʁɔ̃",
+                        "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "parleront": [{"ortho": "parleront", "cgram": "VER", "phone": "paʁlʁɔ̃",
+                       "freq": 3.0, "personne": "3", "nombre": "p"}],
+        "parlerai": [{"ortho": "parlerai", "cgram": "VER", "phone": "paʁlʁe",
+                      "freq": 3.0, "personne": "1", "nombre": "s"}],
+        "parlera": [{"ortho": "parlera", "cgram": "VER", "phone": "paʁlʁa",
+                     "freq": 5.0, "personne": "3", "nombre": "s"}],
+        "parlerons": [{"ortho": "parlerons", "cgram": "VER", "phone": "paʁlʁɔ̃",
+                       "freq": 3.0, "personne": "1", "nombre": "p"}],
+        # --- Formes attribut (pour ATTR) ---
+        "contente": [{"ortho": "contente", "cgram": "ADJ", "phone": "kɔ̃tɑ̃t",
+                      "freq": 15.0, "genre": "f", "nombre": "s"}],
+        "contentes": [{"ortho": "contentes", "cgram": "ADJ", "phone": "kɔ̃tɑ̃t",
+                       "freq": 8.0, "genre": "f", "nombre": "p"}],
+        "beau": [{"ortho": "beau", "cgram": "ADJ", "phone": "bo",
+                  "freq": 30.0, "genre": "m", "nombre": "s"}],
+        "bel": [{"ortho": "bel", "cgram": "ADJ", "phone": "bɛl",
+                 "freq": 10.0, "genre": "m", "nombre": "s"}],
+        "beaux": [{"ortho": "beaux", "cgram": "ADJ", "phone": "bo",
+                   "freq": 15.0, "genre": "m", "nombre": "p"}],
+        # --- Homophones leur/leurs, ca/sa ---
+        "leur": [{"ortho": "leur", "cgram": "DET", "phone": "lœʁ",
+                  "freq": 100.0, "nombre": "s"}],
+        "leurs": [{"ortho": "leurs", "cgram": "DET", "phone": "lœʁ",
+                   "freq": 80.0, "nombre": "p"}],
+        "ça": [{"ortho": "ça", "cgram": "PRO:dem", "phone": "sa",
+                "freq": 100.0}],
+        "sa": [{"ortho": "sa", "cgram": "ADJ:pos", "phone": "sa",
+                "freq": 120.0, "genre": "f", "nombre": "s"}],
+        # Infinitifs supplementaires pour -er/-e apres aller
+        "aller": [{"ortho": "aller", "cgram": "VER", "phone": "ale",
+                   "freq": 50.0, "mode": "inf"}],
+        "arriver": [{"ortho": "arriver", "cgram": "VER", "phone": "aʁive",
+                     "freq": 20.0, "mode": "inf"}],
+        "partir": [{"ortho": "partir", "cgram": "VER", "phone": "paʁtiʁ",
+                    "freq": 20.0, "mode": "inf"}],
+        "tomber": [{"ortho": "tomber", "cgram": "VER", "phone": "tɔ̃be",
+                    "freq": 15.0, "mode": "inf"}],
+        "venir": [{"ortho": "venir", "cgram": "VER", "phone": "vəniʁ",
+                   "freq": 20.0, "mode": "inf"}],
+        # Verbe 'parle' (forme conjuguee)
+        "parle": [{"ortho": "parle", "cgram": "VER", "phone": "paʁl",
+                   "freq": 15.0, "personne": "3", "nombre": "s"}],
+        "parlent": [{"ortho": "parlent", "cgram": "VER", "phone": "paʁl",
+                     "freq": 8.0, "personne": "3", "nombre": "p"}],
+        # été (PP etre)
+        "été": [{"ortho": "été", "cgram": "VER", "phone": "ete",
+                 "freq": 20.0, "mode": "participe", "genre": "m", "nombre": "s"}],
+        # Supplementaires pour corpus evaluation
+        "chanson": [{"ortho": "chanson", "cgram": "NOM", "phone": "ʃɑ̃sɔ̃",
+                     "freq": 20.0, "genre": "f", "nombre": "s"}],
+        "chansons": [{"ortho": "chansons", "cgram": "NOM", "phone": "ʃɑ̃sɔ̃",
+                      "freq": 10.0, "genre": "f", "nombre": "p"}],
+        "rouge": [{"ortho": "rouge", "cgram": "ADJ", "phone": "ʁuʒ",
+                   "freq": 25.0, "genre": "m", "nombre": "s"},
+                  {"ortho": "rouge", "cgram": "ADJ", "phone": "ʁuʒ",
+                   "freq": 25.0, "genre": "f", "nombre": "s"}],
+        "rouges": [{"ortho": "rouges", "cgram": "ADJ", "phone": "ʁuʒ",
+                    "freq": 10.0, "genre": "m", "nombre": "p"},
+                   {"ortho": "rouges", "cgram": "ADJ", "phone": "ʁuʒ",
+                    "freq": 10.0, "genre": "f", "nombre": "p"}],
+        "regarde": [{"ortho": "regarde", "cgram": "VER", "phone": "ʁəɡaʁd",
+                     "freq": 15.0, "personne": "3", "nombre": "s"}],
+        "regardent": [{"ortho": "regardent", "cgram": "VER", "phone": "ʁəɡaʁd",
+                       "freq": 8.0, "personne": "3", "nombre": "p"}],
+        "donne": [{"ortho": "donne", "cgram": "VER", "phone": "dɔn",
+                   "freq": 15.0, "personne": "3", "nombre": "s"}],
+        "donnent": [{"ortho": "donnent", "cgram": "VER", "phone": "dɔn",
+                     "freq": 8.0, "personne": "3", "nombre": "p"}],
+        "fleur": [{"ortho": "fleur", "cgram": "NOM", "phone": "flœʁ",
+                   "freq": 20.0, "genre": "f", "nombre": "s"}],
+        "fleurs": [{"ortho": "fleurs", "cgram": "NOM", "phone": "flœʁ",
+                    "freq": 15.0, "genre": "f", "nombre": "p"}],
+        "garçon": [{"ortho": "garçon", "cgram": "NOM", "phone": "ɡaʁsɔ̃",
+                    "freq": 30.0, "genre": "m", "nombre": "s"}],
+        "garçons": [{"ortho": "garçons", "cgram": "NOM", "phone": "ɡaʁsɔ̃",
+                     "freq": 15.0, "genre": "m", "nombre": "p"}],
+        "ami": [{"ortho": "ami", "cgram": "NOM", "phone": "ami",
+                 "freq": 25.0, "genre": "m", "nombre": "s"}],
+        "amis": [{"ortho": "amis", "cgram": "NOM", "phone": "ami",
+                  "freq": 15.0, "genre": "m", "nombre": "p"}],
+        "oiseau": [{"ortho": "oiseau", "cgram": "NOM", "phone": "wazo",
+                    "freq": 15.0, "genre": "m", "nombre": "s"}],
+        "oiseaux": [{"ortho": "oiseaux", "cgram": "NOM", "phone": "wazo",
+                     "freq": 10.0, "genre": "m", "nombre": "p"}],
+        "jolie": [{"ortho": "jolie", "cgram": "ADJ", "phone": "ʒɔli",
+                   "freq": 15.0, "genre": "f", "nombre": "s"}],
+        "jolies": [{"ortho": "jolies", "cgram": "ADJ", "phone": "ʒɔli",
+                    "freq": 8.0, "genre": "f", "nombre": "p"}],
+        "lit": [{"ortho": "lit", "cgram": "NOM", "phone": "li",
+                 "freq": 20.0, "genre": "m", "nombre": "s"}],
+        "table": [{"ortho": "table", "cgram": "NOM", "phone": "tabl",
+                   "freq": 25.0, "genre": "f", "nombre": "s"}],
+        "cour": [{"ortho": "cour", "cgram": "NOM", "phone": "kuʁ",
+                  "freq": 15.0, "genre": "f", "nombre": "s"}],
+    }
+
+
+def _CONJUGAISONS_DEFAUT() -> dict[str, dict]:
+    """Tables de conjugaison minimales pour les tests."""
+    return {
+        "manger": {"indicatif": {
+            "présent": {"1s": "mange", "2s": "manges", "3s": "mange",
+                        "1p": "mangeons", "2p": "mangez", "3p": "mangent"},
+            "imparfait": {"1s": "mangeais", "2s": "mangeais", "3s": "mangeait",
+                          "1p": "mangions", "2p": "mangiez", "3p": "mangeaient"},
+            "futur": {"1s": "mangerai", "2s": "mangeras", "3s": "mangera",
+                      "1p": "mangerons", "2p": "mangerez", "3p": "mangeront"},
+        }},
+        "finir": {"indicatif": {
+            "présent": {"1s": "finis", "2s": "finis", "3s": "finit",
+                        "1p": "finissons", "2p": "finissez", "3p": "finissent"},
+            "imparfait": {"1s": "finissais", "2s": "finissais", "3s": "finissait",
+                          "1p": "finissions", "2p": "finissiez", "3p": "finissaient"},
+            "futur": {"1s": "finirai", "2s": "finiras", "3s": "finira",
+                      "1p": "finirons", "2p": "finirez", "3p": "finiront"},
+        }},
+        "dormir": {"indicatif": {
+            "présent": {"1s": "dors", "2s": "dors", "3s": "dort",
+                        "1p": "dormons", "2p": "dormez", "3p": "dorment"},
+            "imparfait": {"1s": "dormais", "2s": "dormais", "3s": "dormait",
+                          "1p": "dormions", "2p": "dormiez", "3p": "dormaient"},
+        }},
+        "chanter": {"indicatif": {
+            "présent": {"1s": "chante", "2s": "chantes", "3s": "chante",
+                        "1p": "chantons", "2p": "chantez", "3p": "chantent"},
+            "imparfait": {"1s": "chantais", "2s": "chantais", "3s": "chantait",
+                          "1p": "chantions", "2p": "chantiez", "3p": "chantaient"},
+            "futur": {"1s": "chanterai", "2s": "chanteras", "3s": "chantera",
+                      "1p": "chanterons", "2p": "chanterez", "3p": "chanteront"},
+        }},
+        "parler": {"indicatif": {
+            "présent": {"1s": "parle", "2s": "parles", "3s": "parle",
+                        "1p": "parlons", "2p": "parlez", "3p": "parlent"},
+            "imparfait": {"1s": "parlais", "2s": "parlais", "3s": "parlait",
+                          "1p": "parlions", "2p": "parliez", "3p": "parlaient"},
+            "futur": {"1s": "parlerai", "2s": "parleras", "3s": "parlera",
+                      "1p": "parlerons", "2p": "parlerez", "3p": "parleront"},
+        }},
     }
 
 

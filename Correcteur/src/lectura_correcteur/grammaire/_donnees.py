@@ -138,6 +138,44 @@ AUXILIAIRES = frozenset({
     "fut", "fus", "furent", "fûmes", "fûtes",
 })
 
+# Genre/nombre des pronoms sujets
+PRONOM_GENRE: dict[str, tuple[str, str]] = {
+    "je": ("Masc", "Sing"), "j'": ("Masc", "Sing"),
+    "tu": ("Masc", "Sing"),
+    "il": ("Masc", "Sing"), "on": ("Masc", "Sing"),
+    "elle": ("Fem", "Sing"),
+    "nous": ("Masc", "Plur"),
+    "vous": ("Masc", "Plur"),
+    "ils": ("Masc", "Plur"),
+    "elles": ("Fem", "Plur"),
+}
+
+# Formes conjuguees d'etre
+ETRE_FORMES = frozenset({
+    "suis", "es", "est", "sommes", "êtes", "sont",
+    "etais", "etait", "etions", "etiez", "etaient",
+    "étais", "était", "étions", "étiez", "étaient",
+    "serai", "seras", "sera", "serons", "serez", "seront",
+    "serais", "serait", "serions", "seriez", "seraient",
+    "fus", "fut", "fûmes", "fûtes", "furent",
+})
+
+# Copules : etre + verbes d'etat
+COPULES_ALL = ETRE_FORMES | frozenset({
+    "semble", "sembles", "semblent", "semblait", "semblaient",
+    "devient", "deviens", "deviennent", "devenait", "devenaient",
+    "reste", "restes", "restent", "restait", "restaient",
+    "parait", "paraît", "paraissent", "paraissait", "paraissaient",
+    "demeure", "demeures", "demeurent", "demeurait", "demeuraient",
+})
+
+# Formes conjuguees d'aller (pour homophone -er/-e)
+ALLER_FORMES = frozenset({
+    "vais", "vas", "va", "allons", "allez", "vont",
+    "irai", "iras", "ira", "irons", "irez", "iront",
+    "allais", "allait", "allions", "alliez", "allaient",
+})
+
 
 def generer_candidats_1pl(mot: str) -> list[str]:
     """Genere des candidats 1re personne du pluriel.
@@ -327,4 +365,77 @@ def generer_candidats_masculin(mot: str) -> list[str]:
         candidats.append(low[:-5] + "aux")    # fausse → faux
     if low.endswith("e") and not low.endswith(("sse", "euse", "ve", "ère", "lle", "nne", "trice", "ousse", "ouce", "ausse")):
         candidats.append(low[:-1])           # petite → petit, verte → vert
+    return candidats
+
+
+# --- Mots transparents (ne changent pas l'analyse sujet-verbe) ---
+_TRANSPARENTS = frozenset({
+    "ne", "n'", "pas", "plus", "jamais", "rien",
+    "point", "y", "en",
+})
+
+
+def trouver_sujet_genre_nombre(
+    mots: list[str],
+    pos_tags: list[str],
+    morpho: dict[str, list[str]],
+    idx_verbe: int,
+    lexique,
+) -> tuple[str, str] | None:
+    """Trouve le genre et nombre du sujet en scannant a gauche du verbe.
+
+    Retourne (genre, nombre) via : pronom > NOM (lexique.info) > DET.
+    genre: "Masc" ou "Fem", nombre: "Sing" ou "Plur".
+    """
+    for j in range(idx_verbe - 1, max(-1, idx_verbe - 5), -1):
+        w = mots[j].lower()
+        if w in _TRANSPARENTS:
+            continue
+        # Pronom sujet
+        if w in PRONOM_GENRE:
+            return PRONOM_GENRE[w]
+        # NOM → utiliser lexique
+        pos_j = pos_tags[j] if j < len(pos_tags) else ""
+        if pos_j == "NOM" and lexique is not None:
+            infos = lexique.info(mots[j])
+            if infos:
+                genre = infos[0].get("genre", "")
+                nombre = infos[0].get("nombre", "")
+                g = "Fem" if genre == "f" else "Masc"
+                n = "Plur" if nombre == "p" else "Sing"
+                return (g, n)
+        break
+    return None
+
+
+def generer_candidats_pp_accorde(pp: str, genre: str, nombre: str) -> list[str]:
+    """Genere les formes accordees d'un participe passe.
+
+    alle + Fem+Sing → allee
+    alle + Masc+Plur → alles
+    alle + Fem+Plur → allees
+    """
+    low = pp.lower()
+    candidats: list[str] = []
+
+    if genre == "Fem" and nombre == "Sing":
+        if low.endswith("s"):
+            # alles → allee (retirer s, ajouter e) — peu probable ici
+            candidats.append(low[:-1])
+        elif low.endswith("e"):
+            pass  # deja feminin singulier
+        else:
+            candidats.append(low + "e")
+    elif genre == "Masc" and nombre == "Plur":
+        if not low.endswith("s"):
+            candidats.append(low + "s")
+    elif genre == "Fem" and nombre == "Plur":
+        if low.endswith("e"):
+            candidats.append(low + "s")
+        elif low.endswith("s"):
+            # alles → allees
+            candidats.append(low[:-1] + "es")
+        else:
+            candidats.append(low + "es")
+
     return candidats
