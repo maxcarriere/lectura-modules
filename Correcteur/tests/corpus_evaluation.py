@@ -3,7 +3,7 @@
 Chaque phrase est associée à sa version corrigée attendue et à une ou
 plusieurs catégories d'erreur.  Le corpus couvre les règles implémentées
 dans lectura-correcteur ainsi que quelques catégories non encore
-implémentées (PP, NEG) afin de mesurer les lacunes.
+implémentées afin de mesurer les lacunes.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ class CasTest:
     attendue: str  # phrase corrigée attendue
     categories: list[str] = field(default_factory=list)
     description: str = ""
-    implementee: bool = True  # False pour PP, NEG
+    implementee: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -334,14 +334,13 @@ CORPUS: list[CasTest] = [
         "det masc + adj fém + nom masc",
     ),
 
-    # ===== PP — Participe passé (non implémenté) =====
+    # ===== PP — Participe passé =====
     CasTest(
         "PP_01",
         "il a manger du pain",
         "Il a mangé du pain.",
         ["PP"],
         "infinitif au lieu du participe passé",
-        implementee=False,
     ),
     CasTest(
         "PP_02",
@@ -349,7 +348,6 @@ CORPUS: list[CasTest] = [
         "Elle a chanté toute la soirée.",
         ["PP"],
         "infinitif au lieu du participe passé",
-        implementee=False,
     ),
     CasTest(
         "PP_03",
@@ -357,7 +355,6 @@ CORPUS: list[CasTest] = [
         "Ils ont joué dans le jardin.",
         ["PP"],
         "infinitif au lieu du participe passé",
-        implementee=False,
     ),
     CasTest(
         "PP_04",
@@ -365,7 +362,6 @@ CORPUS: list[CasTest] = [
         "Nous avons parlé avec le voisin.",
         ["PP"],
         "infinitif au lieu du participe passé",
-        implementee=False,
     ),
     CasTest(
         "PP_05",
@@ -373,17 +369,15 @@ CORPUS: list[CasTest] = [
         "Vous avez donné des fleurs.",
         ["PP"],
         "infinitif au lieu du participe passé",
-        implementee=False,
     ),
 
-    # ===== NEG — Négation (non implémenté) =====
+    # ===== NEG — Négation =====
     CasTest(
         "NEG_01",
         "il mange pas de pommes",
         "Il ne mange pas de pommes.",
         ["NEG"],
         "négation sans ne",
-        implementee=False,
     ),
     CasTest(
         "NEG_02",
@@ -391,7 +385,6 @@ CORPUS: list[CasTest] = [
         "Elle ne dort pas bien.",
         ["NEG"],
         "négation sans ne",
-        implementee=False,
     ),
     CasTest(
         "NEG_03",
@@ -399,7 +392,6 @@ CORPUS: list[CasTest] = [
         "Ils ne veulent pas jouer.",
         ["NEG"],
         "négation sans ne",
-        implementee=False,
     ),
     CasTest(
         "NEG_04",
@@ -407,7 +399,6 @@ CORPUS: list[CasTest] = [
         "Je ne sais pas pourquoi.",
         ["NEG"],
         "négation sans ne",
-        implementee=False,
     ),
 
     # ===== MAJ — Majuscules / ponctuation =====
