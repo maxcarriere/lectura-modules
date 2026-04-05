@@ -39,10 +39,12 @@ from lectura_aligneur.lectura_aligneur import (
     lecture_depuis_g2p,
     syllabifier_groupes,
     _valider_spans_formule,
+    # Schwas pédagogiques
+    ajouter_schwa_final,
     # Classe principale
     LecturaSyllabeur,
     # Type alias
     Span,
 )
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"

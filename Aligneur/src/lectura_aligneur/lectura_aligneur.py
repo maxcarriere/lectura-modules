@@ -342,6 +342,9 @@ class MotAnalyse:
     phone: str = ""
     liaison: str = "none"
     pos: str = ""
+    ponctuation_avant: bool = False
+    elision_avant: bool = False
+    est_formule: bool = False
 
     @property
     def text(self) -> str:
@@ -715,10 +718,22 @@ def _alignement_v2(
     ortho: str,
     phone: str,
     phone_to_graphs: dict[str, list[str]],
+    word_boundaries: list[int] | None = None,
 ) -> tuple[list[str], list[str], bool]:
     ortho_orig = ortho
     ortho_norm = ortho.lower()
     phone_tokens = iter_phonemes(phone.lower())
+    # Positions juste avant une frontière de mot (1 ou 2 chars avant)
+    # pour autoriser l'exploration e-muet / s-muet / e°s° en fin de mot.
+    _boundary_muet_positions: frozenset[int] = frozenset()
+    if word_boundaries:
+        pos_set: set[int] = set()
+        for b in word_boundaries:
+            if b - 1 >= 0:
+                pos_set.add(b - 1)  # dernière lettre du mot (s, e)
+            if b - 2 >= 0:
+                pos_set.add(b - 2)  # avant-dernière (e dans e°s°)
+        _boundary_muet_positions = frozenset(pos_set)
 
     bloc_defs = [
         (b, iter_phonemes(b.lower()))
@@ -855,6 +870,29 @@ def _alignement_v2(
                                 allow_split=True,
                             )
 
+            # En mode groupe : explorer e/s muet juste avant une frontière
+            # de mot, même quand un graphème matche à cette position.
+            # Couvre : e° (Maxime+et), s° (cas liaison), e°s° (grandes+amis).
+            if (pos_ortho < M and possible_here
+                    and pos_ortho in _boundary_muet_positions
+                    and ortho_orig[pos_ortho].lower() in ("e", "s")):
+                ch = ortho_orig[pos_ortho]
+                mu = ch + "°"
+                if align_gr:
+                    align_gr[-1] += mu
+                    dfs(
+                        elements, i_el, pos_ortho + 1,
+                        align_ph, align_gr, pending, muettes + 1,
+                        allow_split=True,
+                    )
+                    align_gr[-1] = align_gr[-1][: -len(mu)]
+                else:
+                    dfs(
+                        elements, i_el, pos_ortho + 1,
+                        align_ph, align_gr, pending + mu, muettes + 1,
+                        allow_split=True,
+                    )
+
         dfs(elements0, 0, 0, [], [], "", 0, allow_split=True)
 
     if not all_results:
@@ -960,9 +998,12 @@ def _phonemise_alignment(
 def _aligner(
     ortho: str,
     phone: str,
+    word_boundaries: list[int] | None = None,
 ) -> tuple[list[str], list[str], list[Span], bool]:
     """Aligne graphèmes et phonèmes."""
-    align_ph, align_gr, ok = _alignement_v2(ortho, phone, _PHONE_TO_GRAPHEMES)
+    align_ph, align_gr, ok = _alignement_v2(
+        ortho, phone, _PHONE_TO_GRAPHEMES, word_boundaries
+    )
     if not ok:
         return [], [], [], False
     spans = _build_spans(ortho, align_gr)
@@ -996,6 +1037,7 @@ def _build_syllabes(
     """Construit les objets Syllabe depuis la syllabation et l'alignement."""
     syllabes: list[Syllabe] = []
     cursor = 0
+    prev_last_grapheme = ""  # Pour la gestion ² inter-syllabe
 
     for syll_phone in syll_phones:
         syll_phonemes = iter_phonemes(syll_phone)
@@ -1038,17 +1080,48 @@ def _build_syllabes(
                 mapped.append((sph, "", (0, 0)))
         cursor = pos
 
-        # Calculer ortho et span de la syllabe
+        # Calculer ortho et span de la syllabe (avec gestion ² lettres doublées)
         syll_ortho_parts: list[str] = []
         rel_start: float = float("inf")
         rel_end = 0
+        bridge_letter = ""       # Lettre pont inter-syllabe (y dans ay²)
+        doubled_to_prev = False  # ² seul en début → annoter syllabe précédente
 
-        for _, gr, sp in mapped:
-            clean_gr = gr.replace("°", "").replace("²", "")
-            syll_ortho_parts.append(clean_gr)
+        for j, (_, gr, sp) in enumerate(mapped):
             if sp[0] < sp[1]:
                 rel_start = min(rel_start, sp[0])
                 rel_end = max(rel_end, sp[1])
+
+            if "²" not in gr:
+                # Graphème normal (garder ° pour lettres muettes)
+                syll_ortho_parts.append(gr)
+            elif j == 0:
+                # ² en début de syllabe → concerne la syllabe précédente
+                clean = gr.replace("²", "")
+                if clean:
+                    # "y²" → lettre pont (parenthèses dans syllabe précédente)
+                    bridge_letter = clean.replace("°", "")
+                    syll_ortho_parts.append(clean)
+                else:
+                    # "²" seul → ajouter ² à la syllabe précédente
+                    doubled_to_prev = True
+                    syll_ortho_parts.append("")
+            else:
+                # ² intra-syllabe
+                clean = gr.replace("²", "")
+                if clean:
+                    # "y²" en milieu de syllabe → garder avec marqueur
+                    syll_ortho_parts.append(gr)
+                else:
+                    # "²" seul → annoter l'entrée précédente
+                    syll_ortho_parts.append("")
+                    for k in range(j - 1, -1, -1):
+                        if syll_ortho_parts[k].replace("°", "").replace("²", ""):
+                            syll_ortho_parts[k] += "²"
+                            break
+
+        if mapped:
+            prev_last_grapheme = mapped[-1][1]
 
         if rel_start == float("inf") or rel_start >= rel_end:
             rel_start = 0
@@ -1057,6 +1130,13 @@ def _build_syllabes(
         abs_start = word_offset + rel_start
         abs_end = word_offset + rel_end
         syll_ortho = "".join(syll_ortho_parts)
+
+        # Lettres doublées inter-syllabe : modifier la syllabe précédente
+        if syllabes:
+            if bridge_letter:
+                syllabes[-1].ortho += f"({bridge_letter})"
+            elif doubled_to_prev:
+                syllabes[-1].ortho += "²"
 
         if decomp is not None:
             att_str, noy_str, cod_str = decomp
@@ -1148,6 +1228,41 @@ def _phone_ends_with_schwa(phone: str) -> bool:
     return phonemes[-1] == "ə" if phonemes else False
 
 
+# ── Schwas pédagogiques ──────────────────────────────────────────────────────
+
+# Ortho finit par e/es (sauf é/è/ê/ë)
+_RE_E_MUET = re.compile(r"(?<![éèêë])es?$", re.IGNORECASE)
+# Verbe finit par -ent (3e pers. pluriel)
+_RE_VERB_ENT = re.compile(r"ent$", re.IGNORECASE)
+
+
+def ajouter_schwa_final(ortho: str, pos: str, phone: str) -> str:
+    """Ajoute un ə pédagogique final si le mot a un e-muet non prononcé.
+
+    Conditions :
+    - ortho finit par e/es (sauf é/è/ê/ë) OU ortho finit par -ent avec POS=VER
+    - ET l'IPA ne finit pas déjà par une voyelle
+    """
+    if not phone or not ortho:
+        return phone
+
+    has_e_muet = bool(_RE_E_MUET.search(ortho))
+    has_verb_ent = (
+        bool(_RE_VERB_ENT.search(ortho))
+        and isinstance(pos, str)
+        and pos.upper().startswith("VER")
+    )
+
+    if not (has_e_muet or has_verb_ent):
+        return phone
+
+    phonemes = iter_phonemes(phone)
+    if phonemes and est_voyelle(phonemes[-1]):
+        return phone
+
+    return phone + "ə"
+
+
 def construire_groupes(
     mots: list[MotAnalyse],
     options: OptionsGroupes | None = None,
@@ -1173,54 +1288,50 @@ def construire_groupes(
     for i in range(1, len(mots)):
         mot_courant = mots[i]
         mot_precedent = mots[i - 1]
-        jonction = ""
 
-        # Vérifier si on doit fusionner
-
-        # Élision : le mot précédent finit par apostrophe (on détecte par le texte)
-        if options.gerer_elisions:
-            prev_text = mot_precedent.text
-            if prev_text.endswith("'") or (
-                i >= 2 and hasattr(mots[i - 1], "token") and
-                mot_precedent.token is not None and
-                hasattr(mot_precedent.token, "text")
+        # La ponctuation interdit toute fusion entre les mots
+        if mot_courant.ponctuation_avant:
+            pass  # tombe dans le « pas de fusion » ci-dessous
+        else:
+            # Élision : apostrophe entre les deux mots (m'appelle, l'enfant)
+            if options.gerer_elisions and (
+                mot_precedent.text.endswith("'") or mot_courant.elision_avant
             ):
-                # Vérifier si le token entre les deux est une apostrophe
-                # On se base sur la liaison entre les phones
-                pass
-
-        # Liaison : mot précédent a un label de liaison et mot courant commence par voyelle
-        if options.gerer_liaisons and mot_precedent.liaison != "none":
-            if _phone_starts_with_vowel(mot_courant.phone):
-                liaison_consonne = _LIAISON_CONSONNES.get(mot_precedent.liaison, "")
-                if liaison_consonne:
-                    jonction = f"liaison_{liaison_consonne}"
-                    current_mots.append(mot_courant)
-                    # Le phone de liaison est déjà dans le phone du mot précédent
-                    # (appliqué par le G2P via appliquer_liaison())
-                    current_phones.append(mot_courant.phone)
-                    current_jonctions.append(jonction)
-                    continue
-
-        # Enchaînement : consonne finale de mot1 + voyelle initiale de mot2
-        if options.gerer_enchainement:
-            if (_phone_ends_with_consonne(mot_precedent.phone) and
-                    _phone_starts_with_vowel(mot_courant.phone)):
-                jonction = "enchainement"
                 current_mots.append(mot_courant)
                 current_phones.append(mot_courant.phone)
-                current_jonctions.append(jonction)
+                current_jonctions.append("elision")
                 continue
+
+            # Liaison : mot précédent a un label de liaison et mot courant commence par voyelle
+            if options.gerer_liaisons and mot_precedent.liaison != "none":
+                if _phone_starts_with_vowel(mot_courant.phone):
+                    liaison_consonne = _LIAISON_CONSONNES.get(mot_precedent.liaison, "")
+                    if liaison_consonne:
+                        current_mots.append(mot_courant)
+                        current_phones.append(mot_courant.phone)
+                        current_jonctions.append(f"liaison_{liaison_consonne}")
+                        continue
+
+            # Enchaînement : consonne finale de mot1 + voyelle initiale de mot2
+            if options.gerer_enchainement:
+                if (_phone_ends_with_consonne(mot_precedent.phone) and
+                        _phone_starts_with_vowel(mot_courant.phone)):
+                    current_mots.append(mot_courant)
+                    current_phones.append(mot_courant.phone)
+                    current_jonctions.append("enchainement")
+                    continue
 
         # Pas de fusion → fermer le groupe courant et en ouvrir un nouveau
         phone_groupe = "".join(current_phones)
         span_start = current_mots[0].span[0] if current_mots else 0
         span_end = current_mots[-1].span[1] if current_mots else 0
+        is_formule = any(m.est_formule for m in current_mots)
         groupes.append(GroupeLecture(
             mots=current_mots,
             phone_groupe=phone_groupe,
             span=(span_start, span_end),
             jonctions=current_jonctions,
+            est_formule=is_formule,
         ))
         current_mots = [mot_courant]
         current_phones = [mot_courant.phone]
@@ -1232,15 +1343,13 @@ def construire_groupes(
         span_start = current_mots[0].span[0] if current_mots else 0
         span_end = current_mots[-1].span[1] if current_mots else 0
 
-        # Schwa final
-        if options.ajouter_schwas_finaux and _phone_ends_with_schwa(phone_groupe):
-            pass  # Le schwa est déjà dans le phone, il sera prononcé
-
+        is_formule = any(m.est_formule for m in current_mots)
         groupes.append(GroupeLecture(
             mots=current_mots,
             phone_groupe=phone_groupe,
             span=(span_start, span_end),
             jonctions=current_jonctions,
+            est_formule=is_formule,
         ))
 
     return groupes
@@ -1361,12 +1470,21 @@ def syllabifier_groupes(
         if len(groupe.mots) == 1:
             ortho = groupe.mots[0].text
             word_offset = groupe.mots[0].span[0]
+            dec_ph, dec_gr, dec_spans, ok = _aligner(ortho, phone)
         else:
             # Multi-mots : concaténer sans espaces pour l'alignement IPA
-            ortho = "".join(m.text for m in groupe.mots)
+            # et calculer les frontières de mots pour guider les muettes
+            parts = [m.text for m in groupe.mots]
+            ortho = "".join(parts)
             word_offset = groupe.mots[0].span[0] if groupe.mots else 0
-
-        dec_ph, dec_gr, dec_spans, ok = _aligner(ortho, phone)
+            boundaries: list[int] = []
+            pos = 0
+            for p in parts[:-1]:
+                pos += len(p)
+                boundaries.append(pos)
+            dec_ph, dec_gr, dec_spans, ok = _aligner(
+                ortho, phone, word_boundaries=boundaries
+            )
         syllabes = _build_syllabes(syll_phones, dec_ph, dec_gr, dec_spans, word_offset, ok)
         resultats.append(ResultatGroupe(groupe=groupe, syllabes=syllabes))
 
@@ -1482,9 +1600,21 @@ class LecturaSyllabeur:
         # E1 : construire les groupes de lecture
         groupes = construire_groupes(mots, options)
 
+        # Remap lectures_formules : mot index → group index
+        # (construire_groupes regroupe les mots, décalant les indices)
+        group_lectures: dict[int, LectureFormule] = {}
+        if lectures_formules:
+            mot_idx = 0
+            for gi, groupe in enumerate(groupes):
+                for _m in groupe.mots:
+                    if mot_idx in lectures_formules:
+                        group_lectures[gi] = lectures_formules[mot_idx]
+                        groupe.est_formule = True
+                    mot_idx += 1
+
         # E2 : syllabifier chaque groupe
         resultats_groupes = syllabifier_groupes(
-            groupes, lectures_formules,
+            groupes, group_lectures,
         )
 
         # Reconstituer le texte original
