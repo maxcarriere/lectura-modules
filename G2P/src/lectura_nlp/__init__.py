@@ -24,7 +24,7 @@ Exemple rapide::
 
 from pathlib import Path
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 

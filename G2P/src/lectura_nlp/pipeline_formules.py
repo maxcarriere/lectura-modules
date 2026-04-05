@@ -55,6 +55,7 @@ class MotAnalyseG2P:
     liaison: str = ""
     morpho: dict[str, str] = field(default_factory=dict)
     est_formule: bool = False
+    est_ponctuation: bool = False
     lecture: LectureFormuleResult | None = None
 
 
@@ -92,6 +93,29 @@ class ResultatPhraseG2P:
 # ── Placeholder ──────────────────────────────────────────────────────────
 
 _PLACEHOLDER = "PLACEHOLDER"
+
+# ── Lecture de la ponctuation (mode dictée) ──────────────────────────────
+
+PONCTUATION_LECTURE: dict[str, tuple[str, str]] = {
+    # text → (texte_français, ipa)
+    ".": ("point", "pwɛ̃"),
+    ",": ("virgule", "viʁɡyl"),
+    ";": ("point-virgule", "pwɛ̃ viʁɡyl"),
+    ":": ("deux-points", "dø pwɛ̃"),
+    "!": ("point d'exclamation", "pwɛ̃ dɛkslamasjɔ̃"),
+    "?": ("point d'interrogation", "pwɛ̃ dɛ̃tɛʁɔɡasjɔ̃"),
+    "...": ("points de suspension", "pwɛ̃ də syspɑ̃sjɔ̃"),
+    "…": ("points de suspension", "pwɛ̃ də syspɑ̃sjɔ̃"),
+    "«": ("ouvrez les guillemets", "uvʁe le ɡijmɛ"),
+    "»": ("fermez les guillemets", "fɛʁme le ɡijmɛ"),
+    '"': ("guillemet", "ɡijmɛ"),
+    "(": ("ouvrez la parenthèse", "uvʁe la paʁɑ̃tɛz"),
+    ")": ("fermez la parenthèse", "fɛʁme la paʁɑ̃tɛz"),
+    "-": ("tiret", "tiʁɛ"),
+    "—": ("tiret", "tiʁɛ"),
+    "–": ("tiret", "tiʁɛ"),
+    "'": ("apostrophe", "apɔstʁɔf"),
+}
 
 
 def _is_formule(token: Any) -> bool:
@@ -141,29 +165,37 @@ def analyser_phrase_complete(
     if options_lecture is None:
         options_lecture = OptionsLecture()
 
-    # ── Étape 1 : séparer mots / formules ──
+    # ── Étape 1 : séparer mots / formules / ponctuation ──
 
-    # Index dans la liste filtrée (mots+formules) → token original
-    items: list[tuple[int, Any, bool]] = []  # (idx_original, token, is_formule)
+    # Classifie chaque token pertinent : "mot", "formule" ou "ponctuation"
+    items: list[tuple[int, Any, str]] = []  # (idx_original, token, kind)
     for i, tok in enumerate(tokens):
         ttype = getattr(tok, "type", None)
         tname = str(getattr(ttype, "value", str(ttype))).lower() if ttype else ""
-        if tname in ("mot", "formule"):
-            items.append((i, tok, tname == "formule"))
+        if tname in ("mot", "formule", "ponctuation"):
+            items.append((i, tok, tname))
 
     if not items:
         return ResultatPhraseG2P()
 
     # ── Étape 2 : préparer tokens pour le modèle neural ──
+    # Seuls les mots et formules (placeholder) passent au neural.
+    # La ponctuation est exclue du modèle neural.
 
     neural_tokens: list[str] = []
     formule_indices: dict[int, int] = {}  # position dans neural_tokens → position dans items
+    # Mapping item_idx → neural_idx (None pour ponctuation)
+    item_to_neural: dict[int, int | None] = {}
 
-    for item_idx, (orig_idx, tok, is_form) in enumerate(items):
-        if is_form:
+    for item_idx, (orig_idx, tok, kind) in enumerate(items):
+        if kind == "ponctuation":
+            item_to_neural[item_idx] = None
+        elif kind == "formule":
+            item_to_neural[item_idx] = len(neural_tokens)
             neural_tokens.append(_PLACEHOLDER)
             formule_indices[len(neural_tokens) - 1] = item_idx
         else:
+            item_to_neural[item_idx] = len(neural_tokens)
             neural_tokens.append(getattr(tok, "text", str(tok)))
 
     # ── Étape 3 : exécuter le modèle neural ──
@@ -184,11 +216,22 @@ def analyser_phrase_complete(
 
     mots_resultat: list[MotAnalyseG2P] = []
 
-    for neural_idx, (orig_idx, tok, is_form) in enumerate(items):
-        if is_form:
+    for item_idx, (orig_idx, tok, kind) in enumerate(items):
+        text = getattr(tok, "text", str(tok))
+        neural_idx = item_to_neural[item_idx]
+
+        if kind == "ponctuation":
+            # Lecture de la ponctuation (texte français + IPA)
+            fr_text, fr_ipa = PONCTUATION_LECTURE.get(text, (text, ""))
+            mots_resultat.append(MotAnalyseG2P(
+                text=text,
+                phone=fr_ipa,
+                pos="PONCT",
+                est_ponctuation=True,
+            ))
+        elif kind == "formule":
             # Lecture algorithmique de la formule
             ftype = _get_formule_type(tok)
-            text = getattr(tok, "text", str(tok))
             tok_span = getattr(tok, "span", (0, len(text)))
             children = getattr(tok, "children", None)
 
@@ -216,7 +259,7 @@ def analyser_phrase_complete(
                     word_morpho[feat] = vals[neural_idx]
 
             mots_resultat.append(MotAnalyseG2P(
-                text=getattr(tok, "text", str(tok)),
+                text=text,
                 phone=g2p_list[neural_idx] if neural_idx < len(g2p_list) else "",
                 pos=pos_list[neural_idx] if neural_idx < len(pos_list) else "",
                 liaison=liaison_list[neural_idx] if neural_idx < len(liaison_list) else "",
