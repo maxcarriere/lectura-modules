@@ -10,15 +10,16 @@ Usage::
         print(lex.homophones("ʃa"))     # [{"ortho": "chat", ...}, ...]
 """
 
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
 from lectura_lexique._types import EntreeLexicale, LexiqueProtocol
-from lectura_lexique._utils import normaliser_ortho
+from lectura_lexique._utils import generer_phones_proches, normaliser_ortho
 from lectura_lexique.lexique import Lexique
 
 __all__ = [
     "EntreeLexicale",
     "Lexique",
     "LexiqueProtocol",
+    "generer_phones_proches",
     "normaliser_ortho",
 ]

@@ -11,7 +11,7 @@ TEST_CSV = DONNEES_DIR / "test.csv"
 def test_iter_csv_produit_des_entrees():
     """iter_csv doit produire des entrees non vides."""
     entrees = list(iter_csv(TEST_CSV))
-    assert len(entrees) == 20
+    assert len(entrees) == 34
 
 
 def test_iter_csv_champs_canoniques():
