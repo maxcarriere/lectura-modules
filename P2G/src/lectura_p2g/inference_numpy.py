@@ -192,26 +192,13 @@ class NumpyInferenceEngine:
             return {"ipa_words": [], "ortho": [], "pos": [], "morpho": {}}
 
         char_ids, word_starts, word_ends = self._encode_sentence(ipa_words)
+        n_words = len(ipa_words)
 
         # Character embedding
         emb = self.char_embedding[char_ids]
 
         # Character BiLSTM
         char_out = self.char_bilstm.forward(emb)
-
-        # P2G logits
-        p2g_logits = self._linear(char_out, self.p2g_weight, self.p2g_bias)
-
-        # P2G results
-        n_words = len(ipa_words)
-        p2g_preds = p2g_logits.argmax(axis=-1)
-        ortho_results = []
-        for w in range(n_words):
-            ws = word_starts[w]
-            we = word_ends[w]
-            word_labels = [self.idx2p2g.get(int(p2g_preds[i]), "_CONT")
-                          for i in range(ws, we + 1)]
-            ortho_results.append(reconstruct_ortho(word_labels))
 
         # Word representations: fwd[last_char] || bwd[first_char]
         char_hidden = self.config["char_hidden_dim"]
@@ -242,6 +229,30 @@ class NumpyInferenceEngine:
                 idx2label.get(int(feat_preds[w]), "_") for w in range(n_words)
             ]
 
+        # Word feedback: broadcast word representations to char positions
+        word_feedback = np.zeros((len(char_ids), word_out.shape[1]))
+        for w in range(n_words):
+            ws = word_starts[w]
+            we = word_ends[w]
+            for i in range(ws, we + 1):
+                word_feedback[i] = word_out[w]
+
+        # P2G input: char_out (320d) || word_feedback (384d) = 704d
+        p2g_input = np.concatenate([char_out, word_feedback], axis=-1)
+
+        # P2G logits
+        p2g_logits = self._linear(p2g_input, self.p2g_weight, self.p2g_bias)
+
+        # P2G results
+        p2g_preds = p2g_logits.argmax(axis=-1)
+        ortho_results = []
+        for w in range(n_words):
+            ws = word_starts[w]
+            we = word_ends[w]
+            word_labels = [self.idx2p2g.get(int(p2g_preds[i]), "_CONT")
+                          for i in range(ws, we + 1)]
+            ortho_results.append(reconstruct_ortho(word_labels))
+
         return {
             "ipa_words": ipa_words,
             "ortho": ortho_results,
@@ -260,18 +271,55 @@ class NumpyInferenceEngine:
             }
 
         char_ids, word_starts, word_ends = self._encode_sentence(ipa_words)
+        n_words = len(ipa_words)
 
         # Character embedding + BiLSTM
         emb = self.char_embedding[char_ids]
         char_out = self.char_bilstm.forward(emb)
 
+        # Word representations + Word BiLSTM (needed for word feedback)
+        char_hidden = self.config["char_hidden_dim"]
+        fwd = char_out[:, :char_hidden]
+        bwd = char_out[:, char_hidden:]
+        word_repr = np.zeros((n_words, char_hidden * 2))
+        for w in range(n_words):
+            word_repr[w, :char_hidden] = fwd[word_ends[w]]
+            word_repr[w, char_hidden:] = bwd[word_starts[w]]
+        word_out = self.word_bilstm.forward(word_repr)
+
+        # POS
+        pos_logits = self._linear(word_out, self.pos_weight, self.pos_bias)
+        pos_preds = pos_logits.argmax(axis=-1)
+        pos_results = [self.idx2pos.get(int(pos_preds[w]), "NOM") for w in range(n_words)]
+
+        # Morpho
+        morpho_results: dict[str, list[str]] = {}
+        for feat_name, idx2label in self.idx2morpho.items():
+            feat_logits = self._linear(
+                word_out, self.morpho_weights[feat_name], self.morpho_biases[feat_name]
+            )
+            feat_preds = feat_logits.argmax(axis=-1)
+            morpho_results[feat_name] = [
+                idx2label.get(int(feat_preds[w]), "_") for w in range(n_words)
+            ]
+
+        # Word feedback: broadcast word representations to char positions
+        word_feedback = np.zeros((len(char_ids), word_out.shape[1]))
+        for w in range(n_words):
+            ws = word_starts[w]
+            we = word_ends[w]
+            for i in range(ws, we + 1):
+                word_feedback[i] = word_out[w]
+
+        # P2G input: char_out (320d) || word_feedback (384d) = 704d
+        p2g_input = np.concatenate([char_out, word_feedback], axis=-1)
+
         # P2G logits + softmax
-        p2g_logits = self._linear(char_out, self.p2g_weight, self.p2g_bias)
+        p2g_logits = self._linear(p2g_input, self.p2g_weight, self.p2g_bias)
         exp_l = np.exp(p2g_logits - p2g_logits.max(axis=-1, keepdims=True))
         probs = exp_l / exp_l.sum(axis=-1, keepdims=True)
         p2g_preds = p2g_logits.argmax(axis=-1)
 
-        n_words = len(ipa_words)
         ortho_results = []
         alternatives_results = []
         confiance_results = []
@@ -327,32 +375,6 @@ class NumpyInferenceEngine:
                     seen.add(ortho)
                     unique_alts.append((ortho, score))
             alternatives_results.append(unique_alts[:k])
-
-        # Word representations + Word BiLSTM
-        char_hidden = self.config["char_hidden_dim"]
-        fwd = char_out[:, :char_hidden]
-        bwd = char_out[:, char_hidden:]
-        word_repr = np.zeros((n_words, char_hidden * 2))
-        for w in range(n_words):
-            word_repr[w, :char_hidden] = fwd[word_ends[w]]
-            word_repr[w, char_hidden:] = bwd[word_starts[w]]
-        word_out = self.word_bilstm.forward(word_repr)
-
-        # POS
-        pos_logits = self._linear(word_out, self.pos_weight, self.pos_bias)
-        pos_preds = pos_logits.argmax(axis=-1)
-        pos_results = [self.idx2pos.get(int(pos_preds[w]), "NOM") for w in range(n_words)]
-
-        # Morpho
-        morpho_results: dict[str, list[str]] = {}
-        for feat_name, idx2label in self.idx2morpho.items():
-            feat_logits = self._linear(
-                word_out, self.morpho_weights[feat_name], self.morpho_biases[feat_name]
-            )
-            feat_preds = feat_logits.argmax(axis=-1)
-            morpho_results[feat_name] = [
-                idx2label.get(int(feat_preds[w]), "_") for w in range(n_words)
-            ]
 
         return {
             "ipa_words": ipa_words,
