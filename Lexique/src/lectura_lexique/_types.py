@@ -5,6 +5,18 @@ from __future__ import annotations
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 
+class SensDefinition(TypedDict, total=False):
+    """Un sens (definition) d'un mot, issu de la table ``definitions``."""
+
+    sens_num: int
+    definition: str
+    exemples: list[str]
+    synonymes: list[str]
+    antonymes: list[str]
+    domaine: str
+    tags: list[str]
+
+
 class EntreeLexicale(TypedDict, total=False):
     """Entree du lexique avec champs canoniques.
 

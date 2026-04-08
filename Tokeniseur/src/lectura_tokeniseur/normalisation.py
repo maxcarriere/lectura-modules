@@ -172,6 +172,9 @@ def _normalize_dashes(text: str) -> str:
         # Signe négatif devant un chiffre en début ou après opérateur : -12, (-3
         if next_.isdigit() and (prev == "" or prev in "([:=<>≤≥≠,;"):
             continue
+        # Signe négatif devant un symbole maths (√, ∑, ∏, ∫) : -√3
+        if next_ in "√∑∏∫∂∇" and (prev == "" or prev in "([:=<>≤≥≠,;"):
+            continue
         # Signe négatif devant une variable (1 lettre seule) : -x, -a
         # Mais pas devant un mot : -bonjour doit être normalisé
         if next_.isalpha() and (prev == "" or prev in "([:=<>≤≥≠,;"):
@@ -179,7 +182,9 @@ def _normalize_dashes(text: str) -> str:
             if not after.isalpha():
                 continue
         # Opérateur dans formule : chiffre/lettre + op + chiffre/lettre (ex: 3+5, x-2)
-        if (prev.isdigit() or prev.isalpha()) and (next_.isdigit() or next_.isalpha()):
+        _MATH_SYMS = "√∑∏∫∂∇∞"
+        if ((prev.isdigit() or prev.isalpha()) and
+                (next_.isdigit() or next_.isalpha() or next_ in _MATH_SYMS)):
             continue
 
         # Dialogue ou ponctuation : forcer espace

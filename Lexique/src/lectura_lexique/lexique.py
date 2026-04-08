@@ -499,6 +499,49 @@ class Lexique:
         ortho_index = self._get_index_ortho()
         return _phonetique.mots_par_syllabes(ortho_index, n, cgram, limite)
 
+    # --- Methodes : Definitions multi-sens ---
+
+    def definitions(self, mot: str, cgram: str | None = None) -> list[dict[str, Any]]:
+        """Definitions multiples depuis la table definitions.
+
+        Retourne [] si la table est absente (compatibilite anciennes BDD).
+        Ordonne par cgram, sens_num.
+        """
+        if self._backend != "sqlite":
+            return []
+        conn = self._get_conn()
+        try:
+            if cgram:
+                cur = conn.execute(
+                    "SELECT * FROM definitions "
+                    "WHERE lemme = ? COLLATE NOCASE AND cgram = ? "
+                    "ORDER BY cgram, sens_num",
+                    (mot, cgram),
+                )
+            else:
+                cur = conn.execute(
+                    "SELECT * FROM definitions "
+                    "WHERE lemme = ? COLLATE NOCASE "
+                    "ORDER BY cgram, sens_num",
+                    (mot,),
+                )
+            rows = cur.fetchall()
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                d: dict[str, Any] = dict(row)
+                # Convertir les champs separes par ; en listes
+                for key in ("exemples", "synonymes", "antonymes", "tags"):
+                    val = d.get(key)
+                    if val:
+                        d[key] = [x.strip() for x in val.split(";") if x.strip()]
+                    else:
+                        d[key] = []
+                results.append(d)
+            return results
+        except sqlite3.OperationalError:
+            # Table definitions absente
+            return []
+
     # --- Methodes facades : Semantique ---
 
     def synonymes(self, mot: str) -> list[str]:

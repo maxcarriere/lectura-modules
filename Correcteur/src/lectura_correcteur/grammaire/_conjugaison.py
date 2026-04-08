@@ -11,6 +11,9 @@ from lectura_correcteur._utils import transferer_casse
 from lectura_correcteur.grammaire._donnees import (
     AUXILIAIRES,
     IRREGULIERS_FORMES_FAUSSES,
+    MODAUX_FORMES,
+    PLUR_DET,
+    PREPOSITIONS,
     PRONOM_PERSONNE,
     SUJETS_3PL,
     generer_candidats_1pl,
@@ -22,6 +25,74 @@ from lectura_correcteur.grammaire._donnees import (
 _TRANSPARENTS_AUX = frozenset({
     "ne", "n'", "pas", "plus", "jamais", "rien", "point", "y", "en",
 })
+
+# Mots transparents entre sujet nominal et verbe (se, reflexifs, adverbes)
+_TRANSPARENTS_SUJET = frozenset({
+    "se", "s'", "ne", "n'", "pas", "plus", "jamais", "rien",
+    "y", "en", "me", "m'", "te", "t'", "le", "la", "l'",
+    "lui", "nous", "vous", "leur",
+})
+
+
+def _est_sujet_nominal_pluriel(
+    mots: list[str],
+    pos_tags: list[str],
+    origs: list[str],
+    idx_verbe: int,
+) -> bool:
+    """Detecte un sujet nominal pluriel avant le verbe.
+
+    Scanne en arriere en sautant les mots transparents (se, ne, ...),
+    puis les groupes prepositionnels (PRE + DET + NOM/ADJ) pour trouver
+    le vrai sujet et non un complement de nom.
+
+    Ex: "le chat de mes voisins dort" → sujet = "le chat" (sing), pas "voisins".
+    """
+    j = idx_verbe - 1
+    # Sauter les mots transparents
+    while j >= 0 and mots[j].lower() in _TRANSPARENTS_SUJET:
+        j -= 1
+    if j < 0:
+        return False
+
+    # Scan arriere : sauter NOM/ADJ, detecter DET, sauter PP
+    while j >= 0:
+        pos_j = pos_tags[j] if j < len(pos_tags) else ""
+        mot_j = mots[j].lower()
+
+        if pos_j in ("NOM", "ADJ"):
+            j -= 1
+            continue
+
+        # Contractions prepositionnelles : "du", "au" agissent comme PRE+DET
+        if mot_j in ("du", "au"):
+            j -= 1
+            continue
+
+        if pos_j in ("ART:def", "ART:ind", "DET", "DET:dem", "ADJ:pos"):
+            # Verifier si ce DET est dans un complement prepositionnel
+            if j > 0:
+                prev_pos = pos_tags[j - 1] if j - 1 < len(pos_tags) else ""
+                prev_mot = mots[j - 1].lower()
+                if prev_pos == "PRE" or prev_mot in PREPOSITIONS:
+                    # C'est un PP → sauter DET + PRE et continuer
+                    j -= 2
+                    continue
+                # "des" apres un NOM = contraction "de+les" (PP)
+                # Ex: "le directeur des ecoles" → "des" introduit un PP
+                if mot_j == "des" and prev_pos == "NOM":
+                    j -= 1  # sauter "des" (la PRE est incorporee)
+                    continue
+            # Pas de preposition devant → c'est le DET du sujet
+            return mot_j in PLUR_DET
+
+        if pos_j == "PRE" or mot_j in PREPOSITIONS:
+            j -= 1
+            continue
+
+        break
+
+    return False
 
 # Terminaisons attendues par personne (indicatif present, 1er groupe)
 _SUFFIXES_ATTENDUS: dict[str, list[str]] = {
@@ -66,6 +137,7 @@ def verifier_conjugaisons(
             prev_is_3pl = (
                 result[i - 1].lower() in SUJETS_3PL
                 or (i - 1 < len(origs) and origs[i - 1].lower() in SUJETS_3PL)
+                or _est_sujet_nominal_pluriel(result, pos_tags, origs, i)
             )
             if prev_is_3pl:
                 faux_candidate = IRREGULIERS_FORMES_FAUSSES.get(curr.lower())
@@ -89,6 +161,7 @@ def verifier_conjugaisons(
             prev_is_3pl = (
                 result[i - 1].lower() in SUJETS_3PL
                 or (i - 1 < len(origs) and origs[i - 1].lower() in SUJETS_3PL)
+                or _est_sujet_nominal_pluriel(result, pos_tags, origs, i)
             )
 
             if prev_is_3pl and not curr.lower().endswith(("ent", "nt")):
@@ -116,7 +189,7 @@ def verifier_conjugaisons(
             _skip_aux = False
             for _j in range(i - 1, max(-1, i - 4), -1):
                 _w = result[_j].lower()
-                if _w in AUXILIAIRES:
+                if _w in AUXILIAIRES or _w in MODAUX_FORMES:
                     _skip_aux = True
                     break
                 if _w not in _TRANSPARENTS_AUX:
@@ -151,6 +224,32 @@ def verifier_conjugaisons(
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
                         explication=f"Conjugaison P{personne}",
+                    ))
+                    continue
+
+        # Regle 5b : Sujet nominal pluriel + imparfait/futur
+        # "les gens se promenais" -> "promenaient"
+        if i > 0 and pos in ("VER", "AUX"):
+            temps = _detecter_temps_from_suffixe(curr)
+            if temps is not None and _est_sujet_nominal_pluriel(
+                result, pos_tags, origs, i,
+            ):
+                correction = _deriver_forme_nombre(
+                    curr, "3", "p", temps, lexique,
+                )
+                if correction is None:
+                    correction = _corriger_par_lexique(
+                        curr, "3", "p", temps, lexique,
+                    )
+                if correction and correction.lower() != curr.lower():
+                    ancien = result[i]
+                    result[i] = transferer_casse(curr, correction)
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=result[i],
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="Sujet nominal pluriel + imp/fut -> 3pl",
                     ))
 
     return result, corrections
@@ -293,9 +392,26 @@ def _deriver_forme_nombre(
     want_plur = nombre == "p"
 
     if is_plur == want_plur:
-        # La forme correspond deja au nombre voulu
-        if lexique is None or lexique.existe(forme):
-            return forme
+        # Verifier que la personne correspond aussi (plur->plur)
+        _person_mismatch = False
+        if is_plur and temps == "Fut":
+            if low.endswith("rons") and personne != "1":
+                _person_mismatch = True
+            elif low.endswith("ront") and personne != "3":
+                _person_mismatch = True
+            elif low.endswith("rez") and personne != "2":
+                _person_mismatch = True
+        if is_plur and temps == "Imp":
+            if low.endswith("ions") and personne != "1":
+                _person_mismatch = True
+            elif low.endswith("iez") and personne != "2":
+                _person_mismatch = True
+            elif low.endswith("aient") and personne != "3":
+                _person_mismatch = True
+        if not _person_mismatch:
+            # La forme correspond deja au nombre et personne voulus
+            if lexique is None or lexique.existe(forme):
+                return forme
 
     if temps == "Imp":
         if is_plur and not want_plur:
@@ -350,6 +466,24 @@ def _deriver_forme_nombre(
                     cand = low[:-4] + "ras"
                 else:
                     cand = low[:-4] + "ra"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+        elif is_plur and want_plur:
+            # plur -> plur (changement de personne) : rons -> ront, ront -> rons
+            if low.endswith("rons") and personne == "3":
+                cand = low[:-4] + "ront"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("rons") and personne == "2":
+                cand = low[:-4] + "rez"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ront") and personne == "1":
+                cand = low[:-4] + "rons"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ront") and personne == "2":
+                cand = low[:-4] + "rez"
                 if lexique is None or lexique.existe(cand):
                     return cand
         elif not is_plur and want_plur:
@@ -437,11 +571,29 @@ def _corriger_par_suffixe(
             if lexique is None or lexique.existe(candidate):
                 return candidate
 
+    # Nous (P1p) : imparfait tronque "dansion" -> "dansions" (manque -s)
+    if key == "1p" and low.endswith("ion") and not low.endswith("ions"):
+        candidate = mot + "s"
+        if lexique is None or lexique.existe(candidate):
+            return candidate
+
+    # Nous (P1p) : futur tronque "partiron" -> "partirons" (manque -s)
+    if key == "1p" and low.endswith("ron") and not low.endswith("rons"):
+        candidate = mot + "s"
+        if lexique is None or lexique.existe(candidate):
+            return candidate
+
     # Nous (P1p) : generer candidats 1re pluriel
     if key == "1p" and not low.endswith("ons"):
         for candidate in generer_candidats_1pl(mot):
             if lexique is None or lexique.existe(candidate):
                 return candidate
+
+    # Vous (P2p) : imparfait tronque "dansie" -> "dansiez" (manque -z)
+    if key == "2p" and low.endswith("ie") and not low.endswith("iez"):
+        candidate = mot + "z"
+        if lexique is None or lexique.existe(candidate):
+            return candidate
 
     # Vous (P2p) : generer candidats 2e pluriel
     if key == "2p" and not low.endswith("ez"):

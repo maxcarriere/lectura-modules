@@ -24,6 +24,11 @@ from lectura_tokeniseur.maths import UNIT_NAMES_LOWER as _UNIT_NAMES_LOWER
 logger = logging.getLogger(__name__)
 
 
+def _is_unit_name(text: str) -> bool:
+    """Vérifie si un texte est un nom d'unité (casse originale ou minuscule)."""
+    return text in _UNIT_NAMES_LOWER or text.lower() in _UNIT_NAMES_LOWER
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Classification single-token
 # ══════════════════════════════════════════════════════════════════════════════
@@ -206,16 +211,66 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
                 if _detect_heure(full):
                     return full, k + 1, FormuleType.HEURE
 
-    # ── Pourcentage : FORMULE + PONCT("%"/"%") ──
+    # ── Pourcentage : [PONCT(sign)] + FORMULE + PONCT("%"/"%") ──
+    _SIGN_CHARS = {"-", "+", "±", "−"}
+    # Variante avec signe
+    if isinstance(first, Ponctuation) and first.text in _SIGN_CHARS:
+        j = start + 1
+        if (j < n and isinstance(tokens[j], Formule)
+                and tokens[j].text.replace(".", "").replace("'", "").isdigit()
+                and tokens[j].span[0] == first.span[1]):
+            k = j + 1
+            if k < n and isinstance(tokens[k], Ponctuation) and tokens[k].text in ("%", "‰"):
+                full = first.text + tokens[j].text + tokens[k].text
+                return full, k + 1, FormuleType.POURCENTAGE
+            # PONCT(sign) + FORMULE + espace + PONCT(%/‰)
+            if (k < n and isinstance(tokens[k], Separateur) and tokens[k].sep_type == "space"
+                    and k + 1 < n and isinstance(tokens[k + 1], Ponctuation)
+                    and tokens[k + 1].text in ("%", "‰")):
+                full = first.text + tokens[j].text + tokens[k + 1].text
+                return full, k + 2, FormuleType.POURCENTAGE
+    # Variante sans signe
     if isinstance(first, Formule) and first.text.replace(".", "").replace("'", "").isdigit():
         j = start + 1
         if j < n and isinstance(tokens[j], Ponctuation) and tokens[j].text in ("%", "‰"):
             full = first.text + tokens[j].text
             return full, j + 1, FormuleType.POURCENTAGE
+        # FORMULE + espace + PONCT(%/‰)
+        if (j < n and isinstance(tokens[j], Separateur) and tokens[j].sep_type == "space"
+                and j + 1 < n and isinstance(tokens[j + 1], Ponctuation)
+                and tokens[j + 1].text in ("%", "‰")):
+            full = first.text + tokens[j + 1].text
+            return full, j + 2, FormuleType.POURCENTAGE
 
-    # ── Monnaie : FORMULE + PONCT("€"/"$"/"£"/"¥") ou inverse ──
+    # ── Monnaie : [PONCT(sign)] + FORMULE + PONCT("€"/"$"/"£"/"¥") ou inverse ──
     _CURRENCY_SYMBOLS = {"€", "$", "£", "¥"}
     _CURRENCY_CODES = {"EUR", "USD", "GBP", "CHF", "JPY"}
+    # Variante avec signe : PONCT(sign) + FORMULE + PONCT(€) [+ FORMULE(centimes)]
+    if isinstance(first, Ponctuation) and first.text in _SIGN_CHARS:
+        j = start + 1
+        if (j < n and isinstance(tokens[j], Formule)
+                and tokens[j].text.replace(".", "").replace("'", "").replace(",", "").isdigit()
+                and tokens[j].span[0] == first.span[1]):
+            k = j + 1
+            if k < n and isinstance(tokens[k], Ponctuation) and tokens[k].text in _CURRENCY_SYMBOLS:
+                m2 = k + 1
+                # Centimes collés
+                if (m2 < n and isinstance(tokens[m2], Formule)
+                        and tokens[m2].text.isdigit() and len(tokens[m2].text) <= 2
+                        and tokens[m2].span[0] == tokens[k].span[1]):
+                    full = first.text + tokens[j].text + tokens[k].text + tokens[m2].text
+                    return full, m2 + 1, FormuleType.MONNAIE
+                full = first.text + tokens[j].text + tokens[k].text
+                return full, k + 1, FormuleType.MONNAIE
+            # PONCT(sign) + FORMULE + espace + PONCT(€/$) ou MOT(code devise)
+            if k < n and isinstance(tokens[k], Separateur) and tokens[k].sep_type == "space":
+                if k + 1 < n and isinstance(tokens[k + 1], Ponctuation) and tokens[k + 1].text in _CURRENCY_SYMBOLS:
+                    full = first.text + tokens[j].text + tokens[k + 1].text
+                    return full, k + 2, FormuleType.MONNAIE
+                if k + 1 < n and isinstance(tokens[k + 1], Mot) and tokens[k + 1].text.upper() in _CURRENCY_CODES:
+                    full = first.text + tokens[j].text + " " + tokens[k + 1].text
+                    return full, k + 2, FormuleType.MONNAIE
+    # Variante sans signe
     if isinstance(first, Formule) and first.text.replace(".", "").replace("'", "").replace(",", "").isdigit():
         j = start + 1
         if j < n and isinstance(tokens[j], Ponctuation) and tokens[j].text in _CURRENCY_SYMBOLS:
@@ -228,8 +283,11 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
                 return full, k + 1, FormuleType.MONNAIE
             full = first.text + tokens[j].text
             return full, j + 1, FormuleType.MONNAIE
-        # FORMULE + espace + MOT(code devise)
+        # FORMULE + espace + PONCT(€/$) ou MOT(code devise)
         if j < n and isinstance(tokens[j], Separateur) and tokens[j].sep_type == "space":
+            if j + 1 < n and isinstance(tokens[j + 1], Ponctuation) and tokens[j + 1].text in _CURRENCY_SYMBOLS:
+                full = first.text + tokens[j + 1].text
+                return full, j + 2, FormuleType.MONNAIE
             if j + 1 < n and isinstance(tokens[j + 1], Mot) and tokens[j + 1].text.upper() in _CURRENCY_CODES:
                 full = first.text + " " + tokens[j + 1].text
                 return full, j + 2, FormuleType.MONNAIE
@@ -358,13 +416,30 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
             if _detect_ordinal(full):
                 return full, j + 1, FormuleType.ORDINAL
 
-    # ── Nombre + espace + unité → MATHS (5 km, 36.5 °C) ──
+    # ── Nombre + espace + unité → MATHS (5 km, 36.5 °C, -5 km) ──
+    # Variante avec signe : PONCT(sign) + FORMULE + espace + unité
+    if isinstance(first, Ponctuation) and first.text in _SIGN_CHARS:
+        j = start + 1
+        if (j < n and isinstance(tokens[j], Formule)
+                and tokens[j].text.replace(".", "").replace(",", "").isdigit()
+                and tokens[j].span[0] == first.span[1]):
+            k = j + 1
+            if k < n and isinstance(tokens[k], Separateur) and tokens[k].sep_type == "space":
+                m2 = k + 1
+                if m2 < n and isinstance(tokens[m2], Mot) and _is_unit_name(tokens[m2].text):
+                    full = first.text + tokens[j].text + " " + tokens[m2].text
+                    return full, m2 + 1, FormuleType.MATHS
+                if (m2 + 1 < n and isinstance(tokens[m2], Ponctuation) and tokens[m2].text == "°"
+                        and isinstance(tokens[m2 + 1], Mot) and tokens[m2 + 1].text in ("C", "F")):
+                    full = first.text + tokens[j].text + " °" + tokens[m2 + 1].text
+                    return full, m2 + 2, FormuleType.MATHS
+    # Variante sans signe
     if isinstance(first, Formule) and first.text.replace(".", "").replace(",", "").isdigit():
         j = start + 1
         if j < n and isinstance(tokens[j], Separateur) and tokens[j].sep_type == "space":
             k = j + 1
             # Unité simple : MOT("km"), MOT("m"), ...
-            if k < n and isinstance(tokens[k], Mot) and tokens[k].text.lower() in _UNIT_NAMES_LOWER:
+            if k < n and isinstance(tokens[k], Mot) and _is_unit_name(tokens[k].text):
                 full = first.text + " " + tokens[k].text
                 return full, k + 1, FormuleType.MATHS
             # Unité composée : °C, °F
@@ -406,10 +481,32 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
         has_parens = False
         bracket_depth = 0
         prev_end = first.span[0]
+        # Opérateurs maths qui peuvent être espacés (x < y, a + b = c)
+        _SPACED_OPS = set("<>≤≥≠=≈≃≡∈∉⊂∪∩→←↔⇒⇔") | {"<=", ">=", "!=", "=="}
+        last_was_spaced_op = False
         while j < n:
             t = tokens[j]
-            # Stop si espace ou séparateur
+            # Espace : autoriser si suivi d'un opérateur maths espacé,
+            # ou si on vient de consommer un opérateur espacé (espace post-op)
             if isinstance(t, Separateur):
+                # Peek : SPACE + PONCT(op) + [SPACE] + (FORMULE|MOT)
+                if (j + 2 < n
+                        and isinstance(tokens[j + 1], Ponctuation)
+                        and tokens[j + 1].text in _SPACED_OPS):
+                    k2 = j + 2
+                    if k2 < n and isinstance(tokens[k2], Separateur):
+                        k2 += 1
+                    if k2 < n and isinstance(tokens[k2], (Formule, Mot)):
+                        # Accepter : sauter l'espace pré-opérateur
+                        prev_end = t.span[1]
+                        j += 1
+                        continue
+                # Espace post-opérateur : SPACE + (FORMULE|MOT)
+                if last_was_spaced_op and j + 1 < n and isinstance(tokens[j + 1], (Formule, Mot)):
+                    prev_end = t.span[1]
+                    j += 1
+                    last_was_spaced_op = False
+                    continue
                 break
             # Vérifier contiguïté (pas d'espace entre les tokens)
             if t.span[0] != prev_end and j > start:
@@ -429,6 +526,7 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
                         has_math_op = True
                 parts.append(txt)
                 prev_end = t.span[1]
+                last_was_spaced_op = False
                 j += 1
             elif isinstance(t, Ponctuation) and t.text in _MERGE_PUNCT:
                 # Le signe initial ne compte pas comme opérateur interne
@@ -444,6 +542,7 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
                 elif t.text in ")]}":
                     bracket_depth -= 1
                 parts.append(t.text)
+                last_was_spaced_op = t.text in _SPACED_OPS
                 prev_end = t.span[1]
                 j += 1
             elif isinstance(t, Ponctuation) and t.text in ",;" and bracket_depth != 0:
@@ -521,6 +620,18 @@ def _classify_and_merge(tokens: list[Token]) -> list[Token]:
                 full_text, end_idx, forced_type = merged
                 ftype = forced_type or _classify_formule_single(full_text)
                 if ftype is not None:
+                    # Re-fusion : absorber PONCT(/) + Formule/Mot contigus
+                    # pour les unités composées (ex: "60 km" + "/" + "h")
+                    while (end_idx < n
+                           and isinstance(tokens[end_idx], Ponctuation)
+                           and tokens[end_idx].text == "/"
+                           and tokens[end_idx].span[0] == tokens[end_idx - 1].span[1]
+                           and end_idx + 1 < n
+                           and isinstance(tokens[end_idx + 1], (Formule, Mot))
+                           and tokens[end_idx + 1].span[0] == tokens[end_idx].span[1]):
+                        full_text += "/" + tokens[end_idx + 1].text
+                        end_idx += 2
+                        ftype = FormuleType.MATHS
                     span_start = tokens[i].span[0]
                     span_end = tokens[end_idx - 1].span[1]
                     formule = Formule(
@@ -574,6 +685,24 @@ def _classify_and_merge(tokens: list[Token]) -> list[Token]:
             result.append(formule)
             i += 1
             continue
+
+        # Classifie les MOT qui sont des unités seules (km, cm, etc.)
+        # Sauf si suivi d'une apostrophe (élision : m'appelle, s'il)
+        if isinstance(tok, Mot) and _is_unit_name(tok.text):
+            _next_is_apos = (i + 1 < n and isinstance(tokens[i + 1], Separateur)
+                             and tokens[i + 1].sep_type == "apostrophe")
+            if not _next_is_apos:
+                formule = Formule(
+                    type=TokenType.FORMULE,
+                    text=tok.text,
+                    span=tok.span,
+                    formule_type=FormuleType.MATHS,
+                    children=_build_formule_children(tok.text, FormuleType.MATHS, tok.span[0]),
+                    valeur=tok.text,
+                )
+                result.append(formule)
+                i += 1
+                continue
 
         # Classifie les MOT qui sont en fait des sigles (2+ majuscules)
         if isinstance(tok, Mot) and _detect_sigle(tok.text):

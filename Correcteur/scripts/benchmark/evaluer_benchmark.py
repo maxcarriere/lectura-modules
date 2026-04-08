@@ -37,6 +37,7 @@ LEXIQUE_PATH = Path(
 )
 
 from corpus_benchmark import CATEGORIES, CORPUS, CasBenchmark  # noqa: E402
+from corpus_validation import CORPUS_VALIDATION  # noqa: E402
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -281,6 +282,58 @@ class AdaptateurLecturaScoring(Adaptateur):
         return self._correcteur.corriger(phrase).phrase_corrigee
 
 
+class AdaptateurLecturaScoringAzerty(Adaptateur):
+    """Lectura avec scoring unifie + AZERTY actives."""
+
+    nom = "Lec+Az"
+
+    def __init__(self, seuil: float = 0.15) -> None:
+        self._correcteur = None
+        self._seuil = seuil
+
+    def initialiser(self) -> None:
+        from lectura_correcteur import Correcteur
+        from lectura_correcteur._config import CorrecteurConfig
+        from lectura_lexique import Lexique
+
+        lexique = Lexique(str(LEXIQUE_PATH))
+
+        g2p = None
+        try:
+            from lectura_nlp.inference_numpy import NumpyInferenceEngine
+            import pathlib
+            g2p_dir = pathlib.Path(__file__).resolve().parents[3] / "G2P"
+            weights = g2p_dir / "modeles_numpy" / "unifie_weights.json"
+            vocab = g2p_dir / "src" / "lectura_nlp" / "modeles" / "unifie_vocab.json"
+            if weights.exists() and vocab.exists():
+                _engine = NumpyInferenceEngine(
+                    weights_path=str(weights), vocab_path=str(vocab),
+                )
+                class _G2PAdapter:
+                    def prononcer(self, mot: str) -> str | None:
+                        try:
+                            result = _engine.analyser([mot])
+                            phones = result.get("g2p", [])
+                            return phones[0] if phones else None
+                        except Exception:
+                            return None
+                g2p = _G2PAdapter()
+                print("  G2P phonetique d<=1: active")
+        except Exception as e:
+            print(f"  G2P phonetique: indisponible ({e})")
+
+        config = CorrecteurConfig(
+            activer_scoring=True,
+            activer_azerty=True,
+            seuil_remplacement=self._seuil,
+        )
+        self._correcteur = Correcteur(lexique, config=config, g2p=g2p)
+
+    def corriger(self, phrase: str) -> str:
+        assert self._correcteur is not None
+        return self._correcteur.corriger(phrase).phrase_corrigee
+
+
 class AdaptateurGrammalecte(Adaptateur):
     """Grammalecte en mode complet (grammaire + orthographe)."""
 
@@ -395,8 +448,12 @@ def _normaliser_simple(phrase: str) -> str:
 def evaluer_corpus(
     outils: list[Adaptateur],
     verbose: bool = False,
+    corpus: list[CasBenchmark] | None = None,
 ) -> tuple[list[ResultatOutil], list[ResultatPhrase]]:
     """Evalue tous les outils sur le corpus."""
+    if corpus is None:
+        corpus = CORPUS
+
     # Initialisation
     for outil in outils:
         print(f"  Chargement {outil.nom}...", end=" ", flush=True)
@@ -416,9 +473,9 @@ def evaluer_corpus(
         o.nom: ResultatOutil(nom=o.nom) for o in outils
     }
     res_phrases: list[ResultatPhrase] = []
-    n = len(CORPUS)
+    n = len(corpus)
 
-    for i, cas in enumerate(CORPUS, 1):
+    for i, cas in enumerate(corpus, 1):
         rp = ResultatPhrase(cas=cas)
 
         if verbose:
@@ -664,6 +721,7 @@ def exporter_markdown(
 OUTILS_DISPONIBLES = {
     "lectura": AdaptateurLectura,
     "lectura+scoring": AdaptateurLecturaScoring,
+    "lectura+azerty": AdaptateurLecturaScoringAzerty,
     "grammalecte": AdaptateurGrammalecte,
     "langtool": AdaptateurLanguageTool,
     "baseline": AdaptateurBaseline,
@@ -692,7 +750,20 @@ def main() -> None:
         "--markdown", type=str, default=None,
         help="Chemin de sortie pour le rapport markdown",
     )
+    parser.add_argument(
+        "--corpus", type=str, default="dev",
+        choices=["dev", "validation", "all"],
+        help="Corpus a utiliser : dev (120 phrases), validation (60), all (180)",
+    )
     args = parser.parse_args()
+
+    # Selection du corpus
+    if args.corpus == "dev":
+        corpus_actif = CORPUS
+    elif args.corpus == "validation":
+        corpus_actif = CORPUS_VALIDATION
+    else:
+        corpus_actif = CORPUS + CORPUS_VALIDATION
 
     # Selection des outils
     if args.outils:
@@ -712,9 +783,11 @@ def main() -> None:
         outils.append(cls())
 
     print(f"\nOutils : {', '.join(o.nom for o in outils)}")
-    print(f"Corpus : {len(CORPUS)} phrases\n")
+    print(f"Corpus : {args.corpus} ({len(corpus_actif)} phrases)\n")
 
-    res_outils, res_phrases = evaluer_corpus(outils, verbose=args.verbose)
+    res_outils, res_phrases = evaluer_corpus(
+        outils, verbose=args.verbose, corpus=corpus_actif,
+    )
     afficher_rapport(res_outils, res_phrases, verbose=args.verbose)
 
     if args.markdown:

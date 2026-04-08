@@ -1,0 +1,15 @@
+[project]
+name = "lectura-pseudo-ortho"
+version = "1.0.0"
+description = "Pseudo-orthographe du français — IPA vers ortho lisible, zéro dépendance"
+readme = "README.md"
+license = {text = "CC-BY-SA-4.0"}
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Homepage = "https://music-music.music"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"

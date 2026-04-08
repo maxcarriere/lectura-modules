@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-tts"
+version = "0.1.0"
+description = "Abstraction multi-moteurs TTS pour Lectura"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+piper = ["piper-tts>=1.2"]
+kokoro = ["kokoro-onnx>=0.4", "onnxruntime>=1.16"]
+gtts = ["gTTS>=2.3", "soundfile>=0.12"]
+edge = ["edge-tts>=6.1", "soundfile>=0.12"]
+cloud-google = ["google-cloud-texttospeech>=2.14"]
+cloud-aws = ["boto3>=1.28"]
+playback = ["sounddevice>=0.4"]
+all = ["lectura-tts[piper,kokoro,gtts,edge,playback]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

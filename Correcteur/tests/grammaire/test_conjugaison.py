@@ -157,3 +157,88 @@ def test_il_mangent_mange(mock_lexique):
     )
     assert result[1] == "mange"
     assert len(corrections) >= 1
+
+
+# --- A1 : Sujets nominaux pluriels ---
+
+def test_les_enfants_allent_vont(mock_lexique):
+    """'les enfants allent' -> 'les enfants vont' (sujet nominal pluriel + forme fausse)."""
+    mots = ["les", "enfants", "allent"]
+    pos = ["ART:def", "NOM", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=["les", "enfants", "allent"],
+    )
+    assert result[2] == "vont"
+    assert len(corrections) >= 1
+
+
+def test_les_enfants_faisent_font(mock_lexique):
+    """'les enfants faisent' -> 'les enfants font' (sujet nominal pluriel + forme fausse)."""
+    mots = ["les", "enfants", "faisent"]
+    pos = ["ART:def", "NOM", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=["les", "enfants", "faisent"],
+    )
+    assert result[2] == "font"
+    assert len(corrections) >= 1
+
+
+# --- A2 : Sujets nominaux pluriels dans un complement prepositionnel (pas FP) ---
+
+def test_chat_de_mes_voisins_dort_pas_de_correction(mock_lexique):
+    """'le chat de mes voisins dort' -> pas de correction (voisins est complement)."""
+    mots = ["le", "chat", "de", "mes", "voisins", "dort"]
+    pos = ["ART:def", "NOM", "PRE", "ADJ:pos", "NOM", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=mots,
+    )
+    assert result[5] == "dort"
+    assert not any(c.index == 5 for c in corrections)
+
+
+def test_directeur_des_ecoles_visite_pas_de_correction(mock_lexique):
+    """'le directeur des ecoles visite' -> pas de correction (ecoles est complement)."""
+    mots = ["le", "directeur", "des", "ecoles", "visite"]
+    pos = ["ART:def", "NOM", "ART:ind", "NOM", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=mots,
+    )
+    assert result[4] == "visite"
+    assert not any(c.index == 4 for c in corrections)
+
+
+# --- A3 : Regle 5b sujet nominal pluriel + imparfait/futur ---
+
+def test_les_gens_se_promenais_promenaient(mock_lexique):
+    """'les gens se promenais' -> 'les gens se promenaient' (sujet nominal plur + imp)."""
+    mots = ["les", "gens", "se", "promenais"]
+    pos = ["ART:def", "NOM", "PRO:per", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=mots,
+    )
+    assert result[3] == "promenaient"
+    assert len(corrections) >= 1
+
+
+def test_les_eleves_passerons_passeront(mock_lexique):
+    """'les eleves passerons' -> 'les eleves passeront' (sujet nominal plur + fut)."""
+    mots = ["les", "enfants", "passerons"]
+    pos = ["ART:def", "NOM", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=mots,
+    )
+    assert result[2] == "passeront"
+    assert len(corrections) >= 1
+
+
+# --- A4 : Futur tronque ---
+
+def test_nous_partiron_partirons(mock_lexique):
+    """'nous partiron' -> 'nous partirons' (futur tronque)."""
+    mots = ["nous", "partiron"]
+    pos = ["PRO:per", "VER"]
+    result, corrections = verifier_conjugaisons(
+        mots, pos, {}, mock_lexique, originaux=mots,
+    )
+    assert result[1] == "partirons"
+    assert len(corrections) >= 1

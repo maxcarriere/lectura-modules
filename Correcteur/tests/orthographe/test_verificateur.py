@@ -143,3 +143,83 @@ def test_scoring_actif_mot_connu_inchange(mock_lexique):
     assert results[0].dans_lexique is True
     assert results[0].corrige == "chat"
     assert results[0].suggestions == []
+
+
+# --- Axe 1 : Auto-correction accent sans seuil frequence ---
+
+def test_accent_auto_correction_ecole(mock_lexique):
+    """'ecole' (sans accent) -> 'école' meme si freq < 5.0."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["ecole"])
+    assert results[0].corrige == "école"
+
+
+def test_accent_auto_correction_mere(mock_lexique):
+    """'mere' -> 'mère' meme si freq < 5.0."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["mere"])
+    assert results[0].corrige == "mère"
+
+
+def test_accent_auto_correction_fatigue(mock_lexique):
+    """'fatigue' -> 'fatigué' meme si freq < 5.0."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["fatigue"])
+    assert results[0].corrige == "fatigué"
+
+
+# --- Axe 2 : Auto-correction doublement consonne ---
+
+def test_doublement_consonne_balon(mock_lexique):
+    """'balon' -> 'ballon' (doublement consonne, freq >= 1.0)."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["balon"])
+    assert results[0].corrige == "ballon"
+
+
+def test_doublement_consonne_dificile(mock_lexique):
+    """'dificile' -> 'difficile' (doublement consonne, freq >= 1.0)."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["dificile"])
+    assert results[0].corrige == "difficile"
+
+
+# --- POS re-ranking ---
+
+def test_pos_reranking_drot_ver(mock_lexique):
+    """'drot' with POS=VER -> 'dort' (VER) preferred over 'droit' (ADJ, higher freq)."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    morpho = [{"pos": "VER"}]
+    results = v.verifier_phrase(["drot"], morpho)
+    assert results[0].suggestions[0] == "dort"
+
+
+def test_pos_reranking_drot_adj(mock_lexique):
+    """'drot' with POS=ADJ -> 'droit' (ADJ) preferred over 'dort' (VER)."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    morpho = [{"pos": "ADJ"}]
+    results = v.verifier_phrase(["drot"], morpho)
+    assert results[0].suggestions[0] == "droit"
+
+
+# --- Accent disambiguation in-lexique ---
+
+def test_accent_inlexique_tres(mock_lexique):
+    """'tres' in lexique (freq=1) -> corrige en 'très' (freq=500)."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["tres"])
+    assert results[0].corrige == "très"
+
+
+def test_accent_inlexique_foret(mock_lexique):
+    """'foret' in lexique (freq=1) -> corrige en 'forêt' (freq=50)."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["foret"])
+    assert results[0].corrige == "forêt"
+
+
+def test_accent_inlexique_chat_pas_modifie(mock_lexique):
+    """'chat' (freq=45.2) n'a pas de variante accent -> pas modifie."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["chat"])
+    assert results[0].corrige == "chat"

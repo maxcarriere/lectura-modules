@@ -50,3 +50,64 @@ def test_quil_split(mock_lexique):
     tokens = ["quil"]
     result = resegmenter(tokens, mock_lexique)
     assert result == ["qu'", "il"]
+
+
+# --- Axe 3 : Fusion de tokens ---
+
+def test_fusion_beaucoup(mock_lexique):
+    """'beau' + 'coup' -> 'beaucoup' (fusion connue)."""
+    tokens = ["beau", "coup"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["beaucoup"]
+
+
+def test_fusion_generique_frequente(mock_lexique):
+    """Generic fusion: two unknown tokens whose concat is known & frequent."""
+    # "ensem" + "ble" are both unknown, "ensemble" has freq=50 >= 10
+    tokens = ["ensem", "ble"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["ensemble"]
+
+
+def test_fusion_connue_deux_mots_connus(mock_lexique):
+    """Fusion connue meme si les deux tokens sont connus (beau+coup)."""
+    tokens = ["beau", "coup"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["beaucoup"]
+
+
+def test_fusion_compose_trait_union(mock_lexique):
+    """'peut' + 'être' -> 'peut-être' (compose avec trait d'union)."""
+    tokens = ["peut", "être"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["peut-être"]
+
+
+def test_fusion_compose_sans_accent(mock_lexique):
+    """'peut' + 'etre' (sans accent) -> 'peut-être' (forme canonique)."""
+    tokens = ["peut", "etre"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["peut-être"]
+
+
+def test_fusion_pas_de_faux_positif(mock_lexique):
+    """Deux tokens connus hors liste ne doivent pas etre fusionnes."""
+    tokens = ["le", "chat"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["le", "chat"]
+
+
+# --- Tokens avec trait d'union (inversions verbe-pronom) ---
+
+def test_vas_tu_preserve(mock_lexique):
+    """'vas-tu' ne doit pas etre corrompu (les deux parties sont connues)."""
+    tokens = ["vas-tu"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["vas-tu"]
+
+
+def test_a_t_il_preserve(mock_lexique):
+    """'a-t-il' preserve (t euphonique filtre, a et il sont connus)."""
+    tokens = ["a-t-il"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["a-t-il"]

@@ -66,18 +66,18 @@ def appliquer_grammaire(
     result = result_ppetre
     corrections.extend(corr_ppetre)
 
-    # 4. Negation (inserer ne)
-    result_neg, corr_neg = verifier_negation(
-        result, pos_tags, morpho, lexique, origs,
-    )
-    result = result_neg
-    corrections.extend(corr_neg)
-
-    # 5. Homophones contextuels
+    # 4. Homophones contextuels (AVANT negation pour eviter desalignement POS)
     result_homo, corr_homo = verifier_homophones(
         result, pos_tags, morpho, lexique, origs,
     )
     result = result_homo
     corrections.extend(corr_homo)
+
+    # 5. Negation (inserer ne)
+    result_neg, corr_neg = verifier_negation(
+        result, pos_tags, morpho, lexique, origs,
+    )
+    result = result_neg
+    corrections.extend(corr_neg)
 
     return result, corrections

@@ -19,6 +19,7 @@ from lectura_correcteur._coherence import appliquer_coherence
 from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._morpho import MorphoTagger
 from lectura_correcteur._scoring import extraire_contexte, scorer_candidats
+from lectura_correcteur._symspell import SymSpellIndex, _obtenir_formes
 from lectura_correcteur._types import (
     Correction,
     MotAnalyse,
@@ -29,6 +30,7 @@ from lectura_correcteur._utils import PUNCT_RE, reconstruire_phrase
 from lectura_correcteur.grammaire import appliquer_grammaire
 from lectura_correcteur.orthographe import VerificateurOrthographe
 from lectura_correcteur.orthographe._resegmentation import resegmenter
+from lectura_correcteur.orthographe._sms import expander_sms
 from lectura_correcteur.syntaxe import appliquer_syntaxe
 
 
@@ -64,11 +66,14 @@ class Correcteur:
         self._tagger = tagger if tagger is not None else MorphoTagger()
         self._tokeniseur = tokeniseur
         self._g2p = g2p
+        formes = _obtenir_formes(lexique)
+        self._symspell = SymSpellIndex(formes) if formes is not None else None
         self._verificateur = VerificateurOrthographe(
             lexique, max_suggestions=self._config.max_suggestions,
             distance=self._config.distance_suggestions,
             g2p=g2p,
             scoring_actif=self._config.activer_scoring,
+            symspell=self._symspell,
         )
 
     @property
@@ -118,6 +123,10 @@ class Correcteur:
         # 3. Resegmentation
         if self._config.activer_resegmentation:
             tokens = resegmenter(tokens, self._lexique)
+
+        # 3b. Expansion SMS
+        if self._config.activer_sms:
+            tokens = expander_sms(tokens, self._lexique)
 
         # 4. Separer ponctuation des mots
         is_punct = [bool(PUNCT_RE.match(t)) for t in tokens]
@@ -195,6 +204,7 @@ class Correcteur:
                     analysis.pos, analysis.morpho,
                     contexte, self._lexique,
                     dans_lexique=dans_lex,
+                    config=self._config,
                 )
                 if scored:
                     top = scored[0]
@@ -269,6 +279,7 @@ class Correcteur:
                         candidats, analysis.original,
                         analysis.pos, analysis.morpho,
                         contexte, self._lexique,
+                        config=self._config,
                     )
                     if scored:
                         top = scored[0]

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-lexique"
-version = "1.2.0"
+version = "1.3.0"
 description = "Module partage d'acces au lexique Lectura"
 requires-python = ">=3.10"
 license = "CC-BY-SA-4.0"

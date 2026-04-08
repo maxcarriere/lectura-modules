@@ -71,6 +71,7 @@ def tokenize_maths(text: str) -> list[MathToken]:
     tokens: list[MathToken] = []
     i = 0
     n = len(text)
+    brace_depth = 0  # profondeur des accolades {}, pour inhiber virgule décimale
 
     def _ascii_digit(c: str) -> bool:
         return "0" <= c <= "9"
@@ -128,8 +129,9 @@ def tokenize_maths(text: str) -> list[MathToken]:
             j = i
             while j < n and _ascii_digit(text[j]):
                 j += 1
-            # Partie décimale
-            if j < n and text[j] in ".," and j + 1 < n and _ascii_digit(text[j + 1]):
+            # Partie décimale (virgule inhibée dans les accolades {1,2,3})
+            decimal_sep = "." if brace_depth > 0 else ".,"
+            if j < n and text[j] in decimal_sep and j + 1 < n and _ascii_digit(text[j + 1]):
                 j += 1
                 while j < n and _ascii_digit(text[j]):
                     j += 1
@@ -177,6 +179,10 @@ def tokenize_maths(text: str) -> list[MathToken]:
 
         # Parenthèses / crochets / pipes
         if ch in MATHS_BRACKETS:
+            if ch == "{":
+                brace_depth += 1
+            elif ch == "}":
+                brace_depth = max(0, brace_depth - 1)
             tokens.append(MathToken(ch, "bracket"))
             i += 1
             continue
@@ -187,8 +193,20 @@ def tokenize_maths(text: str) -> list[MathToken]:
             i += 1
             continue
 
-        # Opérateurs
+        # Opérateurs — vérifier d'abord les unités commençant par ° (°C, °F)
         if ch in MATHS_OPS:
+            if ch == "°":
+                matched_unit = False
+                for mu in UNIT_MULTI:
+                    if mu.startswith("°"):
+                        end = i + len(mu)
+                        if end <= n and text[i:end] == mu:
+                            tokens.append(MathToken(mu, "unit"))
+                            i = end
+                            matched_unit = True
+                            break
+                if matched_unit:
+                    continue
             tokens.append(MathToken(ch, "operator"))
             i += 1
             continue

@@ -92,16 +92,16 @@ def _detect_ordinal(text: str) -> bool:
             prefix = text[:len(text) - len(suffix)]
             if prefix.isdigit() and len(prefix) > 0:
                 return True
-            if _is_roman(prefix):
+            if _is_roman(prefix) and prefix == prefix.upper():
                 return True
     # Cas spécial : "e" seul (1e, 2e, IIe, XXe, etc.)
     if text_lower.endswith("e") and len(text) > 1:
         prefix = text[:-1]
         if prefix.isdigit():
             return True
-        # Pour les romains + "e", exiger au moins 2 caractères de préfixe
-        # pour éviter les faux positifs (Le, Ce, De, Me...)
-        if len(prefix) >= 2 and _is_roman(prefix):
+        # Pour les romains + "e", exiger préfixe majuscule et au moins 2 chars
+        # pour éviter les faux positifs (Le, Ce, De, Me, livre, lire...)
+        if len(prefix) >= 2 and _is_roman(prefix) and prefix == prefix.upper():
             return True
     return False
 
@@ -282,11 +282,11 @@ def _detect_heure(text: str) -> bool:
 
 # ── MONNAIE ──
 _MONNAIE_RE = re.compile(
-    r"^[€$£¥]\s*[0-9][0-9 ']*[.,]?\d*$"
-    r"|^[0-9][0-9 ']*[.,]?\d*\s*[€$£¥]$"
-    r"|^[0-9][0-9 ']*[0-9]*[€$£¥]\d{1,2}$"
-    r"|^[0-9][0-9 ']*[.,]?\d*\s*(?:EUR|USD|GBP|CHF|JPY)$"
-    r"|^(?:EUR|USD|GBP|CHF|JPY)\s*[0-9][0-9 ']*[.,]?\d*$",
+    r"^[€$£¥]\s*[-+±]?[0-9][0-9 ']*[.,]?\d*$"
+    r"|^[-+±]?[0-9][0-9 ']*[.,]?\d*\s*[€$£¥]$"
+    r"|^[-+±]?[0-9][0-9 ']*[0-9]*[€$£¥]\d{1,2}$"
+    r"|^[-+±]?[0-9][0-9 ']*[.,]?\d*\s*(?:EUR|USD|GBP|CHF|JPY)$"
+    r"|^(?:EUR|USD|GBP|CHF|JPY)\s*[-+±]?[0-9][0-9 ']*[.,]?\d*$",
     re.IGNORECASE,
 )
 
@@ -297,7 +297,7 @@ def _detect_monnaie(text: str) -> bool:
 
 
 # ── POURCENTAGE ──
-_POURCENTAGE_RE = re.compile(r"^[0-9][0-9 ']*\.?[0-9]*\s*[%‰]$")
+_POURCENTAGE_RE = re.compile(r"^[-+±]?[0-9][0-9 ']*\.?[0-9]*\s*[%‰]$")
 
 
 def _detect_pourcentage(text: str) -> bool:

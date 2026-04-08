@@ -15,16 +15,19 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from lectura_correcteur._azerty import ratio_adjacence_azerty
+from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._types import Candidat, MotAnalyse
 
 # Poids par defaut (tunables)
 W_IDENTITE = 0.20
-W_FREQ = 0.10
-W_EDIT = 0.10
-W_POS = 0.15
+W_FREQ = 0.08
+W_EDIT = 0.08
+W_POS = 0.14
 W_MORPHO = 0.10
 W_PHONE = 0.05
 W_CTX = 0.30
+W_AZERTY = 0.05
 
 # POS compatibles (un POS CRF peut correspondre a plusieurs cgram lexique)
 _POS_COMPAT: dict[str, set[str]] = {
@@ -267,6 +270,11 @@ def _s_contexte(candidat: Candidat, contexte: dict[str, Any], lexique: Any) -> f
     return 0.5
 
 
+def _s_azerty(candidat: Candidat, mot_original: str) -> float:
+    """Score AZERTY : favorise les candidats dont les substitutions sont adjacentes."""
+    return ratio_adjacence_azerty(mot_original, candidat.forme)
+
+
 def _phone_distance(a: str, b: str) -> int:
     """Distance Levenshtein simplifiee pour les chaines phonetiques."""
     if a == b:
@@ -295,6 +303,7 @@ def scorer_candidats(
     lexique: Any,
     *,
     dans_lexique: bool = True,
+    config: CorrecteurConfig | None = None,
 ) -> list[Candidat]:
     """Score les candidats et les trie par score decroissant.
 
@@ -306,6 +315,7 @@ def scorer_candidats(
         contexte: Contexte extrait par extraire_contexte().
         lexique: Objet lexique.
         dans_lexique: False pour les mots OOV (pas de bonus identite).
+        config: Configuration du correcteur (pour activer_azerty).
 
     Returns:
         Liste de Candidat tries par score decroissant.
@@ -326,6 +336,8 @@ def scorer_candidats(
         and contexte.get("aux_lemme", "") == "avoir"
     )
 
+    azerty_actif = config is not None and config.activer_azerty
+
     for c in candidats:
         s_id = _s_identite(c, contexte, lexique) if dans_lexique else 0.0
         s_fr = _s_freq(c)
@@ -334,6 +346,7 @@ def scorer_candidats(
         s_mo = _s_morpho(c, contexte)
         s_ph = _s_phone(c, phone_original)
         s_cx = _s_contexte(c, contexte, lexique)
+        s_az = _s_azerty(c, mot_original) if azerty_actif else 0.5
 
         c.score = (
             W_IDENTITE * s_id
@@ -343,6 +356,7 @@ def scorer_candidats(
             + W_MORPHO * s_mo
             + W_PHONE * s_ph
             + W_CTX * s_cx
+            + W_AZERTY * s_az
         )
 
     candidats.sort(key=lambda x: -x.score)

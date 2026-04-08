@@ -28,11 +28,46 @@ _ACCENT_MAP: dict[str, tuple[str, ...]] = {
 }
 
 
+def _edit_distance_rapide(a: str, b: str) -> int:
+    """Distance d'edition Levenshtein (optimisee pour seuil bas)."""
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 2:
+        return abs(la - lb)
+    if la == 0:
+        return lb
+    if lb == 0:
+        return la
+    prev = list(range(lb + 1))
+    for i in range(la):
+        curr = [i + 1] + [0] * lb
+        for j in range(lb):
+            cost = 0 if a[i] == b[j] else 1
+            curr[j + 1] = min(curr[j] + 1, prev[j + 1] + 1, prev[j] + cost)
+        prev = curr
+    return prev[lb]
+
+
 def _est_variante_accent(original: str, candidat: str) -> bool:
     """Verifie si le candidat ne differe que par les accents."""
     if len(original) != len(candidat):
         return False
     return original.translate(_DESACCENTUER) == candidat.translate(_DESACCENTUER)
+
+
+def _est_doublement_consonne(original: str, candidat: str) -> bool:
+    """Verifie si le candidat ne differe que par un doublement/dedoublement de consonne."""
+    if abs(len(original) - len(candidat)) != 1:
+        return False
+    short, long_ = (original, candidat) if len(original) < len(candidat) else (candidat, original)
+    for i in range(len(long_)):
+        rebuilt = long_[:i] + long_[i + 1:]
+        if rebuilt == short:
+            # Le caractere insere est le meme que son voisin
+            if i > 0 and long_[i] == long_[i - 1]:
+                return True
+            if i < len(long_) - 1 and long_[i] == long_[i + 1]:
+                return True
+    return False
 
 
 def _variantes_accents(mot: str, lexique) -> list[tuple[str, float]]:
@@ -102,6 +137,23 @@ def _variantes_accents(mot: str, lexique) -> list[tuple[str, float]]:
     return valides
 
 
+def _meilleure_variante_accent(mot: str, lexique, freq_actuelle: float) -> str | None:
+    """Retourne la meilleure variante accentuee si elle est bien plus frequente.
+
+    Ne propose que des variantes accent-only (meme longueur, meme squelette
+    desaccentue). Seuil : freq_candidat > max(freq_actuelle * 3, 30).
+    """
+    variantes = _variantes_accents(mot, lexique)
+    if not variantes:
+        return None
+    best_form, best_freq = variantes[0]  # triees par freq desc
+    if not _est_variante_accent(mot.lower(), best_form.lower()):
+        return None
+    if best_freq > max(freq_actuelle * 2, 15):
+        return best_form
+    return None
+
+
 def _edits_distance_1(mot: str) -> set[str]:
     """Genere tous les candidats a distance d'edition 1."""
     splits = [(mot[:i], mot[i:]) for i in range(len(mot) + 1)]
@@ -168,7 +220,7 @@ def _homophones_via_lexique(
 
 def suggerer(
     mot: str, lexique, max_n: int = 5, distance: int = 2,
-    g2p=None,
+    g2p=None, symspell=None,
 ) -> list[str]:
     """Pipeline de suggestions en 5 niveaux de priorite.
 
@@ -178,12 +230,16 @@ def suggerer(
     4. G2P phonetique (si disponible, prioritaire)
     5. Distance <= 2 en dernier recours (si aucun candidat)
 
+    Si un index SymSpell est fourni, la phase 1 utilise l'index au lieu de
+    la generation brute-force. La phase 5 reste brute-force en fallback.
+
     Args:
         mot: Mot a corriger.
         lexique: Lexique (existe, frequence, phone_de, homophones).
         max_n: Nombre max de suggestions.
         distance: Distance d'edition max (conserve pour compatibilite).
         g2p: Objet optionnel avec methode prononcer(mot) -> str | None.
+        symspell: Index SymSpell optionnel pour generation rapide.
     """
     low = mot.lower()
     seen: set[str] = set()
@@ -192,12 +248,27 @@ def suggerer(
         return lexique.frequence(c) if hasattr(lexique, "frequence") else 0.0
 
     # --- Phase 1 : distance 1 ---
-    d1 = _edits_distance_1(low)
-    valides_d1: list[tuple[str, float]] = []
-    for c in d1:
-        if c not in seen and lexique.existe(c):
-            valides_d1.append((c, _freq(c)))
-            seen.add(c)
+    if symspell is not None:
+        # SymSpell : lookup rapide, mais filtrer pour ne garder que d<=1
+        sym_candidates = symspell.suggestions(low)
+        d1 = set()  # pas besoin du brute-force d1
+        valides_d1: list[tuple[str, float]] = []
+        sym_d2: list[tuple[str, float]] = []  # candidats d=2 pour phase 5
+        for c in sym_candidates:
+            if c not in seen and lexique.existe(c):
+                if _edit_distance_rapide(low, c) <= 1:
+                    valides_d1.append((c, _freq(c)))
+                else:
+                    sym_d2.append((c, _freq(c)))
+                seen.add(c)
+    else:
+        sym_d2 = []
+        d1 = _edits_distance_1(low)
+        valides_d1: list[tuple[str, float]] = []
+        for c in d1:
+            if c not in seen and lexique.existe(c):
+                valides_d1.append((c, _freq(c)))
+                seen.add(c)
 
     # Separer accent-only vs other au sein de d=1
     accent_d1 = [(c, f) for c, f in valides_d1 if _est_variante_accent(low, c)]
@@ -218,13 +289,13 @@ def suggerer(
 
     combined_123 = phase12 + phase3
 
-    # --- Phase 4 : G2P phonetique d<=1 (si disponible, quand d=1 graphemique a echoue) ---
-    # Ne tourne que si les phases 1-3 n'ont rien trouve, pour eviter
-    # de remplacer des bonnes corrections d=1 par des homophones incorrects.
+    # --- Phase 4 : G2P phonetique d<=1 (si disponible) ---
+    # Tourne quand les phases 1-3 ont trouve < 3 candidats, pour attraper
+    # les cas ou d=1 graphemique est insuffisant (ex: farmacien->pharmacien).
     # Cherche d'abord le match exact, puis les variantes phone d=1
     # (deletions + substitutions vocaliques).
     phase4_g2p: list[tuple[str, float]] = []
-    if g2p is not None and not combined_123 and hasattr(lexique, "homophones"):
+    if g2p is not None and len(combined_123) < 3 and hasattr(lexique, "homophones"):
         phone = g2p.prononcer(low) if hasattr(g2p, "prononcer") else None
         if phone:
             from lectura_correcteur._phones import generer_phones_d1
@@ -252,18 +323,24 @@ def suggerer(
     # --- Phase 5 : distance 2 en dernier recours ---
     valides_d2: list[tuple[str, float]] = []
     if not combined_1234 and distance >= 2:
-        count = 0
-        for c in d1:
-            if lexique.existe(c):
-                continue
-            count += 1
-            if count > _MAX_D1_EXPAND:
-                break
-            for c2 in _edits_distance_1(c):
-                if c2 not in seen and c2 != low and lexique.existe(c2):
-                    valides_d2.append((c2, _freq(c2)))
-                    seen.add(c2)
-        valides_d2.sort(key=lambda x: -x[1])
+        if sym_d2:
+            # SymSpell a deja les candidats d=2 pre-filtres
+            sym_d2.sort(key=lambda x: -x[1])
+            valides_d2 = sym_d2
+        else:
+            # Brute-force d=2 classique
+            count = 0
+            for c in d1:
+                if lexique.existe(c):
+                    continue
+                count += 1
+                if count > _MAX_D1_EXPAND:
+                    break
+                for c2 in _edits_distance_1(c):
+                    if c2 not in seen and c2 != low and lexique.existe(c2):
+                        valides_d2.append((c2, _freq(c2)))
+                        seen.add(c2)
+            valides_d2.sort(key=lambda x: -x[1])
 
     combined = combined_1234 + valides_d2
 

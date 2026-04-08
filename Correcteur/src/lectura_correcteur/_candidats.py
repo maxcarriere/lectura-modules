@@ -139,7 +139,7 @@ def _tier1_identite_homophones(
                 candidats.append(Candidat(
                     forme=ortho_low,
                     source="homophone",
-                    freq=float(entry.get("freq", 0)),
+                    freq=float(entry.get("freq") or 0),
                     edit_dist=_edit_distance(mot, ortho_low),
                     pos=entry.get("cgram", ""),
                     phone=entry.get("phone", ""),
@@ -262,7 +262,7 @@ def _tier2_edit_distance(
                     candidats.append(Candidat(
                         forme=ortho_low,
                         source="g2p",
-                        freq=float(entry.get("freq", 0)),
+                        freq=float(entry.get("freq") or 0),
                         edit_dist=_edit_distance(mot, ortho_low),
                         pos=entry.get("cgram", ""),
                         phone=entry.get("phone", ""),
@@ -362,7 +362,7 @@ def _tier3_morpho(
             candidats.append(Candidat(
                 forme=ortho_low,
                 source="morpho",
-                freq=float(entry.get("freq", 0)),
+                freq=float(entry.get("freq") or 0),
                 edit_dist=_edit_distance(mot, ortho_low),
                 pos=entry.get("cgram", ""),
                 phone=entry.get("phone", ""),

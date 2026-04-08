@@ -7,7 +7,10 @@ leur/leurs, ça/sa, -er/-é apres aller.
 from __future__ import annotations
 
 from lectura_correcteur._types import Correction, TypeCorrection
-from lectura_correcteur.grammaire._donnees import ALLER_FORMES
+from lectura_correcteur.grammaire._donnees import (
+    ALLER_FORMES,
+    generer_candidats_pluriel,
+)
 
 # Sujets pronominaux 3e personne du singulier
 _SUJETS_3SG = frozenset({"il", "elle", "on", "qui", "ce", "c'"})
@@ -129,6 +132,61 @@ def verifier_homophones(
             continue
 
         # --- son / sont ---
+        # "son" precede directement par un sujet pluriel (sans verbe entre) →
+        # probablement "sont" (copule etre 3pl).
+        # Ex: "les enfants son gentil" → "les enfants sont gentils"
+        if curr_low == "son" and pos in ("ADJ:pos", "ADJ"):
+            _plur_subj_direct = False
+            for _k in range(i - 1, max(-1, i - 5), -1):
+                _w = result[_k].lower()
+                _pk = pos_tags[_k] if _k < len(pos_tags) else ""
+                if _w in ("ils", "elles"):
+                    _plur_subj_direct = True
+                    break
+                if _pk == "NOM" and _w.endswith(("s", "x", "z")):
+                    _plur_subj_direct = True
+                    break
+                if _pk in ("ART:def", "ART:ind", "DET", "ADJ:pos", "ADJ", "ADV"):
+                    continue
+                break  # Verbe ou autre → arreter
+            if _plur_subj_direct and lexique is not None and lexique.existe("sont"):
+                ancien = result[i]
+                result[i] = "sont"
+                corrections.append(Correction(
+                    index=i,
+                    original=ancien,
+                    corrige="sont",
+                    type_correction=TypeCorrection.GRAMMAIRE,
+                    explication="'son' -> 'sont' (sujet pluriel, copule)",
+                ))
+                # Pluraliser aussi le mot suivant s'il est ADJ dans le lexique
+                if i + 1 < n:
+                    _nw = result[i + 1]
+                    _nlow = _nw.lower()
+                    if (
+                        not _nlow.endswith(("s", "x", "z"))
+                        and len(_nw) > 1
+                        and lexique is not None
+                    ):
+                        _infos = lexique.info(_nlow)
+                        _is_adj = _infos and any(
+                            e.get("cgram", "").startswith("ADJ") for e in _infos
+                        )
+                        if _is_adj:
+                            for _cand in generer_candidats_pluriel(_nw):
+                                if lexique.existe(_cand):
+                                    _anc = result[i + 1]
+                                    result[i + 1] = _cand
+                                    corrections.append(Correction(
+                                        index=i + 1,
+                                        original=_anc,
+                                        corrige=_cand,
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        explication="Accord pluriel apres 'sont'",
+                                    ))
+                                    break
+                continue
+
         # "son" + VER/PP -> probablement "sont" (quand sujet pluriel avant)
         if curr_low == "son" and pos in ("ADJ:pos", "ADJ"):
             if i + 1 < n:
@@ -307,6 +365,39 @@ def verifier_homophones(
                 explication="'ou' -> 'où' (adverbe interrogatif)",
             ))
             continue
+
+        # "ou" (CON) + pronom sujet + VER, precede par VER -> "où"
+        # (interrogatif indirect : "je sais ou il habite")
+        if curr_low == "ou" and pos == "CON":
+            if i > 0 and i + 2 < n:
+                next_low = result[i + 1].lower()
+                next2_pos = pos_tags[i + 2] if i + 2 < len(pos_tags) else ""
+                _is_pronom_sujet = next_low in (
+                    "il", "elle", "on", "je", "j'", "tu",
+                    "nous", "vous", "ils", "elles",
+                )
+                if _is_pronom_sujet and next2_pos in ("VER", "AUX"):
+                    # Verifier qu'un VER precede (contexte interro indirecte)
+                    _ver_before = False
+                    for _k in range(i - 1, max(-1, i - 4), -1):
+                        _pk = pos_tags[_k] if _k < len(pos_tags) else ""
+                        if _pk in ("VER", "AUX"):
+                            _ver_before = True
+                            break
+                        if _pk in ("ADV",):
+                            continue
+                        break
+                    if _ver_before:
+                        ancien = result[i]
+                        result[i] = "où"
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige="où",
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            explication="'ou' -> 'où' (interrogatif indirect)",
+                        ))
+                        continue
 
         # --- on / ont ---
         # "on" apres NOM/PRO + suivi de VER/ADV -> "ont" (3pl avoir)

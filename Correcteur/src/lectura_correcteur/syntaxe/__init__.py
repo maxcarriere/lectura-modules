@@ -1,9 +1,11 @@
-"""Sous-module syntaxe : ponctuation et segmentation."""
+"""Sous-module syntaxe : ponctuation, segmentation et elision."""
 
+from lectura_correcteur.syntaxe._elision import appliquer_elision
 from lectura_correcteur.syntaxe._ponctuation import verifier_ponctuation
 from lectura_correcteur.syntaxe._segmentation import segmenter_phrases
 
 __all__ = [
+    "appliquer_elision",
     "appliquer_syntaxe",
     "segmenter_phrases",
     "verifier_ponctuation",
@@ -23,5 +25,8 @@ def appliquer_syntaxe(
 
     corr_ponct = verifier_ponctuation(result)
     corrections.extend(corr_ponct)
+
+    # Elision : contracter particules devant voyelle/h
+    result = appliquer_elision(result)
 
     return result, corrections

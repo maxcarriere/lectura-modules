@@ -389,7 +389,9 @@ def verifier_accords(
                             break
 
                 # Propager le genre : chercher copule + sujet plus a gauche
+                # ou propager depuis le premier ADJ coordonne
                 if lexique is not None:
+                    target_genre = None
                     # Chercher la copule avant l'ADJ coordonne
                     copule_idx = None
                     for _k in range(i - 3, max(-1, i - 6), -1):
@@ -402,28 +404,39 @@ def verifier_accords(
                         )
                         if gn is not None:
                             s_genre, _s_nombre = gn
-                            adj_infos = lexique.info(result[i])
-                            adj_genred = [e for e in adj_infos if e.get("genre")]
-                            if s_genre == "Fem" and adj_genred and all(
-                                e.get("genre") == "m" for e in adj_genred
-                            ):
-                                for cand in generer_candidats_feminin(result[i]):
-                                    c_infos = lexique.info(cand)
-                                    if c_infos and any(
-                                        e.get("genre") == "f" for e in c_infos
-                                    ):
-                                        ancien = result[i]
-                                        result[i] = cand
-                                        corrections.append(Correction(
-                                            index=i,
-                                            original=ancien,
-                                            corrige=cand,
-                                            type_correction=TypeCorrection.GRAMMAIRE,
-                                            explication="Accord ADJ coordonne en genre (fem)",
-                                        ))
-                                        curr = result[i]
-                                        curr_low = curr.lower()
-                                        break
+                            if s_genre == "Fem":
+                                target_genre = "f"
+                    # Fallback: propager le genre du premier ADJ coordonne
+                    if target_genre is None:
+                        prev2_infos = lexique.info(result[i - 2])
+                        prev2_genred = [e for e in prev2_infos if e.get("genre")]
+                        if prev2_genred and all(
+                            e.get("genre") == "f" for e in prev2_genred
+                        ):
+                            target_genre = "f"
+                    if target_genre == "f":
+                        adj_infos = lexique.info(result[i])
+                        adj_genred = [e for e in adj_infos if e.get("genre")]
+                        if adj_genred and all(
+                            e.get("genre") == "m" for e in adj_genred
+                        ):
+                            for cand in generer_candidats_feminin(result[i]):
+                                c_infos = lexique.info(cand)
+                                if c_infos and any(
+                                    e.get("genre") == "f" for e in c_infos
+                                ):
+                                    ancien = result[i]
+                                    result[i] = cand
+                                    corrections.append(Correction(
+                                        index=i,
+                                        original=ancien,
+                                        corrige=cand,
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        explication="Accord ADJ coordonne en genre (fem)",
+                                    ))
+                                    curr = result[i]
+                                    curr_low = curr.lower()
+                                    break
 
         # Regle 6 : DET feminin + NOM/ADJ masculin -> forme feminine
         if i > 0 and pos in ("NOM", "ADJ"):
@@ -477,6 +490,11 @@ def _trouver_sujet_pluriel(
                 prev_mot = mots[j - 1].lower()
                 if prev_pos == "PRE" or prev_mot in PREPOSITIONS:
                     j -= 2  # sauter DET + PRE
+                    continue
+                # "des" apres un NOM = contraction "de+les" (PP)
+                # Ex: "le directeur des ecoles" → "des" introduit un PP
+                if mot_j == "des" and prev_pos == "NOM":
+                    j -= 1  # sauter "des" (la PRE est incorporee)
                     continue
             return True
         if pos_j.startswith("ART") or pos_j.startswith("DET"):

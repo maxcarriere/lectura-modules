@@ -1289,8 +1289,8 @@ def construire_groupes(
         mot_courant = mots[i]
         mot_precedent = mots[i - 1]
 
-        # La ponctuation interdit toute fusion entre les mots
-        if mot_courant.ponctuation_avant:
+        # La ponctuation ou une formule interdit toute fusion entre les mots
+        if mot_courant.ponctuation_avant or mot_courant.est_formule or mot_precedent.est_formule:
             pass  # tombe dans le « pas de fusion » ci-dessous
         else:
             # Élision : apostrophe entre les deux mots (m'appelle, l'enfant)

@@ -178,3 +178,27 @@ def test_on_apres_nom_ont(mock_lexique):
     )
     assert result[1] == "ont"
     assert any(c.corrige == "ont" for c in corrections)
+
+
+# --- B2 : ou interrogatif indirect ---
+
+def test_ou_interrogatif_indirect(mock_lexique):
+    """'sais ou il habite' -> 'sais où il habite' (interrogatif indirect)."""
+    mots = ["sais", "ou", "il", "habite"]
+    pos = ["VER", "CON", "PRO:per", "VER"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[1] == "où"
+    assert any(c.corrige == "où" for c in corrections)
+
+
+def test_ou_conjonction_pas_interro(mock_lexique):
+    """'chat ou chien' reste 'ou' (pas de contexte interro indirect)."""
+    mots = ["chat", "ou", "chien"]
+    pos = ["NOM", "CON", "NOM"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[1] == "ou"
+    assert not any(c.corrige == "où" for c in corrections)

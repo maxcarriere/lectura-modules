@@ -71,6 +71,7 @@ class OptionsLecture:
     monnaie_dire_centimes: bool = True  # inclure les centimes
     romain_actif: bool = True        # calculer display_rom pour les nombres
     auto_convert_sci: bool = False   # convertir automatiquement décimal ↔ scientifique
+    heure_minuit_midi: bool = False  # 0h → "minuit", 12h → "midi"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -851,6 +852,7 @@ def _assign_span_num_decimal(
 
     M2 : segments (runs de ≥3 zéros fusionnés, portions groupées par 3).
     M1 : zéros initiaux + reste entier surligné d'un bloc.
+    M3 : chiffre par chiffre (1 event = 1 chiffre).
     """
     if not events:
         return
@@ -860,7 +862,13 @@ def _assign_span_num_decimal(
 
     ei = 0
 
-    if method == "m1":
+    if method == "m3":
+        # M3 : 1 chiffre = 1 event
+        for k, ch in enumerate(dec_str):
+            if ei < len(events):
+                events[ei].span_num = (offset + k, offset + k + 1)
+                ei += 1
+    elif method == "m1":
         # M1 : zéros initiaux + reste comme un seul bloc
         lz = _count_leading_zeros(dec_str)
         rest = dec_str[lz:]
@@ -1373,6 +1381,8 @@ def _lire_decimal(
     method = options.decimal_method if options else "m2"
     if method == "m1":
         parts.extend(_decimal_m1(partie_dec))
+    elif method == "m3":
+        parts.extend(_decimal_m3(partie_dec))
     else:
         parts.extend(_decimal_m2(partie_dec))
 
@@ -1532,6 +1542,18 @@ def _decimal_m1(partie_dec: str) -> list[tuple[str, str]]:
         if n > 0:
             parts.extend(_nombre_vers_francais(n))
 
+    return parts
+
+
+def _decimal_m3(partie_dec: str) -> list[tuple[str, str]]:
+    """Méthode M3 : chiffre par chiffre.
+
+    Ex: "14"  → ("un", …), ("quatre", …)
+    Ex: "003" → ("zéro", …), ("zéro", …), ("trois", …)
+    """
+    parts: list[tuple[str, str]] = []
+    for ch in partie_dec:
+        parts.append(_u(ch))
     return parts
 
 
@@ -1814,7 +1836,17 @@ def lire_ordinal(
     if 1 <= n <= 39999:
         try:
             from lectura_formules.romains import int_to_roman
-            display_rom = int_to_roman(n)
+            rom_base = int_to_roman(n)
+            # Ajouter le suffixe ordinal au display_rom
+            if n == 1:
+                if suffix in ("re", "ère", "ière"):
+                    display_rom = rom_base + "re"
+                else:
+                    display_rom = rom_base + "er"
+            elif n == 2 and suffix in ("nd", "nde"):
+                display_rom = rom_base + suffix
+            else:
+                display_rom = rom_base + "e"
         except (ImportError, ValueError):
             pass
     rom_full = (0, len(display_rom)) if display_rom else (0, 0)
@@ -1886,9 +1918,9 @@ def lire_ordinal(
                 )
                 # Étendre span_num pour inclure le suffixe
                 events[-1].span_num = (last_span[0], len(num_text) + len(suffix))
-                # Propager span_rom du cardinal au suffixe ordinal
+                # Propager span_rom du cardinal et l'étendre au suffixe ordinal
                 if last_rom and last_rom != (0, 0):
-                    events[-1].span_rom = last_rom
+                    events[-1].span_rom = (last_rom[0], len(display_rom))
         else:
             # Fallback : ajouter "ième" (composant 1)
             events.append(EventFormuleLecture(
@@ -1897,13 +1929,18 @@ def lire_ordinal(
                 composant=1,
             ))
             events[-1].span_num = (len(num_text), len(num_text) + len(suffix))
+            # Étendre span_rom du dernier event cardinal pour inclure le suffixe
+            if display_rom and len(events) >= 2:
+                prev = events[-2]
+                if prev.span_rom and prev.span_rom != (0, 0):
+                    prev.span_rom = (prev.span_rom[0], len(display_rom))
 
     return _make_result(events, display_num=text.strip(), display_rom=display_rom)
 
 
 # -- FRACTION ------------------------------------------------------------------
 
-_FRACTION_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
+_FRACTION_RE = re.compile(r"([-+]?\d+)\s*/\s*(\d+)")
 
 
 def lire_fraction(
@@ -1969,7 +2006,7 @@ def _fraction_hybride(
     Composants : numérateur (0), dénominateur (2).
     """
     events: list[EventFormuleLecture] = []
-    pluriel = num > 1
+    pluriel = abs(num) > 1
 
     # Cas spéciaux
     if den == 2:
@@ -2049,7 +2086,7 @@ def _fraction_ordinal(
         if last_cardinal in _ORDINAUX:
             ord_t, ord_p = _ORDINAUX[last_cardinal]
             # Ajouter "s" si pluriel
-            if num > 1:
+            if abs(num) > 1:
                 ord_t += "s"
             # Tous les events sauf le dernier (partie cardinale)
             for t, p in parts_den[:-1]:
@@ -2150,6 +2187,15 @@ def lire_scientifique(
     mantisse_str = m.group(1)
     exposant_str = m.group(2)
     src = span[0]
+    display_num = text.strip()
+
+    # Positions dans display_num
+    mant_dn_start = m.start(1)
+    mant_dn_end = m.end(1)
+    sep_dn_start = m.end(1)
+    sep_dn_end = m.start(2)
+    exp_dn_start = m.start(2)
+    exp_dn_end = m.end(2)
 
     events: list[EventFormuleLecture] = []
 
@@ -2157,44 +2203,53 @@ def lire_scientifique(
     mant_start = src + m.start(1)
     mant_end = src + m.end(1)
     mant_result = lire_nombre(mantisse_str, span=(mant_start, mant_end))
+    mant_events: list[EventFormuleLecture] = []
     for evt in mant_result.events:
-        events.append(EventFormuleLecture(
+        new_evt = EventFormuleLecture(
             ortho=evt.ortho, phone=evt.phone,
             span_source=evt.span_source,
             composant=0,
-        ))
+        )
+        mant_events.append(new_evt)
+    # Recalculer span_num pour la mantisse (as standalone number)
+    _compute_span_num(mant_events, mantisse_str)
+    # Décaler les spans vers la position dans display_num
+    for evt in mant_events:
+        if evt.span_num and evt.span_num != (0, 0):
+            s0, e0 = evt.span_num
+            evt.span_num = (mant_dn_start + s0, mant_dn_start + e0)
+        else:
+            evt.span_num = (mant_dn_start, mant_dn_end)
+    events.extend(mant_events)
 
-    # "fois dix exposant" (composant 1)
+    # "fois dix exposant" (composant 1) → surligne le séparateur "e"
     sep_start = src + m.end(1)
     sep_end = src + m.start(2)
-    events.append(EventFormuleLecture(
-        ortho="fois", phone="fwa",
-        span_source=(sep_start, sep_end),
-        composant=1,
-    ))
-    events.append(EventFormuleLecture(
-        ortho="dix", phone="dis",
-        span_source=(sep_start, sep_end),
-        composant=1,
-    ))
-    events.append(EventFormuleLecture(
-        ortho="exposant", phone="ɛkspozɑ̃",
-        span_source=(sep_start, sep_end),
-        composant=1,
-    ))
+    for word, phone in [("fois", "fwa"), ("dix", "dis"), ("exposant", "ɛkspozɑ̃")]:
+        evt = EventFormuleLecture(
+            ortho=word, phone=phone,
+            span_source=(sep_start, sep_end),
+            composant=1,
+        )
+        evt.span_num = (sep_dn_start, sep_dn_end)
+        events.append(evt)
 
     # Exposant (composant 2)
     exp_start = src + m.start(2)
     exp_end = src + m.end(2)
     exp_result = lire_nombre(exposant_str, span=(exp_start, exp_end))
+    exp_events: list[EventFormuleLecture] = []
     for evt in exp_result.events:
-        events.append(EventFormuleLecture(
+        new_evt = EventFormuleLecture(
             ortho=evt.ortho, phone=evt.phone,
             span_source=evt.span_source,
             composant=2,
-        ))
+        )
+        new_evt.span_num = (exp_dn_start, exp_dn_end)
+        exp_events.append(new_evt)
+    events.extend(exp_events)
 
-    return _make_result(events, display_num=text.strip())
+    return _make_result(events, display_num=display_num)
 
 
 # -- MATHS ---------------------------------------------------------------------
@@ -2373,25 +2428,51 @@ def lire_maths(
         evt_start = len(events)
 
         if tok_type == "number":
-            # Vérifier si c'est une fraction : number / number
-            if ti + 2 < n_tok and tokens[ti + 1][0] == "/" and tokens[ti + 1][1] == "operator" and tokens[ti + 2][1] == "number":
+            # √ ne s'applique qu'au nombre entier/décimal suivant :
+            # √3/2 → "racine carrée de trois sur deux" (pas "trois demis")
+            prev_is_sqrt = (ti > 0 and tokens[ti - 1][0] == "√"
+                            and tokens[ti - 1][1] == "operator")
+            # Vérifier si c'est une fraction : [sign] number / number
+            if not prev_is_sqrt and ti + 2 < n_tok and tokens[ti + 1][0] == "/" and tokens[ti + 1][1] == "operator" and tokens[ti + 2][1] == "number":
                 num_str = tok_text
                 den_str = tokens[ti + 2][0]
+                # Vérifier si un signe précède le numérateur
+                sign_prefix = ""
+                has_sign = False
+                if (ti > 0 and tokens[ti - 1][1] == "operator"
+                        and tokens[ti - 1][0] in ("-", "+", "−")
+                        and len(events) > 0
+                        and events[-1].ortho in ("moins", "plus")):
+                    sign_prefix = "-" if tokens[ti - 1][0] in ("-", "−") else "+"
+                    has_sign = True
                 try:
                     num_v = int(num_str)
                     den_v = int(den_str)
                     if den_v in (2, 3, 4, 5, 6, 7, 8, 9, 10, 100, 1000):
                         frac_text = f"{num_str}/{den_str}"
+                        frac_start = pos
+                        if has_sign:
+                            # Retirer l'event de signe déjà émis
+                            events.pop()
+                            comp_idx -= 1
+                            frac_text = f"{sign_prefix}{num_str}/{den_str}"
+                            frac_start = src + tok_positions[ti - 1]
                         end_pos = src + tok_positions[ti + 2] + len(den_str)
                         frac_result = lire_fraction(
-                            frac_text, span=(pos, end_pos), options=options,
+                            frac_text, span=(frac_start, end_pos), options=options,
                         )
+                        # Copier les events en décalant span_num
+                        frac_offset = tok_positions[ti - 1] if has_sign else tpos
                         for evt in frac_result.events:
-                            events.append(EventFormuleLecture(
+                            new_evt = EventFormuleLecture(
                                 ortho=evt.ortho, phone=evt.phone,
                                 span_source=evt.span_source,
                                 composant=comp_idx,
-                            ))
+                            )
+                            if evt.span_num and evt.span_num != (0, 0):
+                                s, e = evt.span_num
+                                new_evt.span_num = (frac_offset + s, frac_offset + e)
+                            events.append(new_evt)
                         comp_idx += 1
                         ti += 3
                         continue
@@ -2969,8 +3050,21 @@ def lire_heure(
     src = span[0]
     comp = 0
 
-    # Heures
-    if hours is not None:
+    # Heures — avec option minuit/midi
+    use_minuit_midi = (options.heure_minuit_midi
+                       and hours is not None
+                       and hours in (0, 12)
+                       and fmt in ("h", "colon"))
+    if use_minuit_midi:
+        word_mm = "minuit" if hours == 0 else "midi"
+        phone_mm = "minɥi" if hours == 0 else "midi"
+        events.append(EventFormuleLecture(
+            ortho=word_mm, phone=phone_mm,
+            span_source=span, composant=comp,
+            sound_id=f"dir_{word_mm}",
+        ))
+        comp += 1
+    elif hours is not None:
         parts = _nombre_vers_francais(hours, feminin=True)
         evts = _events_from_parts(parts, span, text, composant=comp)
         events.extend(evts)
@@ -3009,12 +3103,28 @@ def lire_heure(
 
     # -- span_num par composant (positions dans display_num) --
     _H_LABELS = {"heure", "heures", "minute", "minutes", "seconde", "secondes"}
+    _MM_LABELS = {"minuit", "midi"}
     digit_groups = list(re.finditer(r'\d+', display_num))
     for e in events:
         comp = e.composant
         if comp < len(digit_groups):
             g = digit_groups[comp]
-            if e.ortho in _H_LABELS:
+            if e.ortho in _MM_LABELS:
+                # Minuit/midi → surligne chiffres + séparateur (ex: "0h", "12h")
+                sep_end = g.end()
+                if comp + 1 < len(digit_groups):
+                    sep_end = digit_groups[comp + 1].start()
+                else:
+                    # Pas de groupe suivant : inclure jusqu'à la fin ou le prochain chiffre
+                    rest = display_num[g.end():]
+                    extra = 0
+                    for ch in rest:
+                        if ch.isdigit():
+                            break
+                        extra += 1
+                    sep_end = g.end() + extra
+                e.span_num = (g.start(), sep_end)
+            elif e.ortho in _H_LABELS:
                 # Mot temporel → surligne le séparateur (h, min, s, :)
                 sep_start = g.end()
                 if comp + 1 < len(digit_groups):
@@ -3071,6 +3181,7 @@ _MONNAIE_RE_ISO_POST = re.compile(
 _MONNAIE_RE_ISO_PRE = re.compile(
     r"^(EUR|USD|GBP|CHF|JPY)\s*([0-9][0-9 ']*[0-9]*[.,]?\d*)$", re.IGNORECASE
 )
+# Note: signs (-/+/±) are stripped in _parse_monnaie before matching these regex
 
 
 def _parse_monnaie(text: str) -> dict | None:
@@ -3163,8 +3274,8 @@ def lire_monnaie(
             ortho=t_m, phone=p_m, span_source=span, composant=0,
         ))
 
-    # Partie majeure (composant 0)
-    if major > 0 or minor == 0:
+    # Partie majeure (composant 0) — toujours inclure, même si major=0
+    if True:
         parts = _nombre_vers_francais(major)
         evts = _events_from_parts(parts, span, text, composant=0)
         events.extend(evts)
@@ -3256,7 +3367,7 @@ def lire_monnaie(
 
 # -- POURCENTAGE ---------------------------------------------------------------
 
-_POURCENT_RE = re.compile(r"^([0-9][0-9 ']*\.?[0-9]*)([%‰])$")
+_POURCENT_RE = re.compile(r"^([-+±]?[0-9][0-9 ']*\.?[0-9]*)([%‰])$")
 
 _POURCENT_WORDS: dict[str, tuple[str, str]] = {
     "%":  ("pour cent",  "puʁ sɑ̃"),
@@ -3380,25 +3491,53 @@ def lire_intervalle(
 
     events: list[EventFormuleLecture] = []
 
-    # "de" (connecteur ouvert, composant 1)
-    events.append(EventFormuleLecture(
-        ortho="de", phone="də", span_source=span, composant=1,
-    ))
-
-    # Borne gauche (composant 0)
-    events.extend(_read_bound(left_val, span, composant=0, options=options))
-
-    # "à" (connecteur, composant 1)
-    events.append(EventFormuleLecture(
-        ortho="à", phone="a", span_source=span, composant=1,
-    ))
-
-    # Borne droite (composant 2)
-    events.extend(_read_bound(right_val, span, composant=2, options=options))
-
     left_bracket = m.group(1)
     right_bracket = m.group(4)
     display_num = f"{left_bracket}{left_val};{right_val}{right_bracket}"
+
+    # Positions dans display_num
+    lb_start = 0
+    lb_end = len(left_bracket)
+    lv_start = lb_end
+    lv_end = lv_start + len(left_val)
+    sep_start = lv_end
+    sep_end = sep_start + 1  # ";"
+    rv_start = sep_end
+    rv_end = rv_start + len(right_val)
+    rb_start = rv_end
+    rb_end = rb_start + len(right_bracket)
+
+    # "de" (connecteur ouvert, composant 1) → surligne les deux crochets
+    evt_de = EventFormuleLecture(
+        ortho="de", phone="də", span_source=span, composant=1,
+    )
+    evt_de.span_num = (lb_start, lb_end)
+    evt_de.span_num_extra = (rb_start, rb_end)
+    events.append(evt_de)
+
+    # Borne gauche (composant 0)
+    left_events = _read_bound(left_val, span, composant=0, options=options)
+    for evt in left_events:
+        evt.span_num = (lv_start, lv_end)
+    events.extend(left_events)
+
+    # "a" (connecteur, composant 1) → surligne le ";"
+    evt_a = EventFormuleLecture(
+        ortho="a", phone="a", span_source=span, composant=1,
+    )
+    evt_a.span_num = (sep_start, sep_end)
+    events.append(evt_a)
+
+    # Borne droite (composant 2)
+    right_events = _read_bound(right_val, span, composant=2, options=options)
+    for evt in right_events:
+        evt.span_num = (rv_start, rv_end)
+    events.extend(right_events)
+
+    # Crochet fermant (composant 1) — implicite via display
+    # Ajouter un event silencieux pour le crochet fermant si nécessaire
+    # (le surlignage du crochet fermant se fait naturellement à la fin)
+
     return _make_result(events, display_num=display_num, valeur=display_num)
 
 
@@ -3411,12 +3550,13 @@ _GPS_DD_RE = re.compile(
     r"(\d{1,3}(?:\.\d+)?)°\s*([NSEOW])", re.IGNORECASE
 )
 
-_GPS_DIRECTIONS: dict[str, tuple[str, str]] = {
-    "N": ("nord",  "nɔʁ"),
-    "S": ("sud",   "syd"),
-    "E": ("est",   "ɛst"),
-    "O": ("ouest", "wɛst"),
-    "W": ("ouest", "wɛst"),
+_GPS_DIRECTIONS: dict[str, tuple[str, str, str]] = {
+    # (ortho, phone, sound_id) — sound_id explicite pour "est" (éviter confusion verbe)
+    "N": ("nord",  "nɔʁ",  ""),
+    "S": ("sud",   "syd",  ""),
+    "E": ("est",   "ɛst",  "dir_est"),
+    "O": ("ouest", "wɛst", ""),
+    "W": ("ouest", "wɛst", ""),
 }
 
 _GPS_UNITS: dict[str, tuple[str, str]] = {
@@ -3459,47 +3599,80 @@ def lire_gps(
             if direction == "W":
                 direction = "O"
 
+            # Construire display_num pour ce segment et calculer positions
+            dp = f"{deg}°{mi}'"
+            if sec is not None:
+                dp += f'{sec}"'
+            dp += direction
+            dp_offset = sum(len(p) + 1 for p in display_parts)  # +1 pour espace
+
+            # Positions dans dp
+            deg_str = str(deg)
+            pos_deg = (dp_offset, dp_offset + len(deg_str))
+            pos_deg_sym = (pos_deg[1], pos_deg[1] + 1)  # °
+            mi_str = str(mi)
+            pos_mi = (pos_deg_sym[1], pos_deg_sym[1] + len(mi_str))
+            pos_mi_sym = (pos_mi[1], pos_mi[1] + 1)  # '
+            if sec is not None:
+                sec_str = str(sec)
+                pos_sec = (pos_mi_sym[1], pos_mi_sym[1] + len(sec_str))
+                pos_sec_sym = (pos_sec[1], pos_sec[1] + 1)  # "
+                pos_dir = (pos_sec_sym[1], pos_sec_sym[1] + len(direction))
+            else:
+                pos_dir = (pos_mi_sym[1], pos_mi_sym[1] + len(direction))
+
             # Degrés
             parts = _nombre_vers_francais(deg)
             evts = _events_from_parts(parts, span, text, composant=comp)
+            for evt in evts:
+                evt.span_num = pos_deg
             events.extend(evts)
             word = "degré" if deg == 1 else "degrés"
             t_w, p_w = _GPS_UNITS[word]
-            events.append(EventFormuleLecture(
+            evt_deg_sym = EventFormuleLecture(
                 ortho=t_w, phone=p_w, span_source=span, composant=comp,
-            ))
+            )
+            evt_deg_sym.span_num = pos_deg_sym
+            events.append(evt_deg_sym)
 
             # Minutes
             parts = _nombre_vers_francais(mi, feminin=True)
             evts = _events_from_parts(parts, span, text, composant=comp)
+            for evt in evts:
+                evt.span_num = pos_mi
             events.extend(evts)
             word = "minute" if mi == 1 else "minutes"
             t_w, p_w = _GPS_UNITS[word]
-            events.append(EventFormuleLecture(
+            evt_mi_sym = EventFormuleLecture(
                 ortho=t_w, phone=p_w, span_source=span, composant=comp,
-            ))
+            )
+            evt_mi_sym.span_num = pos_mi_sym
+            events.append(evt_mi_sym)
 
             # Secondes
             if sec is not None:
                 parts = _nombre_vers_francais(sec, feminin=True)
                 evts = _events_from_parts(parts, span, text, composant=comp)
+                for evt in evts:
+                    evt.span_num = pos_sec
                 events.extend(evts)
                 word = "seconde" if sec == 1 else "secondes"
                 t_w, p_w = _GPS_UNITS[word]
-                events.append(EventFormuleLecture(
+                evt_sec_sym = EventFormuleLecture(
                     ortho=t_w, phone=p_w, span_source=span, composant=comp,
-                ))
+                )
+                evt_sec_sym.span_num = pos_sec_sym
+                events.append(evt_sec_sym)
 
             # Direction
-            t_dir, p_dir = _GPS_DIRECTIONS[direction]
-            events.append(EventFormuleLecture(
+            t_dir, p_dir, sid_dir = _GPS_DIRECTIONS[direction]
+            evt_dir = EventFormuleLecture(
                 ortho=t_dir, phone=p_dir, span_source=span, composant=comp,
-            ))
+                sound_id=sid_dir,
+            )
+            evt_dir.span_num = pos_dir
+            events.append(evt_dir)
 
-            dp = f"{deg}°{mi}'"
-            if sec is not None:
-                dp += f'{sec}"'
-            dp += direction
             display_parts.append(dp)
             comp += 1
 
@@ -3515,25 +3688,38 @@ def lire_gps(
             if direction == "W":
                 direction = "O"
 
+            dp = f"{deg_str}°{direction}"
+            dp_offset = sum(len(p) + 1 for p in display_parts)  # +1 pour espace
+
+            # Positions dans dp
+            pos_num = (dp_offset, dp_offset + len(deg_str))
+            pos_deg_dir = (dp_offset + len(deg_str), dp_offset + len(deg_str) + 1 + len(direction))  # °N
+
             # Lire le nombre (possiblement décimal)
             num_result = lire_nombre(deg_str, span=span, options=options)
             for evt in num_result.events:
                 evt.composant = comp
+                evt.span_num = pos_num
             events.extend(num_result.events)
 
-            # "degrés"
+            # "degrés" → surligne °
             t_w, p_w = _GPS_UNITS["degrés"]
-            events.append(EventFormuleLecture(
+            evt_deg = EventFormuleLecture(
                 ortho=t_w, phone=p_w, span_source=span, composant=comp,
-            ))
+            )
+            evt_deg.span_num = pos_deg_dir
+            events.append(evt_deg)
 
-            # Direction
-            t_dir, p_dir = _GPS_DIRECTIONS[direction]
-            events.append(EventFormuleLecture(
+            # Direction → surligne aussi °N ensemble
+            t_dir, p_dir, sid_dir = _GPS_DIRECTIONS[direction]
+            evt_dir = EventFormuleLecture(
                 ortho=t_dir, phone=p_dir, span_source=span, composant=comp,
-            ))
+                sound_id=sid_dir,
+            )
+            evt_dir.span_num = pos_deg_dir
+            events.append(evt_dir)
 
-            display_parts.append(f"{deg_str}°{direction}")
+            display_parts.append(dp)
             comp += 1
 
         display_num = " ".join(display_parts)
@@ -3570,12 +3756,16 @@ def lire_page_chapitre(
     if m:
         prefix_raw = s[:s.index(m.group(2))]
         number_str = m.group(2)
-        events.append(EventFormuleLecture(
+        evt_prefix = EventFormuleLecture(
             ortho="page", phone="paʒ", span_source=span, composant=0,
-        ))
+        )
+        evt_prefix.span_num = (0, len(prefix_raw))
+        events.append(evt_prefix)
         n = int(number_str)
         parts = _nombre_vers_francais(n)
         evts = _events_from_parts(parts, span, text, composant=1)
+        for evt in evts:
+            evt.span_num = (len(prefix_raw), len(prefix_raw) + len(number_str))
         events.extend(evts)
         display_num = prefix_raw + number_str
         return _make_result(events, display_num=display_num, valeur=n)
@@ -3585,12 +3775,16 @@ def lire_page_chapitre(
     if m:
         prefix_raw = s[:s.index(m.group(2))]
         number_str = m.group(2)
-        events.append(EventFormuleLecture(
+        evt_prefix = EventFormuleLecture(
             ortho="chapitre", phone="ʃapitʁ", span_source=span, composant=0,
-        ))
+        )
+        evt_prefix.span_num = (0, len(prefix_raw))
+        events.append(evt_prefix)
         n = int(number_str)
         parts = _nombre_vers_francais(n)
         evts = _events_from_parts(parts, span, text, composant=1)
+        for evt in evts:
+            evt.span_num = (len(prefix_raw), len(prefix_raw) + len(number_str))
         events.extend(evts)
         display_num = prefix_raw + number_str
         return _make_result(events, display_num=display_num, valeur=n)
