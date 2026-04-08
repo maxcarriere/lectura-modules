@@ -79,6 +79,18 @@ COPULES_PLURIEL = frozenset({
 })
 
 # Verbes irreguliers : forme 3e sg -> forme 3e pl
+# Formes fausses courantes de verbes irreguliers -> correction
+IRREGULIERS_FORMES_FAUSSES: dict[str, str] = {
+    "allent": "vont", "allet": "allez", "alle": "va",
+    "faisent": "font", "faist": "fait",
+    "prenent": "prennent",
+    "peuve": "peuvent", "peuent": "peuvent",
+    "voivent": "voient",
+    "savont": "savent",
+    "vienent": "viennent",
+}
+
+# Verbes irreguliers : forme 3e sg -> forme 3e pl
 IRREGULIERS_3PL: dict[str, str] = {
     "va": "vont", "fait": "font", "a": "ont", "dit": "disent",
     "est": "sont", "veut": "veulent", "peut": "peuvent",
@@ -167,6 +179,14 @@ COPULES_ALL = ETRE_FORMES | frozenset({
     "reste", "restes", "restent", "restait", "restaient",
     "parait", "paraît", "paraissent", "paraissait", "paraissaient",
     "demeure", "demeures", "demeurent", "demeurait", "demeuraient",
+})
+
+# Verbes modaux (requierent un infinitif apres)
+MODAUX_FORMES = frozenset({
+    "faut", "doit", "doivent", "devait", "devaient",
+    "peut", "peuvent", "pouvait", "pouvaient",
+    "veut", "veulent", "voulait", "voulaient",
+    "sait", "savent", "savait", "savaient",
 })
 
 # Formes conjuguees d'aller (pour homophone -er/-e)
@@ -404,6 +424,15 @@ def trouver_sujet_genre_nombre(
                 g = "Fem" if genre == "f" else "Masc"
                 n = "Plur" if nombre == "p" else "Sing"
                 return (g, n)
+            # Fallback CRF morpho : le tagger predit genre/nombre meme si
+            # le mot n'est pas dans le lexique
+            genre_list = morpho.get("genre", [])
+            nombre_list = morpho.get("nombre", [])
+            if j < len(genre_list):
+                g_crf = genre_list[j]
+                n_crf = nombre_list[j] if j < len(nombre_list) else "Sing"
+                if g_crf in ("Fem", "Masc"):
+                    return (g_crf, n_crf if n_crf in ("Sing", "Plur") else "Sing")
         break
     return None
 

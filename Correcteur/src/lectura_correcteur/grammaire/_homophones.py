@@ -9,6 +9,21 @@ from __future__ import annotations
 from lectura_correcteur._types import Correction, TypeCorrection
 from lectura_correcteur.grammaire._donnees import ALLER_FORMES
 
+# Sujets pronominaux 3e personne du singulier
+_SUJETS_3SG = frozenset({"il", "elle", "on", "qui", "ce", "c'"})
+
+# Pronoms objets (entre sujet et verbe, indiquent que "a" est auxiliaire)
+_PRONOMS_OBJETS = frozenset({
+    "me", "m'", "te", "t'", "se", "s'", "le", "la", "l'",
+    "lui", "nous", "vous", "leur", "en", "y",
+})
+
+# Terminaisons de participe passe (pour heuristique morpho sans POS)
+_PP_SUFFIXES = ("é", "és", "ée", "ées", "i", "is", "ie", "ies",
+                "u", "us", "ue", "ues", "it", "ite", "ites",
+                "ert", "erte", "ertes", "erts", "oint", "ointe",
+                "eint", "einte", "aint", "ainte", "ort", "orte")
+
 
 def verifier_homophones(
     mots: list[str],
@@ -53,6 +68,31 @@ def verifier_homophones(
                             ))
                             continue
 
+        # "et" suivi de VER ou mot en forme de PP, quand precede d'un sujet
+        # "il et parti" -> "il est parti"
+        if curr_low == "et" and pos == "CON":
+            if i > 0 and i + 1 < n:
+                next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                next_low = result[i + 1].lower()
+                next_looks_pp = next_pos == "VER" or next_low.endswith(_PP_SUFFIXES)
+                if next_looks_pp:
+                    prev_low = result[i - 1].lower()
+                    prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                    if prev_pos in ("PRO:per", "PRO:dem", "PRO:rel") or prev_low in (
+                        "il", "elle", "on", "ils", "elles", "je", "tu",
+                        "nous", "vous", "qui", "ce", "c'",
+                    ):
+                        ancien = result[i]
+                        result[i] = "est"
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige="est",
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            explication="'et' -> 'est' (sujet + _ + participe)",
+                        ))
+                        continue
+
         # "est" (VER/AUX) suivi d'un DET ou PRO -> probablement "et" (coordination)
         if curr_low == "est" and pos in ("VER", "AUX"):
             if i > 0 and i + 1 < n:
@@ -89,12 +129,27 @@ def verifier_homophones(
             continue
 
         # --- son / sont ---
-        # "son" + VER -> probablement "sont"
+        # "son" + VER/PP -> probablement "sont" (quand sujet pluriel avant)
         if curr_low == "son" and pos in ("ADJ:pos", "ADJ"):
             if i + 1 < n:
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
-                if next_pos in ("VER", "AUX"):
-                    if lexique is not None and lexique.existe("sont"):
+                next_low = result[i + 1].lower()
+                _next_verb = next_pos in ("VER", "AUX") or next_low.endswith(_PP_SUFFIXES)
+                if _next_verb:
+                    # Verifier qu'un sujet pluriel precede
+                    _plur_subj = False
+                    for _k in range(i - 1, max(-1, i - 4), -1):
+                        _w = result[_k].lower()
+                        if _w in ("ils", "elles"):
+                            _plur_subj = True
+                            break
+                        _pk = pos_tags[_k] if _k < len(pos_tags) else ""
+                        if _pk == "NOM" and _w.endswith(("s", "x", "z")):
+                            _plur_subj = True
+                            break
+                        if _pk not in ("ADV", "PRE", "ADJ:pos", "ADJ"):
+                            break
+                    if _plur_subj and lexique is not None and lexique.existe("sont"):
                         ancien = result[i]
                         result[i] = "sont"
                         corrections.append(Correction(
@@ -102,28 +157,129 @@ def verifier_homophones(
                             original=ancien,
                             corrige="sont",
                             type_correction=TypeCorrection.GRAMMAIRE,
-                            explication="'son' -> 'sont' (suivi d'un verbe)",
+                            explication="'son' -> 'sont' (sujet pluriel + participe)",
                         ))
                         continue
 
-        # --- a / à ---
-        # "a" (VER/AUX) sans sujet 3sg avant + suivi de VER -> "à"
-        if curr_low == "a" and pos in ("VER", "AUX"):
-            if i + 1 < n:
+        # "sont" etiquete ADJ:pos -> "son" (possessif)
+        if curr_low == "sont" and pos in ("ADJ:pos",):
+            ancien = result[i]
+            result[i] = "son"
+            corrections.append(Correction(
+                index=i,
+                original=ancien,
+                corrige="son",
+                type_correction=TypeCorrection.GRAMMAIRE,
+                explication="'sont' -> 'son' (possessif)",
+            ))
+            continue
+
+        # "sont" apres PRE + suivi de NOM -> "son" (possessif)
+        # "avec sont velo" -> "avec son vélo"
+        if curr_low == "sont" and pos in ("VER", "AUX"):
+            if i > 0 and i + 1 < n:
+                prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
-                if next_pos == "VER" and i > 0:
-                    prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
-                    if prev_pos not in ("PRO:per", "NOM", "PRO:dem"):
+                if prev_pos == "PRE" and next_pos == "NOM":
+                    ancien = result[i]
+                    result[i] = "son"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="son",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'sont' -> 'son' (PRE + possessif + NOM)",
+                    ))
+                    continue
+
+        # --- a / à ---
+        if curr_low == "a" and pos in ("VER", "AUX"):
+            # Chercher si "a" est probablement l'auxiliaire avoir (3sg)
+            _is_aux = False
+            for _k in range(i - 1, max(-1, i - 4), -1):
+                _w = result[_k].lower()
+                # Pronom sujet 3sg -> "a" = auxiliaire avoir
+                if _w in _SUJETS_3SG:
+                    _is_aux = True
+                    break
+                # Pronom objet (me/te/nous/vous/lui/...) -> "a" = auxiliaire
+                if _w in _PRONOMS_OBJETS:
+                    _is_aux = True
+                    break
+                _pk = pos_tags[_k] if _k < len(pos_tags) else ""
+                # NOM directement avant "a" : verifier si le NOM est sujet
+                # (vs objet d'un verbe plus tot dans la phrase)
+                if _pk == "NOM":
+                    # Chercher s'il y a un VER/AUX avant ce NOM -> NOM = objet
+                    _nom_is_subject = True
+                    for _j in range(_k - 1, max(-1, _k - 4), -1):
+                        _pj = pos_tags[_j] if _j < len(pos_tags) else ""
+                        if _pj in ("VER", "AUX"):
+                            _nom_is_subject = False
+                            break
+                        if _pj in ("PRE", "CON"):
+                            break
+                    if _nom_is_subject:
+                        _is_aux = True
+                    break
+                if _pk in ("VER", "AUX", "ADJ"):
+                    break
+            if not _is_aux and i + 1 < n:
+                next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                next_low = result[i + 1].lower() if i + 1 < n else ""
+                # a + ART, a + PRE, a + elision (l', d'), a + VER (infinitif)
+                if next_pos in (
+                    "VER", "ART:def", "ART:ind", "PRE",
+                ) or next_low.endswith(("'", "\u2019")):
+                    ancien = result[i]
+                    result[i] = "à"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="à",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'a' -> 'à' (preposition)",
+                    ))
+                    continue
+
+        # "à" devant VER quand sujet pronominal precede -> "a" (auxiliaire avoir)
+        # "elle à mange" -> "elle a mange"
+        if curr_low == "à" and i + 1 < n:
+            next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+            next_low = result[i + 1].lower()
+            _next_is_verb = next_pos == "VER" or next_low.endswith(_PP_SUFFIXES)
+            if _next_is_verb:
+                for _k in range(i - 1, max(-1, i - 3), -1):
+                    _w = result[_k].lower()
+                    if _w in ("il", "elle", "on", "ils", "elles",
+                              "je", "j'", "tu", "nous", "vous", "qui"):
                         ancien = result[i]
-                        result[i] = "à"
+                        result[i] = "a"
                         corrections.append(Correction(
                             index=i,
                             original=ancien,
-                            corrige="à",
+                            corrige="a",
                             type_correction=TypeCorrection.GRAMMAIRE,
-                            explication="'a' -> 'à' (preposition devant verbe)",
+                            explication="'à' -> 'a' (auxiliaire avoir apres sujet)",
                         ))
-                        continue
+                        break
+                else:
+                    _next_is_verb = False  # reset flag
+                if result[i] == "a":
+                    continue
+
+        # "à" tague VER/AUX -> "a" (auxiliaire avoir)
+        if curr_low == "à" and pos in ("VER", "AUX"):
+            ancien = result[i]
+            result[i] = "a"
+            corrections.append(Correction(
+                index=i,
+                original=ancien,
+                corrige="a",
+                type_correction=TypeCorrection.GRAMMAIRE,
+                explication="'à' -> 'a' (auxiliaire avoir)",
+            ))
+            continue
 
         # --- ou / où ---
         # "ou" etiquete PRO:rel -> "où" (pronom relatif lieu/temps)
@@ -136,6 +292,19 @@ def verifier_homophones(
                 corrige="où",
                 type_correction=TypeCorrection.GRAMMAIRE,
                 explication="'ou' -> 'où' (pronom relatif)",
+            ))
+            continue
+
+        # "ou" etiquete ADV -> "où" (adverbe interrogatif)
+        if curr_low == "ou" and pos == "ADV":
+            ancien = result[i]
+            result[i] = "où"
+            corrections.append(Correction(
+                index=i,
+                original=ancien,
+                corrige="où",
+                type_correction=TypeCorrection.GRAMMAIRE,
+                explication="'ou' -> 'où' (adverbe interrogatif)",
             ))
             continue
 
@@ -156,6 +325,19 @@ def verifier_homophones(
                         explication="'on' -> 'ont' (auxiliaire 3pl)",
                     ))
                     continue
+
+        # "ont" etiquete PRO -> "on" (pronom indefini)
+        if curr_low == "ont" and pos in ("PRO:ind", "PRO:per"):
+            ancien = result[i]
+            result[i] = "on"
+            corrections.append(Correction(
+                index=i,
+                original=ancien,
+                corrige="on",
+                type_correction=TypeCorrection.GRAMMAIRE,
+                explication="'ont' -> 'on' (pronom indefini)",
+            ))
+            continue
 
         # --- ce / se ---
         # "ce" (DET:dem) + VER/AUX -> "se" (pronom reflexif)

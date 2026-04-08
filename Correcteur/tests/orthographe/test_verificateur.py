@@ -105,6 +105,15 @@ def test_auto_correction_miason(mock_lexique):
     assert results[0].corrige == "maison"
 
 
+def test_elision_token_pas_corrige(mock_lexique):
+    """Les tokens d'elision (j', l', n') ne doivent pas etre corriges."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["j'"])
+    assert len(results) == 1
+    assert results[0].corrige == "j'"
+    assert results[0].dans_lexique is True
+
+
 def test_pas_auto_correction_si_ambigue(mock_lexique):
     """Pas d'auto-correction si les deux meilleures suggestions sont proches en frequence."""
     v = VerificateurOrthographe(mock_lexique, distance=1)
@@ -113,3 +122,24 @@ def test_pas_auto_correction_si_ambigue(mock_lexique):
     # On ne verifie pas le corrige exact (depend des suggestions trouvees)
     # mais on verifie que le mecanisme fonctionne sans erreur
     assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+
+
+# --- scoring_actif mode ---
+
+def test_scoring_actif_auto_correction_conservee(mock_lexique):
+    """En mode scoring_actif, l'auto-correction freq>=5.0 fonctionne toujours."""
+    v = VerificateurOrthographe(mock_lexique, distance=1, scoring_actif=True)
+    results = v.verifier_phrase(["hcat"])
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+    # Auto-correction active (chat freq=45.2 >= 5.0)
+    assert results[0].corrige == "chat"
+    assert len(results[0].suggestions) > 0
+
+
+def test_scoring_actif_mot_connu_inchange(mock_lexique):
+    """En mode scoring_actif, un mot connu reste inchange."""
+    v = VerificateurOrthographe(mock_lexique, distance=1, scoring_actif=True)
+    results = v.verifier_phrase(["chat"])
+    assert results[0].dans_lexique is True
+    assert results[0].corrige == "chat"
+    assert results[0].suggestions == []

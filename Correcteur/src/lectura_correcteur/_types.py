@@ -34,6 +34,22 @@ class TypeCorrection(Enum):
 
 
 @dataclass
+class Candidat:
+    """Un candidat de remplacement pour un mot."""
+
+    forme: str
+    source: str          # "identite", "ortho_d1", "ortho_d2", "homophone", "morpho", "g2p"
+    freq: float = 0.0
+    edit_dist: int = 0   # distance d'edition graphemique vs original
+    pos: str = ""        # POS du candidat (cgram lexique)
+    phone: str = ""
+    lemme: str = ""
+    genre: str = ""
+    nombre: str = ""
+    score: float = 0.0   # calcule par le scoring
+
+
+@dataclass
 class MotAnalyse:
     """Details d'analyse pour un mot."""
 

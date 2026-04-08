@@ -63,6 +63,15 @@ class MockLexique:
         """Retourne un dict {mode: {temps: {personne: forme}}}."""
         return self._conjugaisons.get(verbe.lower(), {})
 
+    def lemme_de(self, mot: str) -> str | None:
+        """Retourne le lemme le plus frequent pour un mot."""
+        entries = self._formes.get(mot.lower(), [])
+        if not entries:
+            return None
+        # Prendre le lemme de l'entree la plus frequente
+        best = max(entries, key=lambda e: float(e.get("freq", 0)))
+        return best.get("lemme", best.get("ortho", "")).lower()
+
     def formes_de(self, lemme: str) -> list[dict[str, Any]]:
         """Retourne toutes les formes associees a un lemme."""
         results = []
@@ -94,11 +103,11 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
         "maisons": [{"ortho": "maisons", "cgram": "NOM", "phone": "m\u025bz\u0254\u0303",
                       "freq": 8.2, "genre": "f", "nombre": "p"}],
         "mange": [{"ortho": "mange", "cgram": "VER", "phone": "m\u0251\u0303\u0292",
-                    "freq": 15.4, "personne": "3", "nombre": "s"}],
+                    "freq": 15.4, "personne": "3", "nombre": "s", "lemme": "manger"}],
         "manges": [{"ortho": "manges", "cgram": "VER", "phone": "m\u0251\u0303\u0292",
-                     "freq": 3.2, "personne": "2", "nombre": "s"}],
+                     "freq": 3.2, "personne": "2", "nombre": "s", "lemme": "manger"}],
         "mangent": [{"ortho": "mangent", "cgram": "VER", "phone": "m\u0251\u0303\u0292",
-                      "freq": 5.1, "personne": "3", "nombre": "p"}],
+                      "freq": 5.1, "personne": "3", "nombre": "p", "lemme": "manger"}],
         "enfant": [{"ortho": "enfant", "cgram": "NOM", "phone": "\u0251\u0303f\u0251\u0303",
                      "freq": 30.0, "genre": "m", "nombre": "s"}],
         "enfants": [{"ortho": "enfants", "cgram": "NOM", "phone": "\u0251\u0303f\u0251\u0303",
@@ -245,7 +254,7 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
                      "freq": 2.0, "personne": "2", "nombre": "p"}],
         # Participes passes
         "mangé": [{"ortho": "mangé", "cgram": "VER", "phone": "m\u0251\u0303\u0292e",
-                   "freq": 8.0, "personne": "3", "nombre": "s"}],
+                   "freq": 8.0, "personne": "3", "nombre": "s", "lemme": "manger"}],
         "chanté": [{"ortho": "chanté", "cgram": "VER", "phone": "\u0283\u0251\u0303te",
                     "freq": 5.0}],
         "joué": [{"ortho": "joué", "cgram": "VER", "phone": "\u0292we",
@@ -256,7 +265,7 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
                    "freq": 5.0}],
         # Infinitifs
         "manger": [{"ortho": "manger", "cgram": "VER", "phone": "m\u0251\u0303\u0292e",
-                    "freq": 20.0, "mode": "inf"}],
+                    "freq": 20.0, "mode": "inf", "lemme": "manger"}],
         "chanter": [{"ortho": "chanter", "cgram": "VER", "phone": "\u0283\u0251\u0303te",
                      "freq": 15.0, "mode": "inf"}],
         "jouer": [{"ortho": "jouer", "cgram": "VER", "phone": "\u0292we",

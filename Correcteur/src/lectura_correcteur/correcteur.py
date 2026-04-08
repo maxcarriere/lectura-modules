@@ -14,8 +14,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from lectura_correcteur._candidats import generer_candidats
+from lectura_correcteur._coherence import appliquer_coherence
 from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._morpho import MorphoTagger
+from lectura_correcteur._scoring import extraire_contexte, scorer_candidats
 from lectura_correcteur._types import (
     Correction,
     MotAnalyse,
@@ -45,6 +48,7 @@ class Correcteur:
         config: CorrecteurConfig | None = None,
         tagger: Any | None = None,
         tokeniseur: Any | None = None,
+        g2p: Any | None = None,
     ) -> None:
         """Initialise le correcteur avec injection de dependances.
 
@@ -53,14 +57,18 @@ class Correcteur:
             config: Configuration du correcteur (optionnelle)
             tagger: Objet satisfaisant TaggerProtocol (optionnel, fallback MorphoTagger)
             tokeniseur: Objet satisfaisant TokeniseurProtocol (optionnel)
+            g2p: Objet optionnel avec methode prononcer(mot) -> str | None
         """
         self._lexique = lexique
         self._config = config or CorrecteurConfig()
         self._tagger = tagger if tagger is not None else MorphoTagger()
         self._tokeniseur = tokeniseur
+        self._g2p = g2p
         self._verificateur = VerificateurOrthographe(
             lexique, max_suggestions=self._config.max_suggestions,
             distance=self._config.distance_suggestions,
+            g2p=g2p,
+            scoring_actif=self._config.activer_scoring,
         )
 
     @property
@@ -165,6 +173,48 @@ class Correcteur:
                     if analysis.pos not in cgrams and len(cgrams) == 1:
                         analysis.pos = next(iter(cgrams))
 
+        # 5b. Scoring unifie (si active)
+        if self._config.activer_scoring:
+            for j, analysis in enumerate(analyses):
+                # Si l'orthographe a corrige le mot, verifier si la forme
+                # corrigee est dans le lexique (pas l'originale)
+                dans_lex = analysis.dans_lexique
+                if analysis.corrige != analysis.original and not dans_lex:
+                    dans_lex = self._lexique.existe(analysis.corrige)
+                # Injecter les suggestions du verificateur pour les OOV
+                sugg = analysis.suggestions if not dans_lex else None
+                candidats = generer_candidats(
+                    analysis.corrige, dans_lex,
+                    analysis.pos, analysis.morpho,
+                    self._lexique, self._g2p, self._config,
+                    suggestions=sugg,
+                )
+                contexte = extraire_contexte(analyses, j, self._lexique)
+                scored = scorer_candidats(
+                    candidats, analysis.original,
+                    analysis.pos, analysis.morpho,
+                    contexte, self._lexique,
+                    dans_lexique=dans_lex,
+                )
+                if scored:
+                    top = scored[0]
+                    identite = next(
+                        (c for c in scored if c.source == "identite"), None,
+                    )
+                    # OOV : seuil=0 (on sait que le mot est faux)
+                    seuil = 0.0 if not dans_lex else self._config.seuil_remplacement
+                    if identite is None or (top.score - identite.score) > seuil:
+                        analysis.corrige = top.forme
+                        if top.source == "morpho":
+                            analysis.type_correction = TypeCorrection.GRAMMAIRE
+                        elif top.source != "identite":
+                            analysis.type_correction = TypeCorrection.HORS_LEXIQUE
+
+        # 5c. Coherence POS (experimental, OFF par defaut)
+        if self._config.activer_coherence:
+            corr_coherence = appliquer_coherence(analyses, self._lexique)
+            all_corrections.extend(corr_coherence)
+
         decided_words = [a.corrige for a in analyses]
 
         # 6. Grammaire
@@ -188,6 +238,51 @@ class Correcteur:
                     analyses[j].corrige = after_rules[j]
                     if analyses[j].type_correction == TypeCorrection.AUCUNE:
                         analyses[j].type_correction = TypeCorrection.GRAMMAIRE
+
+            # 6b. Post-grammar scoring pass (PP apres AUX)
+            # La grammaire peut corriger des homophones (a/à, on/ont) qui revelent
+            # un contexte AUX que le scoring initial ne pouvait pas detecter.
+            if self._config.activer_scoring:
+                # Mettre a jour les POS apres corrections grammaticales
+                for j, analysis in enumerate(analyses):
+                    if j < len(after_rules):
+                        forme_courante = after_rules[j].lower()
+                        infos = self._lexique.info(forme_courante)
+                        if infos:
+                            cgrams = {e["cgram"] for e in infos if e.get("cgram")}
+                            # Si la grammaire a change le mot, mettre a jour le POS
+                            if forme_courante != analysis.original.lower() and len(cgrams) == 1:
+                                analysis.pos = next(iter(cgrams))
+                # Re-run scoring sur les mots non deja corriges
+                for j, analysis in enumerate(analyses):
+                    if analysis.type_correction != TypeCorrection.AUCUNE:
+                        continue  # deja corrige, ne pas re-scorer
+                    contexte = extraire_contexte(analyses, j, self._lexique)
+                    if not contexte.get("aux_gauche"):
+                        continue  # seul interet du post-pass
+                    candidats = generer_candidats(
+                        analysis.corrige, analysis.dans_lexique,
+                        analysis.pos, analysis.morpho,
+                        self._lexique, self._g2p, self._config,
+                    )
+                    scored = scorer_candidats(
+                        candidats, analysis.original,
+                        analysis.pos, analysis.morpho,
+                        contexte, self._lexique,
+                    )
+                    if scored:
+                        top = scored[0]
+                        identite = next(
+                            (c for c in scored if c.source == "identite"), None,
+                        )
+                        seuil = self._config.seuil_remplacement
+                        if identite is None or (top.score - identite.score) > seuil:
+                            analysis.corrige = top.forme
+                            after_rules[j] = top.forme
+                            if top.source == "morpho":
+                                analysis.type_correction = TypeCorrection.GRAMMAIRE
+                            elif top.source != "identite":
+                                analysis.type_correction = TypeCorrection.HORS_LEXIQUE
         else:
             after_rules = decided_words
 

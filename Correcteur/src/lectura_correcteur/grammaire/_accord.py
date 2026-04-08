@@ -11,6 +11,7 @@ from lectura_correcteur.grammaire._donnees import (
     COPULES_ALL,
     COPULES_PLURIEL,
     DET_GENRE_MAP,
+    ETRE_FORMES,
     INVARIABLES,
     PLUR_DET,
     PREPOSITIONS,
@@ -23,6 +24,10 @@ from lectura_correcteur.grammaire._donnees import (
     generer_candidats_pluriel,
     trouver_sujet_genre_nombre,
 )
+
+_TRANSPARENTS = frozenset({
+    "ne", "n'", "pas", "plus", "jamais", "rien", "point", "y", "en",
+})
 
 
 def verifier_accords(
@@ -252,8 +257,17 @@ def verifier_accords(
                                 break
 
         # Regle 4 : Sujet pluriel (eventuellement distant) + VER -> 3pl
+        # Ne pas appliquer si etre precede (laisser la regle PP_etre gerer)
         if i > 1 and pos in ("VER", "AUX"):
-            if (
+            _etre_before = False
+            for _j in range(i - 1, max(-1, i - 4), -1):
+                _w = result[_j].lower()
+                if _w in ETRE_FORMES:
+                    _etre_before = True
+                    break
+                if _w not in _TRANSPARENTS:
+                    break
+            if not _etre_before and (
                 not curr_low.endswith(("ent", "nt"))
                 and _trouver_sujet_pluriel(result, pos_tags, i)
             ):
@@ -346,6 +360,70 @@ def verifier_accords(
                             explication="Accord attribut apres copule plurielle",
                         ))
                         break
+
+        # Regle 10 : Accord ADJ coordonne apres copule
+        # "sont intelligentes et serieuse" -> "serieuses"
+        if (
+            i > 2
+            and pos == "ADJ"
+            and result[i - 1].lower() == "et"
+        ):
+            prev2_pos = pos_tags[i - 2] if i - 2 < len(pos_tags) else ""
+            if prev2_pos == "ADJ":
+                prev2_low = result[i - 2].lower()
+                # Propager le nombre : si l'ADJ precedent est pluriel
+                if prev2_low.endswith(("s", "x")) and not curr_low.endswith(("s", "x", "z")):
+                    for candidate in generer_candidats_pluriel(curr):
+                        if lexique is None or lexique.existe(candidate):
+                            ancien = result[i]
+                            result[i] = candidate
+                            corrections.append(Correction(
+                                index=i,
+                                original=ancien,
+                                corrige=candidate,
+                                type_correction=TypeCorrection.GRAMMAIRE,
+                                explication="Accord ADJ coordonne (pluriel)",
+                            ))
+                            curr = result[i]
+                            curr_low = curr.lower()
+                            break
+
+                # Propager le genre : chercher copule + sujet plus a gauche
+                if lexique is not None:
+                    # Chercher la copule avant l'ADJ coordonne
+                    copule_idx = None
+                    for _k in range(i - 3, max(-1, i - 6), -1):
+                        if result[_k].lower() in COPULES_ALL:
+                            copule_idx = _k
+                            break
+                    if copule_idx is not None:
+                        gn = trouver_sujet_genre_nombre(
+                            result, pos_tags, morpho, copule_idx, lexique,
+                        )
+                        if gn is not None:
+                            s_genre, _s_nombre = gn
+                            adj_infos = lexique.info(result[i])
+                            adj_genred = [e for e in adj_infos if e.get("genre")]
+                            if s_genre == "Fem" and adj_genred and all(
+                                e.get("genre") == "m" for e in adj_genred
+                            ):
+                                for cand in generer_candidats_feminin(result[i]):
+                                    c_infos = lexique.info(cand)
+                                    if c_infos and any(
+                                        e.get("genre") == "f" for e in c_infos
+                                    ):
+                                        ancien = result[i]
+                                        result[i] = cand
+                                        corrections.append(Correction(
+                                            index=i,
+                                            original=ancien,
+                                            corrige=cand,
+                                            type_correction=TypeCorrection.GRAMMAIRE,
+                                            explication="Accord ADJ coordonne en genre (fem)",
+                                        ))
+                                        curr = result[i]
+                                        curr_low = curr.lower()
+                                        break
 
         # Regle 6 : DET feminin + NOM/ADJ masculin -> forme feminine
         if i > 0 and pos in ("NOM", "ADJ"):

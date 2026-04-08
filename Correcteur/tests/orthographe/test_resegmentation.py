@@ -29,3 +29,24 @@ def test_pas_de_faux_positif(mock_lexique):
     tokens = ["xyzabc"]
     result = resegmenter(tokens, mock_lexique)
     assert result == ["xyzabc"]
+
+
+def test_lhomme_split(mock_lexique):
+    """'lhomme' -> ["l'", "homme"] via split elargi (consonne h)."""
+    tokens = ["lhomme"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["l'", "homme"]
+
+
+def test_cest_split(mock_lexique):
+    """'cest' -> ["c'", "est"] via split elargi."""
+    tokens = ["cest"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["c'", "est"]
+
+
+def test_quil_split(mock_lexique):
+    """'quil' -> ["qu'", "il"] via split elargi."""
+    tokens = ["quil"]
+    result = resegmenter(tokens, mock_lexique)
+    assert result == ["qu'", "il"]

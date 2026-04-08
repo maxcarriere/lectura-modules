@@ -9,6 +9,8 @@ from __future__ import annotations
 from lectura_correcteur._types import Correction, TypeCorrection
 from lectura_correcteur._utils import transferer_casse
 from lectura_correcteur.grammaire._donnees import (
+    AUXILIAIRES,
+    IRREGULIERS_FORMES_FAUSSES,
     PRONOM_PERSONNE,
     SUJETS_3PL,
     generer_candidats_1pl,
@@ -16,6 +18,10 @@ from lectura_correcteur.grammaire._donnees import (
     generer_candidats_3pl,
     generer_candidats_singulier,
 )
+
+_TRANSPARENTS_AUX = frozenset({
+    "ne", "n'", "pas", "plus", "jamais", "rien", "point", "y", "en",
+})
 
 # Terminaisons attendues par personne (indicatif present, 1er groupe)
 _SUFFIXES_ATTENDUS: dict[str, list[str]] = {
@@ -53,12 +59,38 @@ def verifier_conjugaisons(
         pos = pos_tags[i] if i < len(pos_tags) else ""
         curr = result[i]
 
+        # Regle 3a : Formes fausses (allent->vont, etc.) — AVANT le check POS
+        # car le tagger peut mal etiqueter ces formes (NOM au lieu de VER)
+        # Verifie aussi le mot original (avant correction orthographique)
+        if i > 0:
+            prev_is_3pl = (
+                result[i - 1].lower() in SUJETS_3PL
+                or (i - 1 < len(origs) and origs[i - 1].lower() in SUJETS_3PL)
+            )
+            if prev_is_3pl:
+                faux_candidate = IRREGULIERS_FORMES_FAUSSES.get(curr.lower())
+                # Fallback : verifier le mot original (avant correction ortho)
+                if faux_candidate is None and i < len(origs):
+                    faux_candidate = IRREGULIERS_FORMES_FAUSSES.get(origs[i].lower())
+                if faux_candidate is not None and (lexique is None or lexique.existe(faux_candidate)):
+                    ancien = result[i]
+                    result[i] = transferer_casse(curr, faux_candidate)
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=result[i],
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="ils/elles + forme fausse -> 3pl",
+                    ))
+                    continue
+
         # Regle 3 : ils/elles + VER -> 3e pluriel
         if i > 0 and pos in ("VER", "AUX"):
             prev_is_3pl = (
                 result[i - 1].lower() in SUJETS_3PL
                 or (i - 1 < len(origs) and origs[i - 1].lower() in SUJETS_3PL)
             )
+
             if prev_is_3pl and not curr.lower().endswith(("ent", "nt")):
                 candidats = generer_candidats_3pl(curr)
                 for candidate in candidats:
@@ -79,15 +111,30 @@ def verifier_conjugaisons(
                     continue
 
         # Regle 5 : Pronom sujet + VER -> correction conjugaison
+        # Ne pas appliquer si un auxiliaire precede (laisser la regle PP)
         if i > 0 and pos in ("VER", "AUX"):
-            pronom_info = _trouver_pronom_sujet(result, origs, i)
-            if pronom_info is not None:
+            _skip_aux = False
+            for _j in range(i - 1, max(-1, i - 4), -1):
+                _w = result[_j].lower()
+                if _w in AUXILIAIRES:
+                    _skip_aux = True
+                    break
+                if _w not in _TRANSPARENTS_AUX:
+                    break
+            if _skip_aux:
+                pass  # Laisser la regle des participes gerer ce cas
+            elif (pronom_info := _trouver_pronom_sujet(result, origs, i)) is not None:
                 personne, nombre = pronom_info
                 # Essayer d'abord par lexique (imparfait/futur)
                 temps = _detecter_temps_from_suffixe(curr)
                 correction = None
                 if temps is not None:
                     correction = _corriger_par_lexique(
+                        curr, personne, nombre, temps, lexique,
+                    )
+                # Fallback: deriver directement quand lemmatisation echoue
+                if correction is None and temps is not None:
+                    correction = _deriver_forme_nombre(
                         curr, personne, nombre, temps, lexique,
                     )
                 # Sinon fallback sur suffixe (present)
