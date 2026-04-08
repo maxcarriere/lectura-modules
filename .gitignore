@@ -26,6 +26,9 @@ env/
 # Entrainement (scripts + donnees — prives)
 **/entrainement/
 
+# Modeles V2 prives (repo lectura-modules-private)
+**/modeles/prives/
+
 # Vitrine / showcases (pas pour GitHub)
 **/vitrine/
 
