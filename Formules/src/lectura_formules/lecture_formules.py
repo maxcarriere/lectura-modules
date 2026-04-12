@@ -1248,6 +1248,11 @@ def lire_nombre(
 
     text_clean = text.replace(" ", "").replace("'", "").replace("\u202f", "")
 
+    # Retirer les suffixes non numériques (ex: "42.0254€" → "42.0254")
+    _strip = text_clean.rstrip("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ€$£¥%°")
+    if _strip and _strip != text_clean:
+        text_clean = _strip
+
     # Nombre décimal ?
     if "," in text_clean or "." in text_clean:
         return _lire_decimal(text_clean, span, options)
@@ -1849,7 +1854,7 @@ def lire_ordinal(
                 display_rom = rom_base + "e"
         except (ImportError, ValueError):
             pass
-    rom_full = (0, len(display_rom)) if display_rom else (0, 0)
+    rom_full = (0, int(len(display_rom))) if display_rom else (0, 0)
 
     if n == 1:
         # 1er/1re/1ère → premier/première (composant 0 unique)
@@ -3225,20 +3230,26 @@ def _parse_monnaie(text: str) -> dict | None:
         return None
 
     cleaned = re.sub(r"['\s]", "", amount_str).replace(",", ".")
+    extra_decimals = ""
     if "." in cleaned:
         int_part, dec_part = cleaned.split(".", 1)
         major = int(int_part) if int_part else 0
-        if len(dec_part) == 1:
-            minor = int(dec_part) * 10
-        elif len(dec_part) >= 2:
-            minor = int(dec_part[:2])
+        if len(dec_part) <= 2:
+            # 1-2 décimales → centimes normaux
+            if len(dec_part) == 1:
+                minor = int(dec_part) * 10
+            else:
+                minor = int(dec_part)
         else:
-            minor = 0
+            # >2 décimales → centimes + décimales supplémentaires
+            minor = int(dec_part[:2])
+            extra_decimals = dec_part[2:]
     else:
         major = int(cleaned)
         minor = 0
 
-    return {"currency": currency, "major": major, "minor": minor, "negative": negative}
+    return {"currency": currency, "major": major, "minor": minor,
+            "extra_decimals": extra_decimals, "negative": negative}
 
 
 def lire_monnaie(
@@ -3262,6 +3273,7 @@ def lire_monnaie(
     currency = data["currency"]
     major = data["major"]
     minor = data["minor"]
+    extra_decimals = data.get("extra_decimals", "")
     negative = data.get("negative", False)
     cur = _DEVISES[currency]
 
@@ -3294,7 +3306,19 @@ def lire_monnaie(
             ))
 
     # Connecteur "et" (composant 1) + Partie mineure (composant 2)
-    if minor > 0 and cur.get("mineur") and options.monnaie_dire_centimes:
+    if extra_decimals:
+        # >2 décimales : lire "virgule" + toutes les décimales chiffre par chiffre
+        t_v, p_v = _VIRGULE
+        events.append(EventFormuleLecture(
+            ortho=t_v, phone=p_v, span_source=span, composant=1,
+        ))
+        all_dec = f"{minor:02d}{extra_decimals}"
+        for ch in all_dec:
+            t_ch, p_ch = _u(ch)
+            events.append(EventFormuleLecture(
+                ortho=t_ch, phone=p_ch, span_source=span, composant=2,
+            ))
+    elif minor > 0 and cur.get("mineur") and options.monnaie_dire_centimes:
         events.append(EventFormuleLecture(
             ortho="et", phone="e", span_source=span, composant=1,
         ))

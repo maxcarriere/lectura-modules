@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68.0", "Cython>=3.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-aligneur"
-version = "2.3.0"
+version = "2.3.2"
 description = "Aligneur graphème-phonème et syllabeur phonologique du français — alignement, groupes de lecture, élisions, liaisons, enchaînements, attaque/noyau/coda"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,4 +34,4 @@ Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_aligneur = ["py.typed"]
+lectura_aligneur = []

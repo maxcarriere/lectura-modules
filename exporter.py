@@ -27,12 +27,24 @@ EXTRAS = [
 # Fichiers a exclure de l'export (outils internes du workspace)
 EXCLUDE = [
     "exporter.py",
+    "construire_wheels.py",
 ]
 
 # Dossiers a exclure (modules pas encore prets)
 EXCLUDE_DIRS = [
     "Correcteur",
 ]
+
+
+def _est_source_protege(filepath: str) -> bool:
+    """True si le fichier est un .py de src/ qui doit etre protege.
+
+    On garde les __init__.py (surface API) mais on exclut le reste
+    pour ne pas exposer le code source sur GitHub.
+    """
+    return ("/src/" in filepath
+            and filepath.endswith(".py")
+            and not filepath.endswith("__init__.py"))
 
 
 def get_git_files(repo_root: Path) -> list[str]:
@@ -89,11 +101,12 @@ def main():
     # Fusionner sans doublons, en gardant l'ordre
     all_files = list(dict.fromkeys(git_files + extra_files))
 
-    # Exclure les fichiers internes et les dossiers pas prets
+    # Exclure les fichiers internes, les dossiers pas prets, et les .py proteges
     all_files = [
         f for f in all_files
         if f not in EXCLUDE
         and not any(f.startswith(d + "/") for d in EXCLUDE_DIRS)
+        and not _est_source_protege(f)
     ]
 
     # Verifier que tous les fichiers existent
