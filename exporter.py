@@ -36,17 +36,6 @@ EXCLUDE_DIRS = [
 ]
 
 
-def _est_source_protege(filepath: str) -> bool:
-    """True si le fichier est un .py de src/ qui doit etre protege.
-
-    On garde les __init__.py (surface API) mais on exclut le reste
-    pour ne pas exposer le code source sur GitHub.
-    """
-    return ("/src/" in filepath
-            and filepath.endswith(".py")
-            and not filepath.endswith("__init__.py"))
-
-
 def get_git_files(repo_root: Path) -> list[str]:
     """Renvoie la liste des fichiers trackes par git."""
     result = subprocess.run(
@@ -106,7 +95,6 @@ def main():
         f for f in all_files
         if f not in EXCLUDE
         and not any(f.startswith(d + "/") for d in EXCLUDE_DIRS)
-        and not _est_source_protege(f)
     ]
 
     # Verifier que tous les fichiers existent
