@@ -7,50 +7,19 @@ Licence : CC-BY-SA-4.0
 
 from __future__ import annotations
 
+from lectura_formules._chargeur import (
+    romains_int_to_roman as _load_int_to_roman,
+    romains_values as _load_roman_values,
+    romains_single as _load_single_values,
+)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Tables de conversion
+# Tables de conversion (chargees depuis JSON)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Paires (valeur, symbole) triées par valeur décroissante
-_INT_TO_ROMAN: list[tuple[int, str]] = [
-    (10000, "X̅"),
-    (9000, "MX̅"),
-    (5000, "V̅"),
-    (4000, "MV̅"),
-    (1000, "M"),
-    (900, "CM"),
-    (500, "D"),
-    (400, "CD"),
-    (100, "C"),
-    (90, "XC"),
-    (50, "L"),
-    (40, "XL"),
-    (10, "X"),
-    (9, "IX"),
-    (5, "V"),
-    (4, "IV"),
-    (1, "I"),
-]
-
-# Mapping inverse pour le parsing
-_ROMAN_VALUES: list[tuple[str, int]] = [
-    ("X̅", 10000),
-    ("V̅", 5000),
-    ("CM", 900),
-    ("CD", 400),
-    ("XC", 90),
-    ("XL", 40),
-    ("IX", 9),
-    ("IV", 4),
-    ("M", 1000),
-    ("D", 500),
-    ("C", 100),
-    ("L", 50),
-    ("X", 10),
-    ("V", 5),
-    ("I", 1),
-]
+_INT_TO_ROMAN = _load_int_to_roman()
+_ROMAN_VALUES = _load_roman_values()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -122,8 +91,4 @@ def roman_to_int(s: str) -> int:
     return result
 
 
-# Valeurs des caractères simples pour le parsing soustractif
-_SINGLE_VALUES: dict[str, int] = {
-    "I": 1, "V": 5, "X": 10, "L": 50,
-    "C": 100, "D": 500, "M": 1000,
-}
+_SINGLE_VALUES = _load_single_values()

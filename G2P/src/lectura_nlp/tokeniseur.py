@@ -39,7 +39,8 @@ def tokeniser(text: str) -> list[str]:
     text = _PUNCT_RE.sub(r" \1 ", text)
 
     # Gérer les apostrophes : séparer "l'" de "enfant" mais garder "aujourd'hui"
-    _KEPT_INTACT = {"aujourd'hui", "presqu'île", "quelqu'un", "quelqu'une"}
+    from lectura_nlp._chargeur import kept_intact as _load_kept_intact
+    _KEPT_INTACT = _load_kept_intact()
 
     tokens: list[str] = []
     for raw_tok in text.split():

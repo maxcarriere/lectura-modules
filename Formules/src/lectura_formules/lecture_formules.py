@@ -21,6 +21,26 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
+from lectura_formules._chargeur import (
+    unites as _load_unites,
+    lettres as _load_lettres,
+    symboles as _load_symboles,
+    grec as _load_grec,
+    ordinaux as _load_ordinaux,
+    mois as _load_mois,
+    virgule as _load_virgule,
+    fois as _load_fois,
+    dix as _load_dix,
+    exposant as _load_exposant,
+    echelles as _load_echelles,
+    heure_words as _load_heure_words,
+    devises as _load_devises,
+    pourcent_words as _load_pourcent_words,
+    gps_directions as _load_gps_directions,
+    gps_units as _load_gps_units,
+    intervalle_bounds as _load_intervalle_bounds,
+)
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Types de sortie
 # ══════════════════════════════════════════════════════════════════════════════
@@ -75,260 +95,19 @@ class OptionsLecture:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Tables embarquées (extraites des CSV numReader)
+# Donnees metier chargees depuis JSON (via _chargeur)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# -- Unités de base : label → (texte, phone, valeur) --------------------------
-_UNITES: dict[str, tuple[str, str, int]] = {
-    "0":    ("zéro",             "zeʁo",       0),
-    "1":    ("un",               "ɛ̃",          1),
-    "2":    ("deux",             "dø",          2),
-    "3":    ("trois",            "tʁwa",        3),
-    "4":    ("quatre",           "katʁ",        4),
-    "5":    ("cinq",             "sɛ̃k",        5),
-    "6":    ("six",              "sis",          6),
-    "7":    ("sept",             "sɛt",          7),
-    "8":    ("huit",             "ɥit",          8),
-    "9":    ("neuf",             "nœf",          9),
-    "10":   ("dix",              "dis",         10),
-    "11":   ("onze",             "ɔ̃z",         11),
-    "12":   ("douze",            "duz",         12),
-    "13":   ("treize",           "tʁɛz",       13),
-    "14":   ("quatorze",         "katɔʁz",     14),
-    "15":   ("quinze",           "kɛ̃z",        15),
-    "16":   ("seize",            "sɛz",         16),
-    "20":   ("vingt",            "vɛ̃",         20),
-    "30":   ("trente",           "tʁɑ̃t",       30),
-    "40":   ("quarante",         "kaʁɑ̃t",      40),
-    "50":   ("cinquante",        "sɛ̃kɑ̃t",     50),
-    "60":   ("soixante",         "swasɑ̃t",     60),
-    "100":  ("cent",             "sɑ̃",        100),
-    "1000": ("mille",            "mil",       1000),
-    # Variantes spéciales
-    "et":       ("et",       "e",    0),
-    "1_fem":    ("une",      "yn",   1),
-    "et_1":     ("et un",    "e ɛ̃",  1),
-    "et_1_fem": ("et une",   "e yn", 1),
-    "et_11":    ("et onze",  "e ɔ̃z", 11),
-    "20t":      ("vingt",    "vɛ̃t",  20),  # vingt devant unité (liaison t)
-    "20s":      ("vingts",   "vɛ̃",   20),  # quatre-vingts (pluriel)
-    "100s":     ("cents",    "sɑ̃",  100),  # deux-cents (pluriel)
-    # Échelles
-    "million":    ("million",   "miljɔ̃",   1_000_000),
-    "millions":   ("millions",  "miljɔ̃",   1_000_000),
-    "milliard":   ("milliard",  "miljaʁ",  1_000_000_000),
-    "milliards":  ("milliards", "miljaʁ",  1_000_000_000),
-    "billion":    ("billion",   "bijɔ̃",    1_000_000_000_000),
-    "billions":   ("billions",  "bijɔ̃",    1_000_000_000_000),
-}
-
-# -- Lettres : caractère → (texte, phone) -------------------------------------
-_LETTRES: dict[str, tuple[str, str]] = {
-    "A": ("a", "a"),       "a": ("a", "a"),
-    "B": ("bé", "be"),     "b": ("bé", "be"),
-    "C": ("cé", "se"),     "c": ("cé", "se"),
-    "D": ("dé", "de"),     "d": ("dé", "de"),
-    "E": ("e", "ə"),       "e": ("e", "ə"),
-    "F": ("effe", "ɛf"),   "f": ("effe", "ɛf"),
-    "G": ("gé", "ʒe"),     "g": ("gé", "ʒe"),
-    "H": ("ache", "aʃ"),   "h": ("ache", "aʃ"),
-    "I": ("i", "i"),       "i": ("i", "i"),
-    "J": ("ji", "ʒi"),     "j": ("ji", "ʒi"),
-    "K": ("ka", "ka"),     "k": ("ka", "ka"),
-    "L": ("elle", "ɛl"),   "l": ("elle", "ɛl"),
-    "M": ("emme", "ɛm"),   "m": ("emme", "ɛm"),
-    "N": ("enne", "ɛn"),   "n": ("enne", "ɛn"),
-    "O": ("o", "o"),       "o": ("o", "o"),
-    "P": ("pé", "pe"),     "p": ("pé", "pe"),
-    "Q": ("ku", "ky"),     "q": ("ku", "ky"),
-    "R": ("erre", "ɛʁ"),   "r": ("erre", "ɛʁ"),
-    "S": ("esse", "ɛs"),   "s": ("esse", "ɛs"),
-    "T": ("té", "te"),     "t": ("té", "te"),
-    "U": ("u", "y"),       "u": ("u", "y"),
-    "V": ("vé", "ve"),     "v": ("vé", "ve"),
-    "W": ("double-vé", "dublə ve"), "w": ("double-vé", "dublə ve"),
-    "X": ("ix", "iks"),    "x": ("ix", "iks"),
-    "Y": ("i-grec", "i ɡʁɛk"), "y": ("i-grec", "i ɡʁɛk"),
-    "Z": ("zède", "zɛd"),  "z": ("zède", "zɛd"),
-}
-
-# -- Symboles mathématiques : symbole → (texte, phone) ------------------------
-_SYMBOLES: dict[str, tuple[str, str]] = {
-    "+":  ("plus",                 "plys"),
-    "-":  ("moins",                "mwɛ̃"),
-    "−":  ("moins",                "mwɛ̃"),
-    "±":  ("plus ou moins",        "plyz u mwɛ̃"),
-    "=":  ("égal",                 "eɡal"),
-    "≠":  ("différent de",         "difeʁɑ̃ də"),
-    "<":  ("inférieur à",          "ɛ̃feʁjœʁ a"),
-    ">":  ("supérieur à",          "sypeʁjœʁ a"),
-    "≤":  ("inférieur ou égal à",  "ɛ̃feʁjœʁ u eɡal a"),
-    "≥":  ("supérieur ou égal à",  "sypeʁjœʁ u eɡal a"),
-    "×":  ("fois",                 "fwa"),
-    "*":  ("fois",                 "fwa"),
-    "÷":  ("divisé par",           "divize paʁ"),
-    "/":  ("sur",                  "syʁ"),
-    "^":  ("puissance",            "pɥisɑ̃s"),
-    "√":  ("racine carrée de",     "ʁasin kaʁe də"),
-    "∞":  ("infini",               "ɛ̃fini"),
-    "%":  ("pour cent",            "puʁ sɑ̃"),
-    "‰":  ("pour mille",           "puʁ mil"),
-    "²":  ("au carré",             "o kaʁe"),
-    "³":  ("au cube",              "o kyb"),
-    "∑":  ("somme",                "sɔm"),
-    "∏":  ("produit",              "pʁodɥi"),
-    "∫":  ("intégrale",            "ɛ̃teɡʁal"),
-    "∂":  ("dérivée partielle",    "deʁive paʁsjɛl"),
-    "∇":  ("nabla",                "nabla"),
-    "∈":  ("appartient à",         "apaʁtjɛ̃ a"),
-    "∉":  ("n'appartient pas à",   "napaʁtjɛ̃ pa a"),
-    "⊂":  ("inclus dans",          "ɛ̃kly dɑ̃"),
-    "∪":  ("union",                "ynjɔ̃"),
-    "∩":  ("intersection",         "ɛ̃tɛʁseksjɔ̃"),
-    "→":  ("donne",                "dɔn"),
-    "←":  ("reçoit",               "ʁəswa"),
-    "↔":  ("équivalent à",         "ekivalɑ̃ a"),
-    "⇒":  ("implique",             "ɛ̃plik"),
-    "⇔":  ("équivalent à",         "ekivalɑ̃ a"),
-    "°":  ("degré",                "dəɡʁe"),
-    "!":  ("factorielle",          "faktɔʁjɛl"),
-    "(":  ("parenthèse ouvrante", "paʁɑ̃tɛz uvʁɑ̃t"),
-    ")":  ("parenthèse fermante", "paʁɑ̃tɛz fɛʁmɑ̃t"),
-    "≈":  ("approximativement égal à", "apʁɔksimativmɑ̃ eɡal a"),
-    "≃":  ("quasiment égal à",     "kazimɑ̃ eɡal a"),
-    "≡":  ("identique à",          "idɑ̃tik a"),
-    "<=": ("inférieur ou égal à",  "ɛ̃feʁjœʁ u eɡal a"),
-    ">=": ("supérieur ou égal à",  "sypeʁjœʁ u eɡal a"),
-    "!=": ("différent de",         "difeʁɑ̃ də"),
-    "==": ("égal à",               "eɡal a"),
-    "[":  ("crochet ouvrant",      "kʁoʃɛ uvʁɑ̃"),
-    "]":  ("crochet fermant",      "kʁoʃɛ fɛʁmɑ̃"),
-    "{":  ("accolade ouvrante",    "akolad uvʁɑ̃t"),
-    "}":  ("accolade fermante",    "akolad fɛʁmɑ̃t"),
-    ",":  ("virgule",              "viʁɡyl"),
-    ";":  ("point-virgule",        "pwɛ̃ viʁɡyl"),
-    # Fonctions math
-    "sin":  ("sinus",                    "sinys"),
-    "cos":  ("cosinus",                  "kosinys"),
-    "tan":  ("tangente",                 "tɑ̃ʒɑ̃t"),
-    "exp":  ("exponentielle",            "ɛksponɑ̃sjɛl"),
-    "ln":   ("logarithme népérien",      "loɡaʁitm nepeʁjɛ̃"),
-    "log":  ("logarithme",               "loɡaʁitm"),
-    "sqrt": ("racine carrée",            "ʁasin kaʁe"),
-    "abs":  ("valeur absolue",           "valœʁ apsoly"),
-    # Unités physiques
-    "kg":   ("kilogramme",     "kiloɡʁam"),
-    "km":   ("kilomètre",      "kilomɛtʁ"),
-    "cm":   ("centimètre",     "sɑ̃timɛtʁ"),
-    "mm":   ("millimètre",     "milimɛtʁ"),
-    "mg":   ("milligramme",    "miliɡʁam"),
-    "ml":   ("millilitre",     "mililitʁ"),
-    "°C":   ("degrés Celsius", "dəɡʁe sɛlsjys"),
-    "°F":   ("degrés Fahrenheit", "dəɡʁe faʁɛnajt"),
-    "g":    ("gramme",         "ɡʁam"),
-    "m":    ("mètre",          "mɛtʁ"),
-    "s":    ("seconde",        "səɡɔ̃d"),
-    "h":    ("heure",          "œʁ"),
-    "L":    ("litre",          "litʁ"),
-    "min":  ("minute",         "minyt"),
-}
-
-# -- Lettres grecques : caractère → (texte, phone) ----------------------------
-_GREC: dict[str, tuple[str, str]] = {
-    "Α": ("alpha", "alfa"),     "α": ("alpha", "alfa"),
-    "Β": ("bêta", "bɛta"),     "β": ("bêta", "bɛta"),
-    "Γ": ("gamma", "ɡama"),    "γ": ("gamma", "ɡama"),
-    "Δ": ("delta", "dɛlta"),   "δ": ("delta", "dɛlta"),
-    "Ε": ("epsilon", "ɛpsilɔ̃"), "ε": ("epsilon", "ɛpsilɔ̃"),
-    "Ζ": ("zêta", "zɛta"),     "ζ": ("zêta", "zɛta"),
-    "Η": ("êta", "ɛta"),       "η": ("êta", "ɛta"),
-    "Θ": ("thêta", "tɛta"),    "θ": ("thêta", "tɛta"),
-    "Ι": ("iota", "jota"),     "ι": ("iota", "jota"),
-    "Κ": ("kappa", "kapa"),    "κ": ("kappa", "kapa"),
-    "Λ": ("lambda", "lɑ̃bda"),  "λ": ("lambda", "lɑ̃bda"),
-    "Μ": ("mu", "my"),         "μ": ("mu", "my"),
-    "Ν": ("nu", "ny"),         "ν": ("nu", "ny"),
-    "Ξ": ("ksi", "ksi"),       "ξ": ("ksi", "ksi"),
-    "Ο": ("omicron", "omikʁɔ̃"), "ο": ("omicron", "omikʁɔ̃"),
-    "Π": ("pi", "pi"),         "π": ("pi", "pi"),
-    "Ρ": ("rhô", "ʁo"),       "ρ": ("rhô", "ʁo"),
-    "Σ": ("sigma", "siɡma"),   "σ": ("sigma", "siɡma"),
-    "ς": ("sigma", "siɡma"),
-    "Τ": ("tau", "to"),        "τ": ("tau", "to"),
-    "Υ": ("upsilon", "ypsilɔn"), "υ": ("upsilon", "ypsilɔn"),
-    "Φ": ("phi", "fi"),        "φ": ("phi", "fi"),
-    "Χ": ("khi", "ki"),        "χ": ("khi", "ki"),
-    "Ψ": ("psi", "psi"),       "ψ": ("psi", "psi"),
-    "Ω": ("oméga", "omeɡa"),   "ω": ("oméga", "omeɡa"),
-    "'": ("prime", "pʁim"),     "′": ("prime", "pʁim"),
-}
-
-# -- Ordinaux : cardinal → (texte_ordinal, phone_ordinal) ---------------------
-_ORDINAUX: dict[str, tuple[str, str]] = {
-    "un":         ("unième",        "ynjɛm"),
-    "deux":       ("deuxième",      "døzjɛm"),
-    "trois":      ("troisième",     "tʁwazjɛm"),
-    "quatre":     ("quatrième",     "katʁjɛm"),
-    "cinq":       ("cinquième",     "sɛ̃kjɛm"),
-    "six":        ("sixième",       "sizjɛm"),
-    "sept":       ("septième",      "sɛtjɛm"),
-    "huit":       ("huitième",      "ɥitjɛm"),
-    "neuf":       ("neuvième",      "nœvjɛm"),
-    "dix":        ("dixième",       "dizjɛm"),
-    "onze":       ("onzième",       "ɔ̃zjɛm"),
-    "douze":      ("douzième",      "duzjɛm"),
-    "treize":     ("treizième",     "tʁɛzjɛm"),
-    "quatorze":   ("quatorzième",   "katɔʁzjɛm"),
-    "quinze":     ("quinzième",     "kɛ̃zjɛm"),
-    "seize":      ("seizième",      "sɛzjɛm"),
-    "vingt":      ("vingtième",     "vɛ̃tjɛm"),
-    "trente":     ("trentième",     "tʁɑ̃tjɛm"),
-    "quarante":   ("quarantième",   "kaʁɑ̃tjɛm"),
-    "cinquante":  ("cinquantième",  "sɛ̃kɑ̃tjɛm"),
-    "soixante":   ("soixantième",   "swasɑ̃tjɛm"),
-    "cent":       ("centième",      "sɑ̃tjɛm"),
-    "mille":      ("millième",      "miljɛm"),
-    "million":    ("millionième",   "miljɔnjɛm"),
-    "milliard":   ("milliardième",  "miljaʁdjɛm"),
-    "billion":    ("billionième",   "biljɔnjɛm"),
-    # Formes composées et pluralisées
-    "et un":      ("et unième",   "e ynjɛm"),
-    "et une":     ("et unième",   "e ynjɛm"),
-    "et onze":    ("et onzième",  "e ɔ̃zjɛm"),
-    "vingts":     ("vingtième",   "vɛ̃tjɛm"),
-    "cents":      ("centième",    "sɑ̃tjɛm"),
-    # Formes spéciales
-    "_premier_m":  ("premier",  "pʁømje"),
-    "_premier_f":  ("première", "pʁømjɛʁ"),
-    "_second_m":   ("second",   "səɡɔ̃"),
-    "_second_f":   ("seconde",  "səɡɔ̃d"),
-    "_demi":       ("demi",     "dəmi"),
-    "_tiers":      ("tiers",    "tjɛʁ"),
-    "_quart":      ("quart",    "kaʁ"),
-    "_quarts":     ("quarts",   "kaʁ"),
-}
-
-# -- Mois : numéro 1-12 → (texte, phone) --------------------------------------
-_MOIS: dict[int, tuple[str, str]] = {
-    1:  ("janvier",   "ʒɑ̃vje"),
-    2:  ("février",   "fevʁije"),
-    3:  ("mars",      "maʁs"),
-    4:  ("avril",     "avʁil"),
-    5:  ("mai",       "mɛ"),
-    6:  ("juin",      "ʒɥɛ̃"),
-    7:  ("juillet",   "ʒɥijɛ"),
-    8:  ("août",      "ut"),
-    9:  ("septembre", "sɛptɑ̃bʁ"),
-    10: ("octobre",   "ɔktɔbʁ"),
-    11: ("novembre",  "novɑ̃bʁ"),
-    12: ("décembre",  "desɑ̃bʁ"),
-}
-
-# -- Mots-outils ---------------------------------------------------------------
-_VIRGULE = ("virgule", "viʁɡyl")
-_FOIS    = ("fois",    "fwa")
-_DIX     = ("dix",     "dis")
-_EXPOSANT = ("exposant", "ɛkspozɑ̃")
+_UNITES = _load_unites()
+_LETTRES = _load_lettres()
+_SYMBOLES = _load_symboles()
+_GREC = _load_grec()
+_ORDINAUX = _load_ordinaux()
+_MOIS = _load_mois()
+_VIRGULE = _load_virgule()
+_FOIS = _load_fois()
+_DIX = _load_dix()
+_EXPOSANT = _load_exposant()
 
 # Constantes maths importées du tokeniseur (source unique)
 from lectura_tokeniseur.maths import (
@@ -466,13 +245,7 @@ def _decomposer_blocs(n: int) -> list[tuple[int, int]]:
     return blocs
 
 
-# Échelles : position → (singulier, pluriel, prefixer_un)
-_ECHELLES: dict[int, tuple[str, str, bool]] = {
-    1: ("1000", "1000", False),          # mille (pas "un mille")
-    2: ("million", "millions", True),     # un million, deux millions
-    3: ("milliard", "milliards", True),
-    4: ("billion", "billions", True),
-}
+_ECHELLES = _load_echelles()
 
 
 def _assembler_blocs(
@@ -2962,14 +2735,7 @@ _HEURE_RE_SEC = re.compile(r"^(\d{1,2})s$")
 # Durée : 3'35" ou 3'35
 _HEURE_RE_MINSEC = re.compile(r"""^(\d{1,2})['\u2032](\d{1,2})["\u2033]?$""")
 
-_HEURE_WORDS: dict[str, tuple[str, str]] = {
-    "heure":    ("heure",    "œʁ"),
-    "heures":   ("heures",   "œʁ"),
-    "minute":   ("minute",   "minyt"),
-    "minutes":  ("minutes",  "minyt"),
-    "seconde":  ("seconde",  "səɡɔ̃d"),
-    "secondes": ("secondes", "səɡɔ̃d"),
-}
+_HEURE_WORDS = _load_heure_words()
 
 
 def _parse_heure(text: str) -> dict | None:
@@ -3149,23 +2915,7 @@ def lire_heure(
 
 # -- MONNAIE -------------------------------------------------------------------
 
-_DEVISES: dict[str, dict] = {
-    "EUR": {"symbole": "€",  "majeur": ("euro", "euros"),
-            "mineur": ("centime", "centimes"), "phone_maj": ("øʁo", "øʁo"),
-            "phone_min": ("sɑ̃tim", "sɑ̃tim")},
-    "USD": {"symbole": "$",  "majeur": ("dollar", "dollars"),
-            "mineur": ("centime", "centimes"), "phone_maj": ("dolaʁ", "dolaʁ"),
-            "phone_min": ("sɑ̃tim", "sɑ̃tim")},
-    "GBP": {"symbole": "£",  "majeur": ("livre", "livres"),
-            "mineur": ("centime", "centimes"), "phone_maj": ("livʁ", "livʁ"),
-            "phone_min": ("sɑ̃tim", "sɑ̃tim")},
-    "CHF": {"symbole": None, "majeur": ("franc", "francs"),
-            "mineur": ("centime", "centimes"), "phone_maj": ("fʁɑ̃", "fʁɑ̃"),
-            "phone_min": ("sɑ̃tim", "sɑ̃tim"),
-            "suffixe": ("suisse", "sɥis")},
-    "JPY": {"symbole": "¥",  "majeur": ("yen", "yens"),
-            "mineur": None, "phone_maj": ("jɛn", "jɛn")},
-}
+_DEVISES = _load_devises()
 
 _SYM_TO_ISO: dict[str, str] = {v["symbole"]: k for k, v in _DEVISES.items()
                                  if v.get("symbole")}
@@ -3393,10 +3143,7 @@ def lire_monnaie(
 
 _POURCENT_RE = re.compile(r"^([-+±]?[0-9][0-9 ']*\.?[0-9]*)([%‰])$")
 
-_POURCENT_WORDS: dict[str, tuple[str, str]] = {
-    "%":  ("pour cent",  "puʁ sɑ̃"),
-    "‰": ("pour mille", "puʁ mil"),
-}
+_POURCENT_WORDS = _load_pourcent_words()
 
 
 def lire_pourcentage(
@@ -3452,7 +3199,7 @@ def lire_pourcentage(
 
 _INTERVALLE_RE = re.compile(r"^([\[\]])([^;,]+)[;,]([^;,]+)([\[\]])$")
 
-_INTERVALLE_BOUNDS = {"+∞", "-∞", "∞", "+inf", "-inf", "inf"}
+_INTERVALLE_BOUNDS = _load_intervalle_bounds()
 _INTERVALLE_NUM_RE = re.compile(r"^-?\d+\.?\d*$")
 
 
@@ -3574,23 +3321,8 @@ _GPS_DD_RE = re.compile(
     r"(\d{1,3}(?:\.\d+)?)°\s*([NSEOW])", re.IGNORECASE
 )
 
-_GPS_DIRECTIONS: dict[str, tuple[str, str, str]] = {
-    # (ortho, phone, sound_id) — sound_id explicite pour "est" (éviter confusion verbe)
-    "N": ("nord",  "nɔʁ",  ""),
-    "S": ("sud",   "syd",  ""),
-    "E": ("est",   "ɛst",  "dir_est"),
-    "O": ("ouest", "wɛst", ""),
-    "W": ("ouest", "wɛst", ""),
-}
-
-_GPS_UNITS: dict[str, tuple[str, str]] = {
-    "degré":    ("degré",    "dəɡʁe"),
-    "degrés":   ("degrés",   "dəɡʁe"),
-    "minute":   ("minute",   "minyt"),
-    "minutes":  ("minutes",  "minyt"),
-    "seconde":  ("seconde",  "səɡɔ̃d"),
-    "secondes": ("secondes", "səɡɔ̃d"),
-}
+_GPS_DIRECTIONS = _load_gps_directions()
+_GPS_UNITS = _load_gps_units()
 
 
 def lire_gps(

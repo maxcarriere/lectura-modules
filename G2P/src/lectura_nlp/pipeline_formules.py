@@ -96,26 +96,9 @@ _PLACEHOLDER = "PLACEHOLDER"
 
 # ── Lecture de la ponctuation (mode dictée) ──────────────────────────────
 
-PONCTUATION_LECTURE: dict[str, tuple[str, str]] = {
-    # text → (texte_français, ipa)
-    ".": ("point", "pwɛ̃"),
-    ",": ("virgule", "viʁɡyl"),
-    ";": ("point-virgule", "pwɛ̃ viʁɡyl"),
-    ":": ("deux-points", "dø pwɛ̃"),
-    "!": ("point d'exclamation", "pwɛ̃ dɛkslamasjɔ̃"),
-    "?": ("point d'interrogation", "pwɛ̃ dɛ̃tɛʁɔɡasjɔ̃"),
-    "...": ("points de suspension", "pwɛ̃ də syspɑ̃sjɔ̃"),
-    "…": ("points de suspension", "pwɛ̃ də syspɑ̃sjɔ̃"),
-    "«": ("ouvrez les guillemets", "uvʁe le ɡijmɛ"),
-    "»": ("fermez les guillemets", "fɛʁme le ɡijmɛ"),
-    '"': ("guillemet", "ɡijmɛ"),
-    "(": ("ouvrez la parenthèse", "uvʁe la paʁɑ̃tɛz"),
-    ")": ("fermez la parenthèse", "fɛʁme la paʁɑ̃tɛz"),
-    "-": ("tiret", "tiʁɛ"),
-    "—": ("tiret", "tiʁɛ"),
-    "–": ("tiret", "tiʁɛ"),
-    "'": ("apostrophe", "apɔstʁɔf"),
-}
+from lectura_nlp._chargeur import ponctuation_lecture as _load_ponctuation_lecture
+
+PONCTUATION_LECTURE = _load_ponctuation_lecture()
 
 
 def _is_formule(token: Any) -> bool:
@@ -186,6 +169,8 @@ def analyser_phrase_complete(
     formule_indices: dict[int, int] = {}  # position dans neural_tokens → position dans items
     # Mapping item_idx → neural_idx (None pour ponctuation)
     item_to_neural: dict[int, int | None] = {}
+    # Mots composés : item_idx → (start_neural_idx, end_neural_idx)
+    compound_ranges: dict[int, tuple[int, int]] = {}
 
     for item_idx, (orig_idx, tok, kind) in enumerate(items):
         if kind == "ponctuation":
@@ -195,8 +180,22 @@ def analyser_phrase_complete(
             neural_tokens.append(_PLACEHOLDER)
             formule_indices[len(neural_tokens) - 1] = item_idx
         else:
-            item_to_neural[item_idx] = len(neural_tokens)
-            neural_tokens.append(getattr(tok, "text", str(tok)))
+            children = getattr(tok, "children", None)
+            if children:
+                # Mot composé (ex: arc-en-ciel) : décomposer en sous-mots
+                start = len(neural_tokens)
+                for child in children:
+                    ct = getattr(child, "type", None)
+                    cn = str(getattr(ct, "value", "")).lower() if ct else ""
+                    if cn == "mot":
+                        neural_tokens.append(getattr(child, "text", str(child)))
+                end = len(neural_tokens)
+                item_to_neural[item_idx] = start
+                if end > start:
+                    compound_ranges[item_idx] = (start, end)
+            else:
+                item_to_neural[item_idx] = len(neural_tokens)
+                neural_tokens.append(getattr(tok, "text", str(tok)))
 
     # ── Étape 3 : exécuter le modèle neural ──
 
@@ -253,16 +252,33 @@ def analyser_phrase_complete(
             ))
         else:
             # Résultat du modèle neural
-            word_morpho: dict[str, str] = {}
-            for feat, vals in morpho_dict.items():
-                if neural_idx < len(vals):
-                    word_morpho[feat] = vals[neural_idx]
+            if item_idx in compound_ranges:
+                # Mot composé : concaténer les G2P des sous-mots
+                c_start, c_end = compound_ranges[item_idx]
+                phone = "".join(
+                    g2p_list[i] if i < len(g2p_list) else ""
+                    for i in range(c_start, c_end)
+                )
+                pos = pos_list[c_start] if c_start < len(pos_list) else ""
+                liaison = ""
+                word_morpho: dict[str, str] = {}
+                for feat, vals in morpho_dict.items():
+                    if c_start < len(vals):
+                        word_morpho[feat] = vals[c_start]
+            else:
+                phone = g2p_list[neural_idx] if neural_idx < len(g2p_list) else ""
+                pos = pos_list[neural_idx] if neural_idx < len(pos_list) else ""
+                liaison = liaison_list[neural_idx] if neural_idx < len(liaison_list) else ""
+                word_morpho = {}
+                for feat, vals in morpho_dict.items():
+                    if neural_idx < len(vals):
+                        word_morpho[feat] = vals[neural_idx]
 
             mots_resultat.append(MotAnalyseG2P(
                 text=text,
-                phone=g2p_list[neural_idx] if neural_idx < len(g2p_list) else "",
-                pos=pos_list[neural_idx] if neural_idx < len(pos_list) else "",
-                liaison=liaison_list[neural_idx] if neural_idx < len(liaison_list) else "",
+                phone=phone,
+                pos=pos,
+                liaison=liaison,
                 morpho=word_morpho,
             ))
 

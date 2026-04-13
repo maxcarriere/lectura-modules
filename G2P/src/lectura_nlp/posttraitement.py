@@ -12,23 +12,13 @@ import re
 from pathlib import Path
 
 from lectura_nlp.utils.ipa import iter_phonemes, est_voyelle, est_consonne
+from lectura_nlp._chargeur import (
+    denasalisation as _load_denas,
+    liaison_consonnes as _load_liaison_consonnes,
+)
 
-
-# Mapping dénasalisation standard
-_DENAS_MAP = {
-    "ɔ̃": "ɔ",  # bon → bo.n
-    "ɛ̃": "ɛ",  # plein → ple.n
-    "ɑ̃": "a",  # grand → gra.n (rare)
-}
-
-# Consonnes de liaison
-_LIAISON_CONSONNES = {
-    "Lz": "z",
-    "Lt": "t",
-    "Ln": "n",
-    "Lr": "ʁ",
-    "Lp": "p",
-}
+_DENAS_MAP = _load_denas()
+_LIAISON_CONSONNES = _load_liaison_consonnes()
 
 
 def appliquer_denasalisation(ipa: str, denas: str) -> str:

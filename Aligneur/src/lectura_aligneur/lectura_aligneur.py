@@ -47,162 +47,40 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from lectura_aligneur._chargeur import (
+    alphabet_ipa as _get_alphabet_ipa,
+    phone_to_graphemes as _get_phone_to_graphemes,
+    espeak_to_ipa as _get_espeak_to_ipa,
+    liaison_consonnes as _get_liaison_consonnes,
+    lettres_muettes_possibles as _get_lettres_muettes_possibles,
+    voyelles as _get_voyelles,
+    consonnes as _get_consonnes,
+    semi_voyelles as _get_semi_voyelles,
+)
+
 logger = logging.getLogger(__name__)
 
 __version__ = "2.0.0"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Données embarquées
+# Donnees metier chargees depuis JSON (via _chargeur)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Alphabet IPA du français — classification par type et sous-type
-_ALPHABET_IPA: dict[str, dict] = {
-    # Voyelles orales
-    "i": {"type": "voyelle", "sous_type": "orale"},
-    "y": {"type": "voyelle", "sous_type": "orale"},
-    "u": {"type": "voyelle", "sous_type": "orale"},
-    "e": {"type": "voyelle", "sous_type": "orale"},
-    "ø": {"type": "voyelle", "sous_type": "orale"},
-    "o": {"type": "voyelle", "sous_type": "orale"},
-    "ɛ": {"type": "voyelle", "sous_type": "orale"},
-    "œ": {"type": "voyelle", "sous_type": "orale"},
-    "ɔ": {"type": "voyelle", "sous_type": "orale"},
-    "a": {"type": "voyelle", "sous_type": "orale"},
-    "ə": {"type": "voyelle", "sous_type": "orale"},
-    # Voyelles nasales
-    "ɑ̃": {"type": "voyelle", "sous_type": "nasale"},
-    "ɛ̃": {"type": "voyelle", "sous_type": "nasale"},
-    "ɔ̃": {"type": "voyelle", "sous_type": "nasale"},
-    "œ̃": {"type": "voyelle", "sous_type": "nasale"},
-    # Consonnes occlusives
-    "p": {"type": "consonne", "sous_type": "occlusive", "voisee": False},
-    "b": {"type": "consonne", "sous_type": "occlusive", "voisee": True},
-    "t": {"type": "consonne", "sous_type": "occlusive", "voisee": False},
-    "d": {"type": "consonne", "sous_type": "occlusive", "voisee": True},
-    "k": {"type": "consonne", "sous_type": "occlusive", "voisee": False},
-    "ɡ": {"type": "consonne", "sous_type": "occlusive", "voisee": True},
-    # Consonnes fricatives
-    "f": {"type": "consonne", "sous_type": "fricative", "voisee": False},
-    "v": {"type": "consonne", "sous_type": "fricative", "voisee": True},
-    "s": {"type": "consonne", "sous_type": "fricative", "voisee": False},
-    "z": {"type": "consonne", "sous_type": "fricative", "voisee": True},
-    "ʃ": {"type": "consonne", "sous_type": "fricative", "voisee": False},
-    "ʒ": {"type": "consonne", "sous_type": "fricative", "voisee": True},
-    # Consonnes nasales
-    "m": {"type": "consonne", "sous_type": "nasale", "voisee": True},
-    "n": {"type": "consonne", "sous_type": "nasale", "voisee": True},
-    "ɲ": {"type": "consonne", "sous_type": "nasale", "voisee": True},
-    "ŋ": {"type": "consonne", "sous_type": "nasale", "voisee": True},
-    # Consonnes liquides
-    "l": {"type": "consonne", "sous_type": "liquide", "voisee": True},
-    "ʁ": {"type": "consonne", "sous_type": "liquide", "voisee": True},
-    # Semi-voyelles
-    "j": {"type": "semi-voyelle"},
-    "w": {"type": "semi-voyelle"},
-    "ɥ": {"type": "semi-voyelle"},
-}
-
-# Table phonème → graphèmes possibles (pour l'aligneur)
-_PHONE_TO_GRAPHEMES: dict[str, list[str]] = {
-    "v": ["v", "w", "f", "f_"],
-    "z": ["z", "s", "x", "zz", "s_", "x_"],
-    "ʒ": ["j", "g", "ge", "j'"],
-    "ʃ": ["ch", "sh", "sch", "sc", "s", "x"],
-    "f": ["f", "ff", "ph"],
-    "s": ["s", "ss", "c", "ç", "t", "sc", "x", "z", "s'", "sth"],
-    "ʁ": ["r", "rr", "rh", "j", "h"],
-    "l": ["l", "ll", "l'"],
-    "m": ["m", "mm", "m'"],
-    "n": ["n", "nn", "n'", "n_"],
-    "ɲ": ["gn", "ñ", "nn", "ni", "ny"],
-    "ŋ": ["ng", "n", "g"],
-    "b": ["b", "bb"],
-    "d": ["d", "dd", "z", "j", "g", "t", "d'"],
-    "ɡ": ["g", "gu", "gh", "c", "gg", "ggu"],
-    "k": ["c", "qu", "k", "x", "cc", "ck", "ch", "q", "kh", "cqu", "cq", "qu'", "g"],
-    "p": ["p", "pp", "b", "p_"],
-    "t": ["t", "tt", "th", "pt", "gt", "t'", "t_", "d_", "d"],
-    "ɥ": ["u", "ü"],
-    "j": ["y", "ill", "i", "ï", "î", "y'", "ll", "il", "í"],
-    "w": ["o", "ou", "w", "u"],
-    "ɛ̃": ["in", "im", "ain", "ein", "en", "ym", "yn", "ïn", "în", "aim", "eim", "un", "um"],
-    "ɑ̃": ["an", "am", "en", "em", "aon", "ân"],
-    "œ̃": ["un", "um", "eu", "en", "in"],
-    "ɔ̃": ["on", "om", "aon", "un", "ôn", "um"],
-    "ə": ["e", "on", "ai", "œ", "æ", "u", "o"],
-    "y": ["u", "û", "eu", "eû", "ü"],
-    "i": ["i", "ï", "y", "î", "ee", "e", "ea", "u"],
-    "u": ["ou", "où", "oo", "u", "oû", "ow", "e", "ü"],
-    "ø": ["eu", "œu", "e", "ai", "oe", "œ"],
-    "e": ["é", "er", "ez", "e", "ed", "et", "ai", "ê", "ay", "aî", "aï", "ë", "oe", "es", "æ", "a", "œ"],
-    "o": ["o", "ô", "au", "eau", "aw", "a", "e"],
-    "œ": ["eu", "œu", "ue", "u", "e", "i", "oe", "œ", "u"],
-    "ɛ": ["è", "ê", "ai", "ei", "ay", "e", "et", "ey", "aî", "aï", "é", "ea", "ë", "a", "es", "est", "êt", "æ"],
-    "ɔ": ["o", "au", "u", "a", "ü", "oa", "ô"],
-    "a": ["a", "à", "â", "e", "i", "î"],
-    # Blocs multi-phonèmes
-    "ɡz": ["x²"],
-    "ks": ["x²", "xc"],
-    "wa": ["oi", "oy", "oê"],
-    "wɛ̃": ["oin"],
-    "ɥi": ["ui", "uy"],
-    "jɛ̃": ["ien"],
-    "dʒ": ["j²", "g²"],
-    "waj": ["oy²"],
-    "ɛj": ["ay²", "ey²", "a²"],
-    "ɥij": ["uy²"],
-    "tʃ": ["ch", "cc", "tj"],
-    "nj": ["gn", "ñ²", "nn"],
-    "ɛ̃n": ["in²"],
-    "ɑ̃n": ["an²", "en²"],
-    "œ̃n": ["un²"],
-    "ɔ̃n": ["on²"],
-    "jɛ̃n": ["ien²"],
-    "wɛ̃n": ["oin²"],
-    "ij": ["i²", "y²"],
-    "dz": ["z²"],
-    "aj": ["y²", "i²"],
-    "ej": ["ay²", "ey²", "a²"],
-    "ei": ["ay²", "ey²"],
-    "œl": ["le"],
-    "ju": ["ue"],
-    "nju": ["new"],
-    "əl": ["le"],
-}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Mapping eSpeak → IPA
-# ══════════════════════════════════════════════════════════════════════════════
-
-_ESPEAK_TO_IPA: dict[str, str] = {
-    "i": "i", "e": "e", "E": "ɛ", "a": "a", "O": "ɔ",
-    "o": "o", "u": "u", "y": "y", "Y": "ø", "W": "œ",
-    "@": "ə",
-    "A~": "ɑ̃", "E~": "ɛ̃", "O~": "ɔ̃", "W~": "œ̃",
-    "j": "j", "w": "w", "H": "ɥ",
-    "p": "p", "b": "b", "t": "t", "d": "d", "k": "k", "g": "ɡ",
-    "f": "f", "v": "v", "s": "s", "z": "z", "S": "ʃ", "Z": "ʒ",
-    "m": "m", "n": "n", "n^": "ɲ", "N": "ŋ",
-    "l": "l", "R": "ʁ",
-}
+# Acces paresseux — les fonctions _get_* retournent les donnees depuis le JSON.
+# Les anciennes constantes sont remplacees par des proprietes calculees.
+_ALPHABET_IPA = _get_alphabet_ipa
+_PHONE_TO_GRAPHEMES = _get_phone_to_graphemes
+_ESPEAK_TO_IPA = _get_espeak_to_ipa
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Utilitaires IPA
 # ══════════════════════════════════════════════════════════════════════════════
 
-_VOYELLES: set[str] = {
-    "a", "ɑ", "e", "ɛ", "i", "o", "ɔ", "u", "y", "ø", "œ", "ə",
-}
-
-_CONSONNES: set[str] = {
-    "p", "b", "t", "d", "k", "ɡ", "f", "v", "s", "z",
-    "ʃ", "ʒ", "m", "n", "ɲ", "ŋ", "l", "ʁ",
-}
-
-_SEMI_VOYELLES: set[str] = {"j", "w", "ɥ"}
+_VOYELLES = _get_voyelles
+_CONSONNES = _get_consonnes
+_SEMI_VOYELLES = _get_semi_voyelles
 
 
 def iter_phonemes(ipa: str) -> list[str]:
@@ -234,19 +112,20 @@ def est_voyelle(phoneme: str) -> bool:
     """Vrai si le phonème est une voyelle IPA (orale ou nasale)."""
     if not phoneme:
         return False
-    if phoneme in _VOYELLES:
+    v = _VOYELLES()
+    if phoneme in v:
         return True
-    return bool(phoneme[0] in _VOYELLES)
+    return bool(phoneme[0] in v)
 
 
 def est_consonne(phoneme: str) -> bool:
     """Vrai si le phonème est une consonne IPA."""
-    return bool(phoneme and phoneme in _CONSONNES)
+    return bool(phoneme and phoneme in _CONSONNES())
 
 
 def est_semi_voyelle(phoneme: str) -> bool:
     """Vrai si le phonème est une semi-voyelle IPA."""
-    return bool(phoneme and phoneme in _SEMI_VOYELLES)
+    return bool(phoneme and phoneme in _SEMI_VOYELLES())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -562,14 +441,14 @@ class _SonorityClasses:
 
 
 def _build_sonority_classes() -> _SonorityClasses:
-    """Construit les 5 classes de sonorité depuis l'alphabet IPA embarqué."""
+    """Construit les 5 classes de sonorité depuis l'alphabet IPA."""
     O: set[str] = set()
     N: set[str] = set()
     L: set[str] = set()
     Y: set[str] = set()
     V: set[str] = set()
 
-    for ph, meta in _ALPHABET_IPA.items():
+    for ph, meta in _ALPHABET_IPA().items():
         t = meta.get("type")
         if t == "voyelle":
             V.add(ph)
@@ -706,10 +585,7 @@ def _syllabify_ipa(phone: str) -> list[str]:
 # Aligneur graphème-phonème
 # ══════════════════════════════════════════════════════════════════════════════
 
-_LETTRES_MUETTES_POSSIBLES = {
-    "e", "s", "t", "d", "p", "h", "x", "g", "c", "l",
-    "m", "n", "b", "f", "r", "v", "z", "q",
-}
+_LETTRES_MUETTES_POSSIBLES = _get_lettres_muettes_possibles
 
 _IGNORED_CHARS = {"-", " ", "'", "\u2019", "_"}
 
@@ -794,7 +670,7 @@ def _alignement_v2(
                 if pos_ortho < M and align_gr:
                     for k in range(pos_ortho, M):
                         ch = ortho_orig[k]
-                        if ch.lower() in _LETTRES_MUETTES_POSSIBLES:
+                        if ch.lower() in _LETTRES_MUETTES_POSSIBLES():
                             align_gr[-1] += ch + "°"
                             muettes += 1
                         else:
@@ -846,7 +722,7 @@ def _alignement_v2(
 
             if pos_ortho < M and not possible_here:
                 ch = ortho_orig[pos_ortho]
-                if ch.lower() in _LETTRES_MUETTES_POSSIBLES:
+                if ch.lower() in _LETTRES_MUETTES_POSSIBLES():
                     mu = ch + "°"
                     if ch.lower() == "h":
                         dfs(
@@ -913,7 +789,7 @@ def _alignement_v2(
         sol: tuple[list[str], list[str], int],
     ) -> tuple[int, int, int, int]:
         _, gr, muettes = sol
-        pass2_count = sum(1 for g in gr if g not in phone_to_graphs)
+        pass2_count = sum(1 for g in gr if g not in phone_to_graphs and "²" not in g)
         muette_pos_penalty = _muette_penalty(gr)
         return (muettes, muette_pos_penalty, pass2_count, len(gr))
 
@@ -984,12 +860,18 @@ def _phonemise_alignment(
         rest = "".join(tokens[1:])
         if rest:
             new_ph.append(rest)
-            new_gr.append(gr[1:] if len(gr) > 1 else "")
             g1 = gr[1:] if len(gr) > 1 else ""
             if g1:
                 g1_clean = g1.replace("°", "").replace("²", "")
-                new_spans.append((span[0] + len(g0), span[0] + len(g0) + len(g1_clean)))
+                if g1_clean:
+                    new_gr.append(g1)
+                    new_spans.append((span[0] + len(g0), span[0] + len(g0) + len(g1_clean)))
+                else:
+                    # ² seul : la même lettre produit les deux sons
+                    new_gr.append(g0 + "²")
+                    new_spans.append((span[0], span[0] + len(g0)))
             else:
+                new_gr.append("")
                 new_spans.append((span[1], span[1]))
 
     return new_ph, new_gr, new_spans
@@ -1002,7 +884,7 @@ def _aligner(
 ) -> tuple[list[str], list[str], list[Span], bool]:
     """Aligne graphèmes et phonèmes."""
     align_ph, align_gr, ok = _alignement_v2(
-        ortho, phone, _PHONE_TO_GRAPHEMES, word_boundaries
+        ortho, phone, _PHONE_TO_GRAPHEMES(), word_boundaries
     )
     if not ok:
         return [], [], [], False
@@ -1134,7 +1016,24 @@ def _build_syllabes(
         # Lettres doublées inter-syllabe : modifier la syllabe précédente
         if syllabes:
             if bridge_letter:
-                syllabes[-1].ortho += f"({bridge_letter})"
+                prev_ortho = syllabes[-1].ortho
+                # Si la syllabe précédente finit déjà par cette lettre
+                # (même graphème mappé dans les deux syllabes), remplacer
+                # au lieu de doubler : tuy → tu(y), pas tuy(y)
+                if prev_ortho.endswith(bridge_letter):
+                    syllabes[-1].ortho = (
+                        prev_ortho[:-len(bridge_letter)]
+                        + f"({bridge_letter})"
+                    )
+                else:
+                    syllabes[-1].ortho += f"({bridge_letter})"
+                # Étendre le span pour inclure la lettre pont
+                bridge_span = mapped[0][2] if mapped else None
+                if bridge_span and bridge_span[0] < bridge_span[1]:
+                    bridge_abs_end = word_offset + bridge_span[1]
+                    prev_start, prev_end = syllabes[-1].span
+                    if bridge_abs_end > prev_end:
+                        syllabes[-1].span = (prev_start, bridge_abs_end)
             elif doubled_to_prev:
                 syllabes[-1].ortho += "²"
 
@@ -1190,14 +1089,7 @@ def _build_syllabes(
 # E1 — Groupes de lecture
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Consonnes de liaison (IPA)
-_LIAISON_CONSONNES: dict[str, str] = {
-    "Lz": "z",
-    "Lt": "t",
-    "Ln": "n",
-    "Lr": "ʁ",
-    "Lp": "p",
-}
+_LIAISON_CONSONNES = _get_liaison_consonnes
 
 
 def _phone_starts_with_vowel(phone: str) -> bool:
@@ -1305,7 +1197,7 @@ def construire_groupes(
             # Liaison : mot précédent a un label de liaison et mot courant commence par voyelle
             if options.gerer_liaisons and mot_precedent.liaison != "none":
                 if _phone_starts_with_vowel(mot_courant.phone):
-                    liaison_consonne = _LIAISON_CONSONNES.get(mot_precedent.liaison, "")
+                    liaison_consonne = _LIAISON_CONSONNES().get(mot_precedent.liaison, "")
                     if liaison_consonne:
                         current_mots.append(mot_courant)
                         current_phones.append(mot_courant.phone)
@@ -1476,7 +1368,7 @@ def syllabifier_groupes(
             # et calculer les frontières de mots pour guider les muettes
             parts = [m.text for m in groupe.mots]
             ortho = "".join(parts)
-            word_offset = groupe.mots[0].span[0] if groupe.mots else 0
+            word_offset = 0  # on remappe en absolu ci-dessous
             boundaries: list[int] = []
             pos = 0
             for p in parts[:-1]:
@@ -1484,6 +1376,24 @@ def syllabifier_groupes(
                 boundaries.append(pos)
             dec_ph, dec_gr, dec_spans, ok = _aligner(
                 ortho, phone, word_boundaries=boundaries
+            )
+            # Remapper les spans concat → positions absolues dans le texte
+            # (le concat "dansunarbre" ignore les espaces inter-mots)
+            _c2a: list[int] = []
+            for m in groupe.mots:
+                for ci in range(len(m.text)):
+                    _c2a.append(m.span[0] + ci)
+            n = len(_c2a)
+            dec_spans = [
+                (_c2a[s] if s < n else (_c2a[-1] + 1 if n else s),
+                 _c2a[e - 1] + 1 if 0 < e <= n else (_c2a[-1] + 1 if n else e))
+                for s, e in dec_spans
+            ]
+        # Séparer les phonèmes composés (ex: 'aj' → 'a'+'j') pour
+        # que chaque phonème syllabique ait son entrée d'alignement
+        if ok:
+            dec_ph, dec_gr, dec_spans = _phonemise_alignment(
+                dec_ph, dec_gr, dec_spans
             )
         syllabes = _build_syllabes(syll_phones, dec_ph, dec_gr, dec_spans, word_offset, ok)
         resultats.append(ResultatGroupe(groupe=groupe, syllabes=syllabes))

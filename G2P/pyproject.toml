@@ -46,4 +46,5 @@ lectura_nlp = [
     "modeles/*.onnx",
     "modeles/*.json",
     "modeles/*.md",
+    "data/*.json",
 ]

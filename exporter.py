@@ -35,6 +35,12 @@ EXCLUDE_DIRS = [
     "Correcteur",
 ]
 
+# Patterns de fichiers de donnees metier a exclure de l'export
+# (distribues uniquement via PyPI wheels, pas sur GitHub)
+EXCLUDE_DATA_PATTERNS = [
+    "data/donnees_",
+]
+
 
 def get_git_files(repo_root: Path) -> list[str]:
     """Renvoie la liste des fichiers trackes par git."""
@@ -90,11 +96,12 @@ def main():
     # Fusionner sans doublons, en gardant l'ordre
     all_files = list(dict.fromkeys(git_files + extra_files))
 
-    # Exclure les fichiers internes, les dossiers pas prets, et les .py proteges
+    # Exclure les fichiers internes, les dossiers pas prets, et les donnees metier
     all_files = [
         f for f in all_files
         if f not in EXCLUDE
         and not any(f.startswith(d + "/") for d in EXCLUDE_DIRS)
+        and not any(p in f for p in EXCLUDE_DATA_PATTERNS)
     ]
 
     # Verifier que tous les fichiers existent

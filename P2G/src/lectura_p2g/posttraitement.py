@@ -7,40 +7,17 @@ Deux stratégies complémentaires :
 
 from __future__ import annotations
 
+from lectura_p2g._chargeur import (
+    homophones_pos as _load_homophones_pos,
+    determinants_pluriel as _load_plur_det,
+    determinants_singulier as _load_sing_det,
+    invariables_pluriel as _load_no_plural_s,
+)
 
-# ── Homophones courants : correction POS-aware ───────────────────────
-
-_HOMOPHONES_POS: dict[tuple[str, str], str] = {
-    ("est", "CON"): "et",     # "est" prédit mais POS=conjonction → "et"
-    ("et", "AUX"): "est",     # "et" prédit mais POS=auxiliaire → "est"
-    ("et", "VER"): "est",     # "et" prédit mais POS=verbe → "est"
-    ("a", "PRE"): "à",        # "a" prédit mais POS=préposition → "à"
-    ("à", "AUX"): "a",        # "à" prédit mais POS=auxiliaire → "a"
-    ("à", "VER"): "a",        # "à" prédit mais POS=verbe → "a"
-}
-
-
-# ── Déterminants pluriels / singuliers ──────────────────────────────
-
-_PLUR_DET = frozenset({
-    "les", "des", "ces", "ses", "mes", "tes",
-    "nos", "vos", "aux", "plusieurs", "quelques",
-})
-
-_SING_DET = frozenset({
-    "le", "la", "un", "une", "du",
-    "ce", "cette", "cet",
-    "sa", "ma", "ta", "mon", "ton", "son",
-})
-
-# Mots invariables souvent piégés (nombres, locutions)
-_NO_PLURAL_S = frozenset({
-    "quatre", "cinq", "six", "sept", "huit", "neuf", "dix",
-    "onze", "douze", "treize", "quatorze", "quinze", "seize",
-    "vingt", "trente", "quarante", "cinquante", "soixante",
-    "cent", "mille",
-    "chose",  # "quelque chose" — locution figée
-})
+_HOMOPHONES_POS = _load_homophones_pos()
+_PLUR_DET = _load_plur_det()
+_SING_DET = _load_sing_det()
+_NO_PLURAL_S = _load_no_plural_s()
 
 
 # ── Correction par mot (v1, morpho-based) ──────────────────────────
