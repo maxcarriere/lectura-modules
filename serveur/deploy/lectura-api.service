@@ -1,0 +1,15 @@
+[Unit]
+Description=Lectura API Server
+After=network.target
+
+[Service]
+Type=simple
+User=lectura
+WorkingDirectory=/opt/lectura
+ExecStart=/opt/lectura/venv/bin/uvicorn serveur.app:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

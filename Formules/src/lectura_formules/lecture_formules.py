@@ -97,17 +97,35 @@ class OptionsLecture:
 # ══════════════════════════════════════════════════════════════════════════════
 # Donnees metier chargees depuis JSON (via _chargeur)
 # ══════════════════════════════════════════════════════════════════════════════
+# Si le fichier JSON est absent (mode Niveau 1 / API), on initialise un
+# flag _MODE_API = True et les fonctions publiques deleguent au serveur.
 
-_UNITES = _load_unites()
-_LETTRES = _load_lettres()
-_SYMBOLES = _load_symboles()
-_GREC = _load_grec()
-_ORDINAUX = _load_ordinaux()
-_MOIS = _load_mois()
-_VIRGULE = _load_virgule()
-_FOIS = _load_fois()
-_DIX = _load_dix()
-_EXPOSANT = _load_exposant()
+_MODE_API = False
+try:
+    _UNITES = _load_unites()
+    _LETTRES = _load_lettres()
+    _SYMBOLES = _load_symboles()
+    _GREC = _load_grec()
+    _ORDINAUX = _load_ordinaux()
+    _MOIS = _load_mois()
+    _VIRGULE = _load_virgule()
+    _FOIS = _load_fois()
+    _DIX = _load_dix()
+    _EXPOSANT = _load_exposant()
+except FileNotFoundError:
+    _MODE_API = True
+    # Placeholders — jamais accedes en mode API (les fonctions publiques
+    # deleguent au serveur avant d'atteindre le code local)
+    _UNITES = {}
+    _LETTRES = {}
+    _SYMBOLES = {}
+    _GREC = {}
+    _ORDINAUX = {}
+    _MOIS = {}
+    _VIRGULE = ("", "")
+    _FOIS = ("", "")
+    _DIX = ("", "")
+    _EXPOSANT = ("", "")
 
 # Constantes maths importées du tokeniseur (source unique)
 from lectura_tokeniseur.maths import (
@@ -245,7 +263,7 @@ def _decomposer_blocs(n: int) -> list[tuple[int, int]]:
     return blocs
 
 
-_ECHELLES = _load_echelles()
+_ECHELLES = {} if _MODE_API else _load_echelles()
 
 
 def _assembler_blocs(
@@ -2735,7 +2753,7 @@ _HEURE_RE_SEC = re.compile(r"^(\d{1,2})s$")
 # Durée : 3'35" ou 3'35
 _HEURE_RE_MINSEC = re.compile(r"""^(\d{1,2})['\u2032](\d{1,2})["\u2033]?$""")
 
-_HEURE_WORDS = _load_heure_words()
+_HEURE_WORDS = {} if _MODE_API else _load_heure_words()
 
 
 def _parse_heure(text: str) -> dict | None:
@@ -2915,7 +2933,7 @@ def lire_heure(
 
 # -- MONNAIE -------------------------------------------------------------------
 
-_DEVISES = _load_devises()
+_DEVISES = {} if _MODE_API else _load_devises()
 
 _SYM_TO_ISO: dict[str, str] = {v["symbole"]: k for k, v in _DEVISES.items()
                                  if v.get("symbole")}
@@ -3143,7 +3161,7 @@ def lire_monnaie(
 
 _POURCENT_RE = re.compile(r"^([-+±]?[0-9][0-9 ']*\.?[0-9]*)([%‰])$")
 
-_POURCENT_WORDS = _load_pourcent_words()
+_POURCENT_WORDS = {} if _MODE_API else _load_pourcent_words()
 
 
 def lire_pourcentage(
@@ -3199,7 +3217,7 @@ def lire_pourcentage(
 
 _INTERVALLE_RE = re.compile(r"^([\[\]])([^;,]+)[;,]([^;,]+)([\[\]])$")
 
-_INTERVALLE_BOUNDS = _load_intervalle_bounds()
+_INTERVALLE_BOUNDS = set() if _MODE_API else _load_intervalle_bounds()
 _INTERVALLE_NUM_RE = re.compile(r"^-?\d+\.?\d*$")
 
 
@@ -3321,8 +3339,8 @@ _GPS_DD_RE = re.compile(
     r"(\d{1,3}(?:\.\d+)?)°\s*([NSEOW])", re.IGNORECASE
 )
 
-_GPS_DIRECTIONS = _load_gps_directions()
-_GPS_UNITS = _load_gps_units()
+_GPS_DIRECTIONS = {} if _MODE_API else _load_gps_directions()
+_GPS_UNITS = {} if _MODE_API else _load_gps_units()
 
 
 def lire_gps(
@@ -3582,7 +3600,7 @@ def lire_formule(
     options: OptionsLecture | None = None,
     feminin: bool = False,
 ) -> LectureFormuleResult:
-    """Point d'entrée unique pour la lecture algorithmique des formules.
+    """Point d'entree unique pour la lecture algorithmique des formules.
 
     Parameters
     ----------
@@ -3596,15 +3614,36 @@ def lire_formule(
     children : list | None
         Sous-tokens du Tokeniseur (pour les formules composites).
     options : OptionsLecture | None
-        Options de lecture (mode fraction, méthode décimale).
+        Options de lecture (mode fraction, methode decimale).
     feminin : bool
-        Si True, utilise les formes féminines (une au lieu de un).
+        Si True, utilise les formes feminines (une au lieu de un).
 
     Returns
     -------
     LectureFormuleResult
-        Texte lu, IPA et événements alignés.
+        Texte lu, IPA et evenements alignes.
     """
+    # Mode API : deleguer au serveur quand les donnees locales sont absentes
+    if _MODE_API:
+        from lectura_formules._api_client import lire_formule_api
+        result = lire_formule_api(formule_type, text, span=list(span), feminin=feminin)
+        return LectureFormuleResult(
+            display_fr=result.get("display_fr", ""),
+            phone=result.get("phone", ""),
+            events=[
+                EventFormuleLecture(
+                    ortho=e.get("ortho", ""),
+                    phone=e.get("phone", ""),
+                    span_source=tuple(e.get("span_source", (0, 0))),
+                    composant=e.get("composant", 0),
+                )
+                for e in result.get("events", [])
+            ],
+            display_num=result.get("display_num", ""),
+            display_rom=result.get("display_rom", ""),
+            valeur=result.get("valeur", ""),
+        )
+
     ftype = formule_type.lower()
     logger.debug("lire_formule() type=%s text=%r", ftype, text)
 

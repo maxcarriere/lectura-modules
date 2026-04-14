@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0", "Cython>=3.0"]
+requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-p2g"
-version = "1.0.0"
+version = "2.0.0"
 description = "Conversion phonème-graphème du français (IPA → orthographe) — P2G + POS + Morpho (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,9 +42,4 @@ where = ["src"]
 exclude = ["entrainement*", "evaluation*", "scripts*"]
 
 [tool.setuptools.package-data]
-lectura_p2g = [
-    "modeles/*.onnx",
-    "modeles/*.json",
-    "modeles/*.md",
-    "data/*.json",
-]
+lectura_p2g = []

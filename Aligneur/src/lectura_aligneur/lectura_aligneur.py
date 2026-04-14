@@ -43,8 +43,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
-import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from lectura_aligneur._chargeur import (
@@ -56,6 +55,28 @@ from lectura_aligneur._chargeur import (
     voyelles as _get_voyelles,
     consonnes as _get_consonnes,
     semi_voyelles as _get_semi_voyelles,
+)
+
+# Types et utilitaires partages (externalises pour le package public)
+from lectura_aligneur._types import (  # noqa: F401
+    Span,
+    Phoneme,
+    GroupePhonologique,
+    Syllabe,
+    ResultatAnalyse,
+    MotAnalyse,
+    EventFormule,
+    LectureFormule,
+    OptionsGroupes,
+    GroupeLecture,
+    ResultatGroupe,
+    ResultatSyllabation,
+)
+from lectura_aligneur._utilitaires import (  # noqa: F401
+    iter_phonemes,
+    est_voyelle,
+    est_consonne,
+    est_semi_voyelle,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,276 +95,10 @@ _PHONE_TO_GRAPHEMES = _get_phone_to_graphemes
 _ESPEAK_TO_IPA = _get_espeak_to_ipa
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Utilitaires IPA
-# ══════════════════════════════════════════════════════════════════════════════
-
+# Aliases locaux pour le code interne de l'algo
 _VOYELLES = _get_voyelles
 _CONSONNES = _get_consonnes
 _SEMI_VOYELLES = _get_semi_voyelles
-
-
-def iter_phonemes(ipa: str) -> list[str]:
-    """Découpe une chaîne IPA en phonèmes, regroupant les combining marks Unicode.
-
-    >>> iter_phonemes("ʃa")
-    ['ʃ', 'a']
-    >>> iter_phonemes("ɑ̃")
-    ['ɑ̃']
-    """
-    if not ipa:
-        return []
-    phonemes: list[str] = []
-    current = ""
-    for ch in ipa:
-        cat = unicodedata.category(ch)
-        if cat.startswith("M"):
-            current += ch
-        else:
-            if current:
-                phonemes.append(current)
-            current = ch
-    if current:
-        phonemes.append(current)
-    return phonemes
-
-
-def est_voyelle(phoneme: str) -> bool:
-    """Vrai si le phonème est une voyelle IPA (orale ou nasale)."""
-    if not phoneme:
-        return False
-    v = _VOYELLES()
-    if phoneme in v:
-        return True
-    return bool(phoneme[0] in v)
-
-
-def est_consonne(phoneme: str) -> bool:
-    """Vrai si le phonème est une consonne IPA."""
-    return bool(phoneme and phoneme in _CONSONNES())
-
-
-def est_semi_voyelle(phoneme: str) -> bool:
-    """Vrai si le phonème est une semi-voyelle IPA."""
-    return bool(phoneme and phoneme in _SEMI_VOYELLES())
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Modèles de données — Syllabation de base
-# ══════════════════════════════════════════════════════════════════════════════
-
-Span = tuple[int, int]
-
-
-@dataclass
-class Phoneme:
-    """Phonème individuel avec correspondance graphème."""
-
-    ipa: str
-    grapheme: str = ""
-
-
-@dataclass
-class GroupePhonologique:
-    """Groupe de phonèmes (attaque, noyau ou coda d'une syllabe)."""
-
-    phonemes: list[Phoneme] = field(default_factory=list)
-
-    @property
-    def phone(self) -> str:
-        return "".join(p.ipa for p in self.phonemes)
-
-    @property
-    def grapheme(self) -> str:
-        return "".join(p.grapheme for p in self.phonemes)
-
-
-@dataclass
-class Syllabe:
-    """Syllabe décomposée en attaque/noyau/coda avec correspondance orthographique."""
-
-    phone: str
-    ortho: str
-    span: Span
-    attaque: GroupePhonologique = field(default_factory=GroupePhonologique)
-    noyau: GroupePhonologique = field(default_factory=GroupePhonologique)
-    coda: GroupePhonologique = field(default_factory=GroupePhonologique)
-
-
-@dataclass
-class ResultatAnalyse:
-    """Résultat complet de l'analyse syllabique d'un mot."""
-
-    mot: str
-    phone: str
-    syllabes: list[Syllabe] = field(default_factory=list)
-
-    @property
-    def nb_syllabes(self) -> int:
-        return len(self.syllabes)
-
-    def format_simple(self) -> str:
-        """Retourne "mot -> /phone/ (n syllabes)"."""
-        parts = [s.phone for s in self.syllabes]
-        return f"{self.mot} -> /{'.'.join(parts)}/ ({self.nb_syllabes} syll.)"
-
-    def format_detail(self) -> str:
-        """Retourne un affichage détaillé avec attaque/noyau/coda."""
-        lines = [f"{self.mot} -> /{self.phone}/"]
-        for i, s in enumerate(self.syllabes, 1):
-            att = s.attaque.phone or "-"
-            noy = s.noyau.phone or "-"
-            cod = s.coda.phone or "-"
-            lines.append(
-                f"  σ{i}: /{s.phone}/ <<{s.ortho}>> "
-                f"[{s.span[0]}:{s.span[1]}] "
-                f"att={att} noy={noy} cod={cod}"
-            )
-        return "\n".join(lines)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Modèles de données — Groupes de lecture (E1) et formules
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-@dataclass
-class MotAnalyse:
-    """Mot avec ses annotations G2P.
-
-    Attributs :
-        token : Token du tokeniseur (ou None si non disponible)
-        phone : IPA du mot (ex: "le", "ɑ̃fɑ̃")
-        liaison : Label liaison (none, Lz, Lt, Ln, Lr, Lp)
-        pos : POS tag optionnel
-    """
-    token: object | None = None
-    phone: str = ""
-    liaison: str = "none"
-    pos: str = ""
-    ponctuation_avant: bool = False
-    elision_avant: bool = False
-    est_formule: bool = False
-
-    @property
-    def text(self) -> str:
-        """Texte du mot (depuis le token ou chaîne vide)."""
-        if self.token is not None and hasattr(self.token, "text"):
-            return self.token.text
-        return ""
-
-    @property
-    def span(self) -> Span:
-        """Span du mot (depuis le token ou (0,0))."""
-        if self.token is not None and hasattr(self.token, "span"):
-            return self.token.span
-        return (0, 0)
-
-
-@dataclass
-class EventFormule:
-    """Un cran de lecture pour une formule."""
-    ortho: str
-    phone: str
-    span_source: Span = (0, 0)
-    span_lecture: Span = (0, 0)
-
-
-@dataclass
-class LectureFormule:
-    """Lecture pré-calculée d'un token FORMULE (fournie par numReader)."""
-    display_fr: str
-    events: list[EventFormule] = field(default_factory=list)
-
-
-@dataclass
-class OptionsGroupes:
-    """Options pour la construction des groupes de lecture."""
-    gerer_elisions: bool = True
-    gerer_liaisons: bool = True
-    gerer_enchainement: bool = True
-    ajouter_schwas_finaux: bool = False
-
-
-@dataclass
-class GroupeLecture:
-    """Groupe de lecture : mots liés par élision, liaison ou enchaînement."""
-    mots: list[MotAnalyse] = field(default_factory=list)
-    phone_groupe: str = ""
-    span: Span = (0, 0)
-    jonctions: list[str] = field(default_factory=list)
-    est_formule: bool = False
-    lecture: LectureFormule | None = None
-
-    @property
-    def text(self) -> str:
-        """Texte du groupe (concaténation des mots)."""
-        return " ".join(m.text for m in self.mots)
-
-
-@dataclass
-class ResultatGroupe:
-    """Résultat de syllabation d'un groupe de lecture."""
-    groupe: GroupeLecture
-    syllabes: list[Syllabe] = field(default_factory=list)
-
-
-@dataclass
-class ResultatSyllabation:
-    """Résultat complet de la syllabation avec groupes de lecture."""
-    texte_original: str
-    groupes: list[ResultatGroupe] = field(default_factory=list)
-    options: OptionsGroupes = field(default_factory=OptionsGroupes)
-
-    @property
-    def nb_syllabes(self) -> int:
-        return sum(len(rg.syllabes) for rg in self.groupes)
-
-    @property
-    def nb_groupes(self) -> int:
-        return len(self.groupes)
-
-    def format_ligne1(self) -> str:
-        """Groupes de lecture (non syllabé)."""
-        parts: list[str] = []
-        for rg in self.groupes:
-            if rg.groupe.est_formule and rg.groupe.lecture:
-                parts.append(f"[{rg.groupe.lecture.display_fr}]")
-            else:
-                parts.append(rg.groupe.text)
-        return " | ".join(parts)
-
-    def format_ligne2(self) -> str:
-        """Syllabes."""
-        parts: list[str] = []
-        for rg in self.groupes:
-            syl_parts = [s.phone for s in rg.syllabes]
-            parts.append(".".join(syl_parts))
-        return " | ".join(parts)
-
-    def format_detail(self) -> str:
-        """Affichage détaillé des groupes et syllabes."""
-        lines: list[str] = []
-        lines.append(f"Texte : {self.texte_original}")
-        lines.append(f"Groupes : {self.nb_groupes}  Syllabes : {self.nb_syllabes}")
-        lines.append(f"Ligne 1 : {self.format_ligne1()}")
-        lines.append(f"Ligne 2 : {self.format_ligne2()}")
-        lines.append("")
-        for gi, rg in enumerate(self.groupes, 1):
-            g = rg.groupe
-            jonc = ", ".join(g.jonctions) if g.jonctions else "-"
-            formule_mark = " [FORMULE]" if g.est_formule else ""
-            lines.append(f"  G{gi}: <<{g.text}>>{formule_mark}  /{g.phone_groupe}/  jonctions={jonc}")
-            for si, s in enumerate(rg.syllabes, 1):
-                att = s.attaque.phone or "-"
-                noy = s.noyau.phone or "-"
-                cod = s.coda.phone or "-"
-                lines.append(
-                    f"    σ{si}: /{s.phone}/ <<{s.ortho}>> "
-                    f"[{s.span[0]}:{s.span[1]}] "
-                    f"att={att} noy={noy} cod={cod}"
-                )
-        return "\n".join(lines)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

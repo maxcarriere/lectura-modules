@@ -2,6 +2,9 @@
 
 Charge le fichier donnees_formules.json une seule fois (singleton)
 et expose les constantes sous forme de fonctions.
+
+En mode Niveau 1 (donnees absentes), leve FileNotFoundError
+pour que le code appelant puisse deleguer a l'API.
 """
 
 from __future__ import annotations
@@ -10,20 +13,38 @@ import json
 from importlib import resources
 
 _donnees: dict | None = None
+_donnees_absentes: bool = False
 
 
 def _charger() -> dict:
-    global _donnees
+    global _donnees, _donnees_absentes
+    if _donnees_absentes:
+        raise FileNotFoundError("donnees_formules.json absent (mode API)")
     if _donnees is None:
         ref = resources.files("lectura_formules.data").joinpath("donnees_formules.json")
         try:
             _donnees = json.loads(ref.read_text(encoding="utf-8"))
         except FileNotFoundError:
+            _donnees_absentes = True
             raise FileNotFoundError(
                 "Fichier de donnees donnees_formules.json introuvable. "
-                "Installez le package complet : pip install lectura-formules"
+                "Les appels seront delegues au serveur Lectura."
             ) from None
     return _donnees
+
+
+def donnees_disponibles() -> bool:
+    """Retourne True si les donnees locales sont chargees ou chargeables."""
+    global _donnees, _donnees_absentes
+    if _donnees is not None:
+        return True
+    if _donnees_absentes:
+        return False
+    try:
+        _charger()
+        return True
+    except FileNotFoundError:
+        return False
 
 
 def unites() -> dict[str, tuple[str, str, int]]:

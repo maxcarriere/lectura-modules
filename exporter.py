@@ -2,9 +2,10 @@
 """
 Export les fichiers du workspace vers output/Modules/ pour publication.
 
-Copie tous les fichiers trackes par git (= version propre apres nettoyage)
-puis ajoute les modeles numpy (trop lourds pour le git local mais necessaires
-pour GitHub/PyPI).
+Niveau 1 (modules ouverts + API serveur) :
+  - Le code source Python est public
+  - Les modeles, donnees metier et l'algo d'alignement restent prives
+  - Les modeles numpy ne sont plus exportes (inference via API)
 
 Usage :
     python exporter.py              Exporte vers ../../output/Modules/
@@ -18,11 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Dossiers de modeles numpy a copier en plus des fichiers git
-EXTRAS = [
-    "G2P/modeles_numpy",
-    "P2G/modeles_numpy",
-]
+# Plus de modeles numpy a exporter (inference via API serveur)
+EXTRAS: list[str] = []
 
 # Fichiers a exclure de l'export (outils internes du workspace)
 EXCLUDE = [
@@ -30,16 +28,34 @@ EXCLUDE = [
     "construire_wheels.py",
 ]
 
-# Dossiers a exclure (modules pas encore prets)
+# Dossiers a exclure (modules pas encore prets ou internes)
 EXCLUDE_DIRS = [
     "Correcteur",
+    "Exporter",
+    "TTS",
+    "TTS-Concat",
+    "Pseudo-ortho",
+    "dist_manylinux",
+    "serveur",
 ]
 
-# Patterns de fichiers de donnees metier a exclure de l'export
-# (distribues uniquement via PyPI wheels, pas sur GitHub)
-EXCLUDE_DATA_PATTERNS = [
-    "data/donnees_",
+# Fichiers specifiques a exclure (algo d'alignement + chargeur prive)
+EXCLUDE_FILES = [
+    "Aligneur/src/lectura_aligneur/lectura_aligneur.py",
+    "Aligneur/src/lectura_aligneur/_chargeur.py",
 ]
+
+# Patterns de fichiers a exclure de l'export
+EXCLUDE_PATTERNS = [
+    # Donnees metier JSON (serveur uniquement)
+    "data/donnees_",
+    # Modeles ONNX et poids (serveur uniquement)
+    "modeles/",
+    "modeles_numpy/",
+]
+
+# Extensions de fichiers a exclure
+EXCLUDE_EXTENSIONS = {".c", ".so"}
 
 
 def get_git_files(repo_root: Path) -> list[str]:
@@ -55,7 +71,7 @@ def get_git_files(repo_root: Path) -> list[str]:
 
 
 def collect_extra_files(repo_root: Path) -> list[str]:
-    """Collecte les fichiers des dossiers extras (modeles_numpy, etc.)."""
+    """Collecte les fichiers des dossiers extras."""
     files = []
     for extra_dir in EXTRAS:
         extra_path = repo_root / extra_dir
@@ -65,6 +81,32 @@ def collect_extra_files(repo_root: Path) -> list[str]:
                     full = Path(root) / filename
                     files.append(str(full.relative_to(repo_root)))
     return files
+
+
+def _should_exclude(filepath: str) -> bool:
+    """Determine si un fichier doit etre exclu de l'export."""
+    # Fichiers explicitement exclus
+    if filepath in EXCLUDE:
+        return True
+
+    # Dossiers exclus
+    if any(filepath.startswith(d + "/") for d in EXCLUDE_DIRS):
+        return True
+
+    # Fichiers specifiques exclus
+    if filepath in EXCLUDE_FILES:
+        return True
+
+    # Patterns de fichiers exclus
+    if any(p in filepath for p in EXCLUDE_PATTERNS):
+        return True
+
+    # Extensions exclues (fichiers .c et .so generes par Cython)
+    for ext in EXCLUDE_EXTENSIONS:
+        if filepath.endswith(ext):
+            return True
+
+    return False
 
 
 def format_size(size_bytes: int) -> str:
@@ -96,13 +138,8 @@ def main():
     # Fusionner sans doublons, en gardant l'ordre
     all_files = list(dict.fromkeys(git_files + extra_files))
 
-    # Exclure les fichiers internes, les dossiers pas prets, et les donnees metier
-    all_files = [
-        f for f in all_files
-        if f not in EXCLUDE
-        and not any(f.startswith(d + "/") for d in EXCLUDE_DIRS)
-        and not any(p in f for p in EXCLUDE_DATA_PATTERNS)
-    ]
+    # Appliquer les exclusions
+    all_files = [f for f in all_files if not _should_exclude(f)]
 
     # Verifier que tous les fichiers existent
     missing = [f for f in all_files if not (repo_root / f).exists()]
@@ -132,7 +169,8 @@ def main():
     print(f"\n{'=' * 55}")
     if args.dry_run:
         print("  MODE DRY-RUN — rien ne sera copie")
-    print(f"  Export : {repo_root}")
+    print(f"  Export Niveau 1 (modules ouverts + API)")
+    print(f"  Source : {repo_root}")
     print(f"     ->   {output_dir}")
     print(f"{'=' * 55}")
     print(f"\n  {'Module':<20} {'Fichiers':>10} {'Taille':>10}")
@@ -143,12 +181,14 @@ def main():
     print(f"  {'-' * 42}")
     print(f"  {'TOTAL':<20} {total_count:>10} {format_size(total_size):>10}")
 
-    # Fichiers extras
-    if extra_files:
-        print(f"\n  Extras (non-git) : {len(extra_files)} fichier(s)")
-        for f in extra_files:
-            size = (repo_root / f).stat().st_size if (repo_root / f).exists() else 0
-            print(f"    + {f} ({format_size(size)})")
+    # Fichiers exclus notables
+    excluded_files = [f for f in git_files if _should_exclude(f)]
+    if excluded_files:
+        print(f"\n  Exclus : {len(excluded_files)} fichier(s)")
+        for f in excluded_files[:15]:
+            print(f"    - {f}")
+        if len(excluded_files) > 15:
+            print(f"    ... et {len(excluded_files) - 15} autres")
 
     if args.dry_run:
         print(f"\n  Dry-run termine. Relancer sans --dry-run pour copier.\n")
