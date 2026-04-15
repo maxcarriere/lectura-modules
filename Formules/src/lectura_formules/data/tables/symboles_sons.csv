@@ -1,0 +1,115 @@
+symbole,categorie,texte,phone,sound
+€,currency,euro,øʁo,sym001
+$,currency,dollar,dolaʁ,sym002
+£,currency,livre,livʁ,sym003
+¥,currency,yen,jɛn,sym004
+₩,currency,won,wɔn,sym005
+₹,currency,roupie,ʁupi,sym006
+₽,currency,rouble,ʁubl,sym007
+₺,currency,livre turque,livʁ tyʁk,sym008
+₫,currency,dong,dɔ̃ɡ,sym009
++,math,plus,plys,sym095
+-,math,moins,mwɛ̃,sym094
+−,math,moins,mwɛ̃,sym094
+±,math,plus ou moins,plyz u mwɛ̃,sym010
+=,math,égal,eɡal,sym011
+≠,math,différent de,difeʁɑ̃ də,sym012
+<,math,inférieur à,ɛ̃feʁjœʁ a,sym013
+>,math,supérieur à,sypeʁjœʁ a,sym014
+≤,math,inférieur ou égal à,ɛ̃feʁjœʁ u eɡal a,sym015
+≥,math,supérieur ou égal à,sypeʁjœʁ u eɡal a,sym016
+×,math,fois,fwa,sym017
+*,math,fois,fwa,sym017
+÷,math,divisé par,divize paʁ,sym018
+/,math,sur,syʁ,sym019
+^,math,puissance,pɥisɑ̃s,sym020
+√,math,racine carrée,ʁasin kaʁe,sym021
+∞,math,infini,ɛ̃fini,sym022
+==,comparison,égal à,eɡal a,sym023
+!=,comparison,différent de,difeʁɑ̃ də,sym012
+<=,comparison,inférieur ou égal à,ɛ̃feʁjœʁ u eɡal a,sym015
+>=,comparison,supérieur ou égal à,sypeʁjœʁ u eɡal a,sym016
+<>,comparison,différent de,difeʁɑ̃ də,sym012
+≈,comparison,approximativement égal à,apʁɔksimativmɑ̃ eɡal a,sym024
+≃,comparison,quasiment égal à,kazimɑ̃ eɡal a,sym025
+≡,comparison,identique à,idɑ̃tik a,sym026
+%,percent,pour cent,puʁ sɑ̃,sym027
+‰,percent,pour mille,puʁ mil,sym028
+m,units,mètre,mɛtʁ,sym029
+cm,units,centimètre,sɑ̃timɛtʁ,sym030
+mm,units,millimètre,milimɛtʁ,sym031
+km,units,kilomètre,kilomɛtʁ,sym032
+g,units,gramme,ɡʁam,sym033
+kg,units,kilogramme,kiloɡʁam,sym034
+mg,units,milligramme,miliɡʁam,sym035
+L,units,litre,litʁ,sym036
+ml,units,millilitre,mililitʁ,sym037
+s,units,seconde,səɡɔ̃d,sym038
+min,units,minute,minyt,sym039
+h,units,heure,œʁ,sym040
+°,units,degré,dəɡʁe,sym041
+°C,units,degré Celsius,dəɡʁe sɛlsjys,sym042
+°F,units,degré Fahrenheit,dəɡʁe faʁɛnajt,sym043
+∑,math_extended,somme,sɔm,sym044
+∏,math_extended,produit,pʁodɥi,sym045
+∫,math_extended,intégrale,ɛ̃teɡʁal,sym046
+∂,math_extended,dérivée partielle,deʁive paʁsjɛl,sym047
+∇,math_extended,nabla,nabla,sym048
+∈,math_extended,appartient à,apaʁtjɛ̃ a,sym049
+∉,math_extended,n'appartient pas à,napaʁtjɛ̃ pa a,sym050
+→,arrows,donne,dɔn,sym051
+←,arrows,reçoit,ʁəswa,sym052
+↔,arrows,équivalent à,ekivalɑ̃ a,sym053
+⇒,arrows,implique,ɛ̃plik,sym054
+⇔,arrows,équivalent à,ekivalɑ̃ a,sym053
+.,punctuation,point,pwɛ̃,sym055
+",",punctuation,virgule,viʁɡyl,sym056
+;,punctuation,point-virgule,pwɛ̃ viʁɡyl,sym057
+:,punctuation,deux points,dø pwɛ̃,sym058
+?,punctuation,point d'interrogation,pwɛ̃ dɛ̃tɛʁɔɡasjɔ̃,sym059
+!,punctuation,point d'exclamation,pwɛ̃ dɛksklamasjɔ̃,sym060
+…,punctuation,points de suspension,pwɛ̃ də syspɑ̃sjɔ̃,sym061
+(,brackets,parenthèse ouvrante,paʁɑ̃tɛz uvʁɑ̃t,sym062
+),brackets,parenthèse fermante,paʁɑ̃tɛz fɛʁmɑ̃t,sym063
+[,brackets,crochet ouvrant,kʁoʃɛ uvʁɑ̃,sym064
+],brackets,crochet fermant,kʁoʃɛ fɛʁmɑ̃,sym065
+{,brackets,accolade ouvrante,akolad uvʁɑ̃t,sym066
+},brackets,accolade fermante,akolad fɛʁmɑ̃t,sym067
+<,brackets,chevron ouvrant,ʃəvʁɔ̃ uvʁɑ̃,sym068
+>,brackets,chevron fermant,ʃəvʁɔ̃ fɛʁmɑ̃,sym069
+@,technical,arobase,aʁɔbaz,sym070
+#,technical,dièse,djɛz,sym071
+_,technical,underscore,œndœʁskɔʁ,sym072
+\,technical,antislash,ɑ̃tislaʃ,sym073
+|,technical,barre verticale,baʁ vɛʁtikal,sym074
+~,technical,tilde,tild,sym075
+`,technical,accent grave,aksɑ̃ ɡʁav,sym076
+::,technical,double deux points,dubl dø pwɛ̃,sym077
+&&,logic,et logique,e loʒik,sym078
+||,logic,ou logique,u loʒik,sym079
+!,logic,non logique,nɔ̃ loʒik,sym080
+&,misc,et,e,sym081
+§,misc,paragraphe,paʁaɡʁaf,sym082
+©,misc,copyright,kopiʁajt,sym083
+®,misc,marque déposée,maʁk depoze,sym084
+™,misc,marque commerciale,maʁk komɛʁsjal,sym085
+sin,functions,sinus,sinys,sym086
+cos,functions,cosinus,kosinys,sym087
+tan,functions,tangente,tɑ̃ʒɑ̃t,sym088
+exp,functions,exponentielle,ɛksponɑ̃sjɛl,sym089
+ln,functions,logarithme népérien,loɡaʁitm nepeʁjɛ̃,sym090
+log,functions,logarithme,loɡaʁitm,sym091
+sqrt,functions,racine carrée,ʁasin kaʁe,sym021
+abs,functions,valeur absolue,valœʁ apsoly,sym092
+E,scientific,exposant,ɛkspozɑ̃,sym093
+e,scientific,exposant,ɛkspozɑ̃,sym093
+²,math,au carré,o kaʁe,sym096
+³,math,au cube,o kyb,sym097
+_indice,math,indice,ɛ̃dis,sym098
+_facteur_de,math,facteur de,faktœʁ də,sym099
+_de,math,de,də,sym100
+_factorielle,math,factorielle,faktoʁjɛl,sym101
+_valeur_absolue,math,valeur absolue de,valœʁ apsoly də,sym102
+⊂,math_extended,inclus dans,ɛ̃kly dɑ̃,sym103
+∪,math_extended,union,ynjɔ̃,sym104
+∩,math_extended,intersection,ɛ̃tɛʁseksjɔ̃,sym105

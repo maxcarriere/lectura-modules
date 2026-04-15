@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environnements
+.venv/
+venv/
+env/
+
+# Entrainement (scripts + donnees — prives)
+**/entrainement/
+
+# Modeles V2 prives (repo lectura-modules-private)
+**/modeles/prives/
+
+# Vitrine / showcases (pas pour GitHub)
+**/vitrine/
+
+# Modeles numpy intermediaires (trop lourds pour le git local, copies par exporter.py)
+**/modeles_numpy/
+
+# Modeles intermediaires (ne garder que les versions finales)
+*.pt
+**/*.pt
+
+# Archive (modeles anciens, donnees entrainement, fichiers redondants)
+_archive_modules/
+
+# Dossier legacy (anciennes versions)
+_Outils-NLP/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db
+Lexique/lexique_lectura.db

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-formules"
+version = "3.0.0"
+description = "Lecture algorithmique des formules (nombres, sigles, dates, téléphones, heures, monnaies, etc.) pour le français"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+keywords = ["formules", "french", "nlp", "nombres", "lecture", "romains"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = ["lectura-tokeniseur>=2.2.1"]
+
+[project.urls]
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Formules"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lectura_formules = [
+    "data/tables/*.csv",
+]
+# Les WAV (~12 Mo) ne sont PAS embarqués dans le package.
+# Utiliser tables.set_sounds_dir() pour configurer le chemin sons externe.
