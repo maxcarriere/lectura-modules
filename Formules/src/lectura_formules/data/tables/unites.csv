@@ -1,0 +1,80 @@
+unite,base,variante,value,texte,phone,sound,display_rom,display_num,display_fr
+[0],[0],principale,0,zero,zeʁo,num002,,0,zero
+[1],[1],principale,1,un,ɛ̃,num003,I,1,un
+[2],[2],principale,2,deux,dø,num006,,2,deux
+[3],[3],principale,3,trois,tʁwa,num007,,3,trois
+[4],[4],principale,4,quatre,katʁ,num008,,4,quatre
+[5],[5],principale,5,cinq,sɛ̃k,num009,V,5,cinq
+[6],[6],principale,6,six,sis,num010,,6,six
+[7],[7],principale,7,sept,sɛt,num011,,7,sept
+[8],[8],principale,8,huit,ɥit,num012,,8,huit
+[9],[9],principale,9,neuf,nœf,num013,,9,neuf
+[10],[10],principale,10,dix,dis,num014,X,,dix
+[11],[11],principale,11,onze,ɔ̃z,num017,,,onze
+[12],[12],principale,12,douze,duz,num019,,,douze
+[13],[13],principale,13,treize,tʁɛz,num020,,,treize
+[14],[14],principale,14,quatorze,katɔʁz,num021,,,quatorze
+[15],[15],principale,15,quinze,kɛ̃z,num022,,,quinze
+[16],[16],principale,16,seize,sɛz,num023,,,seize
+[20],[20],principale,20,vingt,vɛ̃,num027,,,vingt
+[30],[30],principale,30,trente,tʁɑ̃t,num030,,,trente
+[40],[40],principale,40,quarante,kaʁɑ̃t,num031,,,quarante
+[50],[50],principale,50,cinquante,sɛ̃kɑ̃t,num032,L,,cinquante
+[60],[60],principale,60,soixante,swasɑ̃t,num033,,,soixante
+[70],[70],principale,70,soixante-dix,swasɑ̃tdis,,LXX,70,soixante-dix
+[80],[80],principale,80,quatre-vingt,katʁvɛ̃,,LXXX,80,quatre-vingt
+[90],[90],principale,90,quatre-vingt-dix,katʁvɛ̃dis,,XC,90,quatre-vingt-dix
+[100],[100],principale,100,cent,sɑ̃,num034,C,,cent
+[500],[500],principale,500,cinq-cents,sɛ̃ksɑ̃,num036,D,,
+[1000],[1000],principale,1000,mille,mil,num037,M,,mille
+[0000],[0000],principale,0,,,,num001,,0000,
+[000],[000],principale,0,,,,num001,,000,
+[00],[00],principale,0,,,,num001,,00,
+[2000],[2000],principale,2000,deux-mille,dømil,,MM,2000,deux-mille
+[10*],[10],sans son s,10,dix,di,num016,,,dix
+[10z],[10],avec son z,10,dix,diz,num015,,,dix
+[20t],[20],sans son t,20,vingt,vɛ̃t,num029,,,vingt
+[20s],[20],pluriel,20,vingts,vɛ̃,num028,,,vingts
+[100s],[100],pluriel,100,cents,sɑ̃,num035,,,cents
+[et1],[1],avec et,1,et un,e ɛ̃,num005,,,et-un
+[et11],[11],avec et,11,et onze,e ɔ̃z,num018,,,et-onze
+[5000],[5000],principale,5000,cinq-mille,sɛ̃kmil,num038,V̅,,
+[10000],[10000],principale,10000,dix-mille,dimil,num039,X̅,,
+[+],[+],principale,,plus,plys,num044,,,
+[-],[-],principale,,soustrait à,sustʁɛ a,num045,,,
+[1000er],[1000],classe,1000,milliers,milje,num047,,,
+[100ne],[100],classe,100,centaines,sɑ̃tɛn,num048,,,
+[10ne],[10],classe,10,dizaines,dizɛn,num049,,,
+[1te],[1],classe,1,unites,ynite,num050,,,
+[1ne],[1],féminin,1,une,yn,num004,,,une
+[et1ne],[1],féminin,1,et une,e yn,num080,,,et-une
+[million],[million],principale,1000000,million,miljɔ̃,num051,,,million
+[millions],[million],pluriel,1000000,millions,miljɔ̃,num052,,,millions
+[milliard],[milliard],principale,1000000000,milliard,miljaʁ,num053,,,milliard
+[milliards],[milliard],pluriel,1000000000,milliards,miljaʁ,num054,,,milliards
+[billion],[billion],principale,1000000000000,billion,bijɔ̃,num055,,,billion
+[billions],[billion],pluriel,1000000000000,billions,bijɔ̃,num056,,,billions
+[virgule],[virgule],principale,0,virgule,viʁɡyl,num057,,virgule,virgule
+[fois],[fois],principale,0,fois,fwa,num058,,fois,fois
+[heures],[heures],principale,0,heures,œʁ,num059,,,heures
+[minutes],[minutes],principale,0,minutes,minyt,num060,,,minutes
+[secondes],[secondes],principale,0,secondes,səɡɔ̃d,num061,,,secondes
+[euros],[euros],principale,0,euros,øʁo,num062,,,euros
+[dollars],[dollars],principale,0,dollars,dolaʁ,num063,,,dollars
+[livres_m],[livres],principale,0,livres,livʁ,num064,,,livres
+[franc],[franc],principale,0,franc,fʁɑ̃,num065,,,franc
+[francs],[francs],principale,0,francs,fʁɑ̃,num066,,,francs
+[suisse],[suisse],principale,0,suisse,sɥis,num067,,,suisse
+[centime],[centime],principale,0,centime,sɑ̃tim,num068,,,centime
+[centimes],[centimes],principale,0,centimes,sɑ̃tim,num069,,,centimes
+[degres],[degres],principale,0,degrés,dəɡʁe,num070,,,degrés
+[nord],[nord],principale,0,nord,nɔʁ,num071,,,nord
+[sud],[sud],principale,0,sud,syd,num072,,,sud
+[est_dir],[est_dir],principale,0,est,ɛst,num073,,,est
+[ouest],[ouest],principale,0,ouest,wɛst,num074,,,ouest
+[a_prep],[a_prep],principale,0,à,a,num075,,,à
+[page],[page],principale,0,page,paʒ,num076,,,page
+[chapitre],[chapitre],principale,0,chapitre,ʃapitʁ,num077,,,chapitre
+[et_conn],[et_conn],principale,0,et,e,num078,,,et
+[par],[par],principale,0,par,paʁ,num079,,,par
+[numero],[numero],principale,0,numéro,nymeʁo,num081,,,numéro

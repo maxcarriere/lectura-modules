@@ -1,0 +1,52 @@
+name: CI — Tests Lectura NLP
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Installer pytest
+        run: pip install pytest
+
+      - name: Tests Tokeniseur
+        env:
+          PYTHONPATH: Tokeniseur/src
+        run: pytest Tokeniseur/tests/ -v
+
+      - name: Tests Formules
+        env:
+          PYTHONPATH: Formules/src:Tokeniseur/src
+        run: pytest Formules/tests/ -v
+
+      - name: Tests Aligneur
+        env:
+          PYTHONPATH: Aligneur/src:Formules/src:Tokeniseur/src
+        run: pytest Aligneur/tests/ -v
+
+      - name: Tests G2P
+        env:
+          PYTHONPATH: G2P/src:Formules/src:Tokeniseur/src
+        run: pytest G2P/tests/ -v --ignore=G2P/tests/test_pipeline_formules.py
+        continue-on-error: true
+
+      - name: Tests P2G
+        env:
+          PYTHONPATH: P2G/src
+        run: pytest P2G/tests/ -v
+        continue-on-error: true

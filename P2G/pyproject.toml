@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-p2g"
+version = "2.0.0"
+description = "Conversion phonème-graphème du français (IPA → orthographe) — P2G + POS + Morpho (BiLSTM multi-tâche)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+keywords = ["p2g", "french", "nlp", "phonétique", "orthographe", "pos-tagging", "morphologie"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = []
+
+[project.optional-dependencies]
+onnx = ["onnxruntime>=1.16"]
+numpy = ["numpy>=1.24"]
+train = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
+all = ["onnxruntime>=1.16", "numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/P2G"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["entrainement*", "evaluation*", "scripts*"]
+
+[tool.setuptools.package-data]
+lectura_p2g = []
