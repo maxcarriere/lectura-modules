@@ -100,11 +100,9 @@ print(syllabes)  # ['ʃɔ', 'kɔ', 'la']
 
 ```python
 from lectura_aligneur import LecturaSyllabeur
-from lectura_nlp.inference_onnx import OnnxInferenceEngine
-from lectura_nlp import get_model_path
+from lectura_nlp import creer_engine
 
-g2p = OnnxInferenceEngine(get_model_path("unifie_int8.onnx"),
-                           get_model_path("unifie_vocab.json"))
+g2p = creer_engine()    # mode API par defaut
 
 # Tout objet avec .predict(word) est accepte
 class G2PPhonemizer:
