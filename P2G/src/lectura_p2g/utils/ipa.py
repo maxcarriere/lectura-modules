@@ -8,23 +8,14 @@ from __future__ import annotations
 
 import unicodedata
 
-from lectura_p2g._chargeur import (
-    voyelles as _load_voyelles,
-    consonnes as _load_consonnes,
-    semi_voyelles as _load_semi_voyelles,
-    nasales as _load_nasales,
-    liquides as _load_liquides,
-    occlusives as _load_occlusives,
-    fricatives as _load_fricatives,
-)
-
-_VOYELLES = _load_voyelles()
-_CONSONNES = _load_consonnes()
-_SEMI_VOYELLES = _load_semi_voyelles()
-_NASALES = _load_nasales()
-_LIQUIDES = _load_liquides()
-_OCCLUSIVES = _load_occlusives()
-_FRICATIVES = _load_fricatives()
+# Inventaire phonologique standard du francais (IPA)
+_VOYELLES = {"a", "ɑ", "e", "ɛ", "i", "o", "ɔ", "u", "y", "ø", "œ", "ə"}
+_CONSONNES = {"p", "b", "t", "d", "k", "ɡ", "f", "v", "s", "z", "ʃ", "ʒ", "m", "n", "ɲ", "ŋ", "l", "ʁ"}
+_SEMI_VOYELLES = {"j", "w", "ɥ"}
+_NASALES = {"m", "n", "ɲ", "ŋ"}
+_LIQUIDES = {"l", "ʁ"}
+_OCCLUSIVES = {"p", "b", "t", "d", "k", "ɡ"}
+_FRICATIVES = {"f", "v", "s", "z", "ʃ", "ʒ"}
 
 
 def iter_phonemes(ipa: str) -> list[str]:
