@@ -27,7 +27,7 @@ Exemple avec backend local::
 
 from pathlib import Path
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
@@ -111,20 +111,24 @@ def creer_engine(
     )
 
 
-# API publique
-from lectura_nlp.tokeniseur import tokeniser, phrase_vers_chars
-from lectura_nlp.posttraitement import (
-    appliquer_liaison,
-    appliquer_regles_g2p,
-    charger_corrections,
-    charger_homographes,
-    corriger_g2p,
-)
+# API publique — disponible uniquement si les donnees locales sont presentes
+try:
+    from lectura_nlp.tokeniseur import tokeniser, phrase_vers_chars
+    from lectura_nlp.posttraitement import (
+        appliquer_liaison,
+        appliquer_regles_g2p,
+        charger_corrections,
+        charger_homographes,
+        corriger_g2p,
+    )
+except FileNotFoundError:
+    pass  # Mode API — donnees locales non disponibles
+
 try:
     from lectura_nlp.pipeline_formules import (
         analyser_phrase_complete,
         ResultatPhraseG2P,
         MotAnalyseG2P,
     )
-except ImportError:
-    pass  # lectura_formules non disponible — pipeline_formules desactive
+except (ImportError, FileNotFoundError):
+    pass  # lectura_formules non disponible ou mode API

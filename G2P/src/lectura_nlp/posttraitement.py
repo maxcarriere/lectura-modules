@@ -12,13 +12,25 @@ import re
 from pathlib import Path
 
 from lectura_nlp.utils.ipa import iter_phonemes, est_voyelle, est_consonne
-from lectura_nlp._chargeur import (
-    denasalisation as _load_denas,
-    liaison_consonnes as _load_liaison_consonnes,
-)
 
-_DENAS_MAP = _load_denas()
-_LIAISON_CONSONNES = _load_liaison_consonnes()
+_DENAS_MAP: dict[str, str] | None = None
+_LIAISON_CONSONNES: dict[str, str] | None = None
+
+
+def _get_denas_map() -> dict[str, str]:
+    global _DENAS_MAP
+    if _DENAS_MAP is None:
+        from lectura_nlp._chargeur import denasalisation
+        _DENAS_MAP = denasalisation()
+    return _DENAS_MAP
+
+
+def _get_liaison_consonnes() -> dict[str, str]:
+    global _LIAISON_CONSONNES
+    if _LIAISON_CONSONNES is None:
+        from lectura_nlp._chargeur import liaison_consonnes
+        _LIAISON_CONSONNES = liaison_consonnes()
+    return _LIAISON_CONSONNES
 
 
 def appliquer_denasalisation(ipa: str, denas: str) -> str:
@@ -61,7 +73,8 @@ def appliquer_liaison(
 
     for i in range(n - 1):
         liaison = liaisons[i]
-        if liaison == "none" or liaison not in _LIAISON_CONSONNES:
+        lc = _get_liaison_consonnes()
+        if liaison == "none" or liaison not in lc:
             continue
 
         # Le token suivant commence-t-il par une voyelle ?
@@ -77,7 +90,7 @@ def appliquer_liaison(
             result[i] = appliquer_denasalisation(result[i], denas_list[i])
 
         # Ajouter la consonne de liaison
-        consonne = _LIAISON_CONSONNES[liaison]
+        consonne = lc[liaison]
         result[i] = result[i] + consonne
 
     return result

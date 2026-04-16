@@ -29,7 +29,7 @@ Exemple avec backend local::
 
 from pathlib import Path
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
@@ -113,6 +113,9 @@ def creer_engine(
     )
 
 
-# API publique
-from lectura_p2g.tokeniseur import tokeniser_ipa, ipa_phrase_vers_chars
-from lectura_p2g.posttraitement import corriger_p2g, corriger_phrase_v2
+# API publique — disponible uniquement si les donnees locales sont presentes
+try:
+    from lectura_p2g.tokeniseur import tokeniser_ipa, ipa_phrase_vers_chars
+    from lectura_p2g.posttraitement import corriger_p2g, corriger_phrase_v2
+except FileNotFoundError:
+    pass  # Mode API — donnees locales non disponibles
