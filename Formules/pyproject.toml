@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-formules"
-version = "3.0.0"
+version = "3.0.1"
 description = "Lecture algorithmique des formules (nombres, sigles, dates, téléphones, heures, monnaies, etc.) pour le français"
 readme = "README.md"
 requires-python = ">=3.10"
