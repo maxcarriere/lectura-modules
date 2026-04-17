@@ -74,7 +74,7 @@ def verifier_participes_passes(
                 break
 
         # --- Regle 1 : AUX + infinitif -> PP ---
-        if aux_found and pos == "VER" and curr_low.endswith(("er", "ir", "re")):
+        if aux_found and curr_low.endswith(("er", "ir", "re")):
             candidats = generer_candidats_participe(curr)
             for candidate in candidats:
                 if lexique is None or lexique.existe(candidate):

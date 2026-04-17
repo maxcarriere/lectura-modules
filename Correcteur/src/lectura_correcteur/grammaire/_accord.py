@@ -151,18 +151,56 @@ def verifier_accords(
                 and len(curr) > 1
                 and curr_low not in INVARIABLES
             ):
-                for candidate in generer_candidats_pluriel(curr):
-                    if lexique is None or lexique.existe(candidate):
-                        ancien = result[i]
-                        result[i] = candidate
-                        corrections.append(Correction(
-                            index=i,
-                            original=ancien,
-                            corrige=candidate,
-                            type_correction=TypeCorrection.GRAMMAIRE,
-                            explication=f"Accord pluriel apres '{prev_low}'",
-                        ))
-                        break
+                # Fix 3a : ADJ antepose + NOM feminin → feminiser avant pluraliser
+                if pos == "ADJ" and lexique is not None and i + 1 < n:
+                    next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                    if next_pos == "NOM":
+                        nom_infos = lexique.info(result[i + 1])
+                        nom_est_fem = nom_infos and any(
+                            e.get("genre") == "f" for e in nom_infos
+                        )
+                        adj_infos = lexique.info(result[i])
+                        adj_genred = [e for e in adj_infos if e.get("genre")]
+                        adj_est_masc = adj_genred and all(
+                            e.get("genre") == "m" for e in adj_genred
+                        )
+                        if nom_est_fem and adj_est_masc:
+                            for cand in generer_candidats_feminin(result[i]):
+                                c_infos = lexique.info(cand)
+                                if c_infos and any(
+                                    e.get("genre") == "f" for e in c_infos
+                                ):
+                                    ancien = result[i]
+                                    result[i] = cand
+                                    corrections.append(Correction(
+                                        index=i,
+                                        original=ancien,
+                                        corrige=cand,
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        explication="Accord en genre ADJ antepose + NOM fem",
+                                    ))
+                                    curr = result[i]
+                                    curr_low = curr.lower()
+                                    break
+
+                # Now pluralize (curr may have been feminized above)
+                if (
+                    not curr_low.endswith(("s", "x", "z"))
+                    and len(curr) > 1
+                    and curr_low not in INVARIABLES
+                ):
+                    for candidate in generer_candidats_pluriel(curr):
+                        if lexique is None or lexique.existe(candidate):
+                            ancien = result[i]
+                            result[i] = candidate
+                            corrections.append(Correction(
+                                index=i,
+                                original=ancien,
+                                corrige=candidate,
+                                type_correction=TypeCorrection.GRAMMAIRE,
+                                explication=f"Accord pluriel apres '{prev_low}'",
+                            ))
+                            break
 
         # Regle 2 : Det. pluriel + ADJ + NOM
         if (
@@ -194,7 +232,14 @@ def verifier_accords(
         # (avant Regle 1b pour que "vert" devienne "verte" avant "vertes")
         if i > 0 and pos == "ADJ" and lexique is not None:
             prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
-            if prev_pos == "NOM":
+            # Accept NOM tag or lexique-confirmed NOM (OOV words fixed by ortho)
+            _prev_is_nom = prev_pos == "NOM"
+            if not _prev_is_nom and not prev_pos:
+                _prev_infos = lexique.info(result[i - 1])
+                if _prev_infos:
+                    _cgrams = {e.get("cgram") for e in _prev_infos if e.get("cgram")}
+                    _prev_is_nom = _cgrams == {"NOM"}
+            if _prev_is_nom:
                 prev_infos = lexique.info(result[i - 1])
                 nom_est_fem = prev_infos and any(
                     e.get("genre") == "f" for e in prev_infos
@@ -206,6 +251,7 @@ def verifier_accords(
                         e.get("genre") == "m" for e in adj_genred
                     )
                     if adj_est_masc:
+                        found_fem = False
                         for cand in generer_candidats_feminin(result[i]):
                             c_infos = lexique.info(cand)
                             if c_infos and any(
@@ -223,7 +269,23 @@ def verifier_accords(
                                 # Update curr_low for subsequent rules
                                 curr = result[i]
                                 curr_low = curr.lower()
+                                found_fem = True
                                 break
+                        # Fallback morphologique : mot + "e" pour OOV
+                        if not found_fem and not result[i].lower().endswith("e"):
+                            fallback = result[i] + "e"
+                            if lexique.existe(fallback):
+                                ancien = result[i]
+                                result[i] = fallback
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien,
+                                    corrige=fallback,
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    explication="Accord en genre NOM fem + ADJ (fallback)",
+                                ))
+                                curr = result[i]
+                                curr_low = curr.lower()
 
         # Regle 1b : NOM pluriel + ADJ -> ajouter -s (adj post-nominal)
         if i > 1 and pos == "ADJ":
