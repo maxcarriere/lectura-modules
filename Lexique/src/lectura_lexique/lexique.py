@@ -18,7 +18,9 @@ from typing import Any, Callable
 
 from lectura_lexique._aliases import resoudre_colonnes
 from lectura_lexique._loaders import iter_csv, iter_tsv
-from lectura_lexique._types import EntreeLexicale
+from lectura_lexique._multext import decoder_multext as _decoder_multext
+from lectura_lexique._multext import filtre_multext as _filtre_multext
+from lectura_lexique._types import Concept, EntreeForme, EntreeLemme, EntreeLexicale
 from lectura_lexique._utils import normaliser_ortho
 
 from lectura_lexique import _morphologie
@@ -67,6 +69,13 @@ class Lexique:
         self._conn: sqlite3.Connection | None = None
         self._col_mapping: dict[str, str] | None = None
 
+        # Schema version (3 or 4) — detected at first SQLite access
+        self._schema_version: int = 3
+
+        # Detecter la version du schema AVANT de charger les formes
+        if self._backend == "sqlite":
+            self._detect_schema_version()
+
         # Charger le niveau 1
         self._charger_formes()
 
@@ -91,10 +100,12 @@ class Lexique:
                 f"CREATE INDEX IF NOT EXISTS idx_{self._table}_ortho_nocase "  # noqa: S608
                 f"ON {self._table}(ortho COLLATE NOCASE)"
             )
-            conn.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_{self._table}_lemme_nocase "  # noqa: S608
-                f"ON {self._table}(lemme COLLATE NOCASE)"
-            )
+            if self._schema_version < 4:
+                # v3 : lemme est une colonne de formes
+                conn.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{self._table}_lemme_nocase "  # noqa: S608
+                    f"ON {self._table}(lemme COLLATE NOCASE)"
+                )
             cur = conn.execute(f"SELECT DISTINCT lower(ortho) FROM {self._table}")  # noqa: S608
             self._formes = frozenset(row[0] for row in cur)
         else:
@@ -120,6 +131,20 @@ class Lexique:
             )
             self._conn.row_factory = sqlite3.Row
         return self._conn
+
+    def _detect_schema_version(self) -> None:
+        """Detecte si la BDD utilise le schema v4 (table lemmes presente)."""
+        conn = self._get_conn()
+        try:
+            conn.execute("SELECT 1 FROM lemmes LIMIT 1")
+            self._schema_version = 4
+        except sqlite3.OperationalError:
+            self._schema_version = 3
+
+    @property
+    def schema_version(self) -> int:
+        """Version du schema BDD (3 ou 4)."""
+        return self._schema_version
 
     def _charger_index(self) -> None:
         """Niveaux 2-4 : construit les index phone, ortho et lemme (CSV/TSV)."""
@@ -204,11 +229,20 @@ class Lexique:
         """
         if self._backend == "sqlite":
             conn = self._get_conn()
-            cur = conn.execute(
-                f"SELECT ortho, cgram, freq_opensubs AS freq, phone "
-                f"FROM {self._table} WHERE phone = ?",  # noqa: S608
-                (phone,),
-            )
+            if self._schema_version >= 4:
+                cur = conn.execute(
+                    "SELECT f.ortho, l.cgram, f.freq_opensubs AS freq, f.phone "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    "WHERE f.phone = ?",
+                    (phone,),
+                )
+            else:
+                cur = conn.execute(
+                    f"SELECT ortho, cgram, freq_opensubs AS freq, phone "
+                    f"FROM {self._table} WHERE phone = ?",  # noqa: S608
+                    (phone,),
+                )
             return [dict(row) for row in cur.fetchall()]
 
         # CSV/TSV : charger les index si necessaire
@@ -218,6 +252,8 @@ class Lexique:
         """Retourne les entrees lexicales completes pour un mot."""
         if self._backend == "sqlite":
             conn = self._get_conn()
+            if self._schema_version >= 4:
+                return self._info_v4(conn, mot)
             cur = conn.execute(
                 f"SELECT * FROM {self._table} WHERE ortho = ? COLLATE NOCASE",  # noqa: S608
                 (normaliser_ortho(mot),),
@@ -235,6 +271,34 @@ class Lexique:
 
         # CSV/TSV
         return self._get_index_ortho().get(normaliser_ortho(mot), [])
+
+    def _info_v4(self, conn: sqlite3.Connection, mot: str) -> list[dict[str, Any]]:
+        """info() pour schema v4 : JOIN formes + lemmes."""
+        cur = conn.execute(
+            "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
+            "f.nb_syllabes, f.syllabes, f.freq_opensubs AS freq_opensubs, f.source, "
+            "l.id AS lemme_id, l.lemme, l.cgram, l.genre, l.contrainte_nombre, "
+            "l.etymologie, l.freq_opensubs AS lemme_freq, l.age "
+            "FROM formes f "
+            "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+            "WHERE f.ortho = ? COLLATE NOCASE",
+            (normaliser_ortho(mot),),
+        )
+        results = []
+        for row in cur.fetchall():
+            entry: dict[str, Any] = dict(row)
+            # Decoder multext en traits lisibles
+            multext = entry.get("multext") or ""
+            if multext:
+                traits = _decoder_multext(multext)
+                entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                entry["nombre"] = traits.get("nombre", "")
+                entry["mode"] = traits.get("mode", "")
+                entry["temps"] = traits.get("temps", "")
+                entry["personne"] = traits.get("personne", "")
+            entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+            results.append(entry)
+        return results
 
     def frequence(self, mot: str) -> float:
         """Frequence max parmi toutes les entrees de ce mot."""
@@ -301,26 +365,61 @@ class Lexique:
         if self._backend == "sqlite":
             conn = self._get_conn()
             placeholders = ",".join("?" for _ in phones)
-            query = (
-                f"SELECT ortho, lemme, cgram, personne, nombre, mode, temps, "
-                f"freq_opensubs AS freq, phone "
-                f"FROM {self._table} "
-                f"WHERE phone IN ({placeholders}) "
-                f"AND cgram IN ('VER', 'AUX') "
-                f"AND personne = ?"
-            )
-            params: list[Any] = list(phones) + [personne]
-            if nombre:
-                query += " AND nombre = ?"
-                params.append(nombre)
-            query += " ORDER BY freq_opensubs DESC"
 
-            cur = conn.execute(query, params)
-            for row in cur.fetchall():
-                ortho = row["ortho"]
-                if ortho.lower() not in seen:
-                    seen.add(ortho.lower())
-                    results.append(dict(row))
+            if self._schema_version >= 4:
+                # v4 : traits dans multext, lemme dans table lemmes
+                multext_pattern = _filtre_multext(
+                    pos="VER", personne=personne,
+                    nombre={"s": "singulier", "p": "pluriel"}.get(nombre, nombre) if nombre else None,
+                )
+                query = (
+                    "SELECT f.ortho, l.lemme, l.cgram, f.multext, "
+                    "f.freq_opensubs AS freq, f.phone "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    f"WHERE f.phone IN ({placeholders}) "
+                    "AND l.cgram IN ('VER', 'AUX') "
+                )
+                params: list[Any] = list(phones)
+                if multext_pattern and multext_pattern != "%":
+                    query += "AND f.multext LIKE ? "
+                    params.append(multext_pattern)
+                query += "ORDER BY f.freq_opensubs DESC"
+                cur = conn.execute(query, params)
+                for row in cur.fetchall():
+                    ortho = row["ortho"]
+                    if ortho.lower() not in seen:
+                        seen.add(ortho.lower())
+                        entry = dict(row)
+                        multext = entry.pop("multext", "") or ""
+                        if multext:
+                            traits = _decoder_multext(multext)
+                            entry["personne"] = traits.get("personne", "")
+                            entry["nombre"] = traits.get("nombre", "")
+                            entry["mode"] = traits.get("mode", "")
+                            entry["temps"] = traits.get("temps", "")
+                        results.append(entry)
+            else:
+                query = (
+                    f"SELECT ortho, lemme, cgram, personne, nombre, mode, temps, "
+                    f"freq_opensubs AS freq, phone "
+                    f"FROM {self._table} "
+                    f"WHERE phone IN ({placeholders}) "
+                    f"AND cgram IN ('VER', 'AUX') "
+                    f"AND personne = ?"
+                )
+                params = list(phones) + [personne]
+                if nombre:
+                    query += " AND nombre = ?"
+                    params.append(nombre)
+                query += " ORDER BY freq_opensubs DESC"
+
+                cur = conn.execute(query, params)
+                for row in cur.fetchall():
+                    ortho = row["ortho"]
+                    if ortho.lower() not in seen:
+                        seen.add(ortho.lower())
+                        results.append(dict(row))
         else:
             # CSV/TSV : chercher dans l'index phone
             phone_index = self._get_index_phone()
@@ -352,6 +451,31 @@ class Lexique:
         """
         if self._backend == "sqlite":
             conn = self._get_conn()
+
+            if self._schema_version >= 4:
+                cur = conn.execute(
+                    "SELECT f.ortho, f.multext, f.phone, f.freq_opensubs, "
+                    "l.lemme, l.cgram "
+                    "FROM formes f "
+                    "JOIN lemmes l ON f.lemme_id = l.id "
+                    "WHERE l.lemme = ? COLLATE NOCASE "
+                    "AND l.cgram IN ('VER', 'AUX')",
+                    (normaliser_ortho(verbe),),
+                )
+                entries = []
+                for row in cur.fetchall():
+                    entry: dict[str, Any] = dict(row)
+                    multext = entry.get("multext") or ""
+                    if multext:
+                        traits = _decoder_multext(multext)
+                        entry["mode"] = traits.get("mode", "")
+                        entry["temps"] = traits.get("temps", "")
+                        entry["personne"] = traits.get("personne", "")
+                        entry["nombre"] = traits.get("nombre", "")
+                        entry["genre"] = traits.get("genre", "")
+                    entries.append(entry)
+                return _morphologie.conjuguer(entries)
+
             cur = conn.execute(
                 f"SELECT * FROM {self._table} "  # noqa: S608
                 f"WHERE lemme = ? COLLATE NOCASE "
@@ -376,6 +500,10 @@ class Lexique:
         """Toutes les formes flechies d'un lemme, avec filtre POS optionnel."""
         if self._backend == "sqlite":
             conn = self._get_conn()
+
+            if self._schema_version >= 4:
+                return self._formes_de_v4(conn, lemme, cgram)
+
             query = f"SELECT * FROM {self._table} WHERE lemme = ? COLLATE NOCASE"  # noqa: S608
             params: list[Any] = [normaliser_ortho(lemme)]
             if cgram is not None:
@@ -395,6 +523,40 @@ class Lexique:
 
         entries = self._get_index_lemme().get(normaliser_ortho(lemme), [])
         return _morphologie.formes_de(entries, cgram)
+
+    def _formes_de_v4(
+        self, conn: sqlite3.Connection, lemme: str, cgram: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """formes_de() pour schema v4."""
+        query = (
+            "SELECT f.ortho, f.multext, f.phone, f.nb_syllabes, "
+            "f.freq_opensubs, l.lemme, l.cgram, l.genre "
+            "FROM formes f "
+            "JOIN lemmes l ON f.lemme_id = l.id "
+            "WHERE l.lemme = ? COLLATE NOCASE"
+        )
+        params: list[Any] = [normaliser_ortho(lemme)]
+        if cgram is not None:
+            query += " AND l.cgram LIKE ?"
+            params.append(f"{cgram}%")
+        cur = conn.execute(query, params)
+        results = []
+        seen: set[str] = set()
+        for row in cur.fetchall():
+            entry: dict[str, Any] = dict(row)
+            multext = entry.get("multext") or ""
+            if multext:
+                traits = _decoder_multext(multext)
+                entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                entry["nombre"] = traits.get("nombre", "")
+                entry["mode"] = traits.get("mode", "")
+                entry["temps"] = traits.get("temps", "")
+                entry["personne"] = traits.get("personne", "")
+            ortho = str(entry.get("ortho", "")).lower()
+            if ortho not in seen:
+                seen.add(ortho)
+                results.append(entry)
+        return results
 
     def lemme_de(self, mot: str) -> str | None:
         """Lemme le plus frequent parmi les entrees d'un mot."""
@@ -419,22 +581,46 @@ class Lexique:
             suffixe_rev = "".join(reversed(suffixe))
             conn = self._get_conn()
             try:
-                cur = conn.execute(
-                    f"SELECT * FROM {self._table} "  # noqa: S608
-                    f"WHERE phone_reversed LIKE ? "
-                    f"ORDER BY freq_opensubs DESC LIMIT ?",
-                    (f"{suffixe_rev}%", limite),
-                )
-                colonnes = [desc[0] for desc in cur.description]
-                mapping = resoudre_colonnes(colonnes)
-                results = []
-                for row in cur.fetchall():
-                    entry: dict[str, Any] = {}
-                    for col, val in zip(colonnes, row):
-                        canon = mapping.get(col, col)
-                        entry[canon] = val
-                    results.append(entry)
-                return results
+                if self._schema_version >= 4:
+                    cur = conn.execute(
+                        "SELECT f.ortho, f.phone, f.phone_reversed, f.multext, "
+                        "f.nb_syllabes, f.freq_opensubs, l.lemme, l.cgram, l.genre "
+                        "FROM formes f "
+                        "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                        "WHERE f.phone_reversed LIKE ? "
+                        "ORDER BY f.freq_opensubs DESC",
+                        (f"{suffixe_rev}%",),
+                    )
+                    results = []
+                    seen: set[str] = set()
+                    for row in cur.fetchall():
+                        ortho = row["ortho"].lower()
+                        if ortho in seen:
+                            continue
+                        seen.add(ortho)
+                        entry: dict[str, Any] = dict(row)
+                        entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                        results.append(entry)
+                        if len(results) >= limite:
+                            break
+                    return results
+                else:
+                    cur = conn.execute(
+                        f"SELECT * FROM {self._table} "  # noqa: S608
+                        f"WHERE phone_reversed LIKE ? "
+                        f"ORDER BY freq_opensubs DESC LIMIT ?",
+                        (f"{suffixe_rev}%", limite),
+                    )
+                    colonnes = [desc[0] for desc in cur.description]
+                    mapping = resoudre_colonnes(colonnes)
+                    results = []
+                    for row in cur.fetchall():
+                        entry: dict[str, Any] = {}
+                        for col, val in zip(colonnes, row):
+                            canon = mapping.get(col, col)
+                            entry[canon] = val
+                        results.append(entry)
+                    return results
             except sqlite3.OperationalError:
                 # phone_reversed n'existe pas, scan complet
                 pass
@@ -446,44 +632,29 @@ class Lexique:
         """Mots contenant une sequence phonetique."""
         if self._backend == "sqlite":
             conn = self._get_conn()
-            cur = conn.execute(
-                f"SELECT * FROM {self._table} "  # noqa: S608
-                f"WHERE phone LIKE ? "
-                f"ORDER BY freq_opensubs DESC LIMIT ?",
-                (f"%{son}%", limite),
-            )
-            colonnes = [desc[0] for desc in cur.description]
-            mapping = resoudre_colonnes(colonnes)
-            results = []
-            for row in cur.fetchall():
-                entry: dict[str, Any] = {}
-                for col, val in zip(colonnes, row):
-                    canon = mapping.get(col, col)
-                    entry[canon] = val
-                results.append(entry)
-            return results
-
-        phone_index = self._get_index_phone()
-        return _phonetique.contient_son(phone_index, son, limite)
-
-    def mots_par_syllabes(
-        self, n: int, cgram: str | None = None, limite: int = 50,
-    ) -> list[dict[str, Any]]:
-        """Mots avec exactement N syllabes."""
-        if self._backend == "sqlite":
-            conn = self._get_conn()
-            query = (
-                f"SELECT * FROM {self._table} "  # noqa: S608
-                f"WHERE nb_syllabes = ?"
-            )
-            params: list[Any] = [n]
-            if cgram is not None:
-                query += " AND cgram LIKE ?"
-                params.append(f"{cgram}%")
-            query += f" ORDER BY freq_opensubs DESC LIMIT ?"
-            params.append(limite)
-            try:
-                cur = conn.execute(query, params)
+            if self._schema_version >= 4:
+                cur = conn.execute(
+                    "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
+                    "f.freq_opensubs, l.lemme, l.cgram "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    "WHERE f.phone LIKE ? "
+                    "ORDER BY f.freq_opensubs DESC LIMIT ?",
+                    (f"%{son}%", limite),
+                )
+                results = []
+                for row in cur.fetchall():
+                    entry: dict[str, Any] = dict(row)
+                    entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                    results.append(entry)
+                return results
+            else:
+                cur = conn.execute(
+                    f"SELECT * FROM {self._table} "  # noqa: S608
+                    f"WHERE phone LIKE ? "
+                    f"ORDER BY freq_opensubs DESC LIMIT ?",
+                    (f"%{son}%", limite),
+                )
                 colonnes = [desc[0] for desc in cur.description]
                 mapping = resoudre_colonnes(colonnes)
                 results = []
@@ -494,8 +665,71 @@ class Lexique:
                         entry[canon] = val
                     results.append(entry)
                 return results
-            except sqlite3.OperationalError:
-                pass  # colonne absente, fallback
+
+        phone_index = self._get_index_phone()
+        return _phonetique.contient_son(phone_index, son, limite)
+
+    def mots_par_syllabes(
+        self, n: int, cgram: str | None = None, limite: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Mots avec exactement N syllabes."""
+        if self._backend == "sqlite":
+            conn = self._get_conn()
+
+            if self._schema_version >= 4:
+                query = (
+                    "SELECT f.ortho, f.multext, f.phone, f.nb_syllabes, "
+                    "f.freq_opensubs, l.lemme, l.cgram, l.genre "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    "WHERE f.nb_syllabes = ?"
+                )
+                params: list[Any] = [n]
+                if cgram is not None:
+                    query += " AND l.cgram LIKE ?"
+                    params.append(f"{cgram}%")
+                query += " ORDER BY f.freq_opensubs DESC LIMIT ?"
+                params.append(limite)
+                try:
+                    cur = conn.execute(query, params)
+                    results = []
+                    for row in cur.fetchall():
+                        entry: dict[str, Any] = dict(row)
+                        multext = entry.get("multext") or ""
+                        if multext:
+                            traits = _decoder_multext(multext)
+                            entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                            entry["nombre"] = traits.get("nombre", "")
+                        entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                        results.append(entry)
+                    return results
+                except sqlite3.OperationalError:
+                    pass
+            else:
+                query = (
+                    f"SELECT * FROM {self._table} "  # noqa: S608
+                    f"WHERE nb_syllabes = ?"
+                )
+                params = [n]
+                if cgram is not None:
+                    query += " AND cgram LIKE ?"
+                    params.append(f"{cgram}%")
+                query += " ORDER BY freq_opensubs DESC LIMIT ?"
+                params.append(limite)
+                try:
+                    cur = conn.execute(query, params)
+                    colonnes = [desc[0] for desc in cur.description]
+                    mapping = resoudre_colonnes(colonnes)
+                    results = []
+                    for row in cur.fetchall():
+                        entry: dict[str, Any] = {}
+                        for col, val in zip(colonnes, row):
+                            canon = mapping.get(col, col)
+                            entry[canon] = val
+                        results.append(entry)
+                    return results
+                except sqlite3.OperationalError:
+                    pass  # colonne absente, fallback
 
         ortho_index = self._get_index_ortho()
         return _phonetique.mots_par_syllabes(ortho_index, n, cgram, limite)
@@ -503,13 +737,53 @@ class Lexique:
     # --- Methodes : Definitions multi-sens ---
 
     def definitions(self, mot: str, cgram: str | None = None) -> list[dict[str, Any]]:
-        """Definitions multiples depuis la table definitions.
+        """Definitions multiples depuis la table definitions (v3) ou concepts (v4).
 
         Retourne [] si la table est absente (compatibilite anciennes BDD).
         Ordonne par cgram, sens_num.
         """
         if self._backend != "sqlite":
             return []
+
+        if self._schema_version >= 4:
+            # v4 : deleguer vers concepts_de
+            concepts = self.concepts_de(mot, cgram)
+            results: list[dict[str, Any]] = []
+            for c in concepts:
+                d: dict[str, Any] = dict(c)
+                d["lemme"] = mot
+                d["domaine"] = c.get("theme") or ""
+                # Recuperer exemples, synonymes, antonymes pour compat v3
+                cid = c.get("id")
+                if cid is not None:
+                    d["exemples"] = self.exemples_de(cid)
+                    syn_concepts = self.synonymes_de(cid)
+                    # Retourner les noms de lemmes (dedupliques)
+                    seen_syn: set[str] = set()
+                    syn_words: list[str] = []
+                    for s in syn_concepts:
+                        w = s.get("_lemme") or ""
+                        if w and w.lower() not in seen_syn:
+                            seen_syn.add(w.lower())
+                            syn_words.append(w)
+                    d["synonymes"] = syn_words
+                    ant_concepts = self.antonymes_de(cid)
+                    seen_ant: set[str] = set()
+                    ant_words: list[str] = []
+                    for a in ant_concepts:
+                        w = a.get("_lemme") or ""
+                        if w and w.lower() not in seen_ant:
+                            seen_ant.add(w.lower())
+                            ant_words.append(w)
+                    d["antonymes"] = ant_words
+                else:
+                    d["exemples"] = []
+                    d["synonymes"] = []
+                    d["antonymes"] = []
+                d["tags"] = []
+                results.append(d)
+            return results
+
         conn = self._get_conn()
         try:
             if cgram:
@@ -527,9 +801,9 @@ class Lexique:
                     (mot,),
                 )
             rows = cur.fetchall()
-            results: list[dict[str, Any]] = []
+            results = []
             for row in rows:
-                d: dict[str, Any] = dict(row)
+                d = dict(row)
                 # Convertir les champs separes par ; en listes
                 for key in ("exemples", "synonymes", "antonymes", "tags"):
                     val = d.get(key)
@@ -575,26 +849,49 @@ class Lexique:
             conn = self._get_conn()
             conn.create_function("REGEXP", 2, lambda p, s: bool(regex.search(s)) if s else False)
             col = "phone" if champ == "phone" else "ortho"
-            cur = conn.execute(
-                f"SELECT * FROM {self._table} "  # noqa: S608
-                f"WHERE {col} REGEXP ? "
-                f"ORDER BY freq_opensubs DESC LIMIT ?",
-                (pattern, limite),
-            )
-            colonnes = [desc[0] for desc in cur.description]
-            mapping = resoudre_colonnes(colonnes)
-            results: list[dict[str, Any]] = []
-            seen: set[str] = set()
-            for row in cur.fetchall():
-                entry: dict[str, Any] = {}
-                for col_name, val in zip(colonnes, row):
-                    canon = mapping.get(col_name, col_name)
-                    entry[canon] = val
-                ortho = str(entry.get("ortho", "")).lower()
-                if ortho not in seen:
-                    seen.add(ortho)
-                    results.append(entry)
-            return results
+
+            if self._schema_version >= 4:
+                col_qualified = f"f.{col}"
+                cur = conn.execute(
+                    "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
+                    "f.freq_opensubs, l.lemme, l.cgram "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    f"WHERE {col_qualified} REGEXP ? "
+                    "ORDER BY f.freq_opensubs DESC LIMIT ?",
+                    (pattern, limite),
+                )
+                results: list[dict[str, Any]] = []
+                seen: set[str] = set()
+                for row in cur.fetchall():
+                    entry: dict[str, Any] = dict(row)
+                    entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                    ortho = str(entry.get("ortho", "")).lower()
+                    if ortho not in seen:
+                        seen.add(ortho)
+                        results.append(entry)
+                return results
+            else:
+                cur = conn.execute(
+                    f"SELECT * FROM {self._table} "  # noqa: S608
+                    f"WHERE {col} REGEXP ? "
+                    f"ORDER BY freq_opensubs DESC LIMIT ?",
+                    (pattern, limite),
+                )
+                colonnes = [desc[0] for desc in cur.description]
+                mapping = resoudre_colonnes(colonnes)
+                results = []
+                seen = set()
+                for row in cur.fetchall():
+                    entry: dict[str, Any] = {}
+                    for col_name, val in zip(colonnes, row):
+                        canon = mapping.get(col_name, col_name)
+                        entry[canon] = val
+                    ortho = str(entry.get("ortho", "")).lower()
+                    if ortho not in seen:
+                        seen.add(ortho)
+                        results.append(entry)
+                return results
 
         if champ == "phone":
             index = self._get_index_phone()
@@ -676,11 +973,25 @@ class Lexique:
         categorie: str | None = None,
         has_age: bool | None = None,
         has_phone: bool | None = None,
+        mode: str | None = None,
+        temps: str | None = None,
+        personne: str | None = None,
         limite: int = 100,
     ) -> list[dict[str, Any]]:
         """Filtre multi-critere sur l'ensemble du lexique."""
         if self._backend == "sqlite":
             conn = self._get_conn()
+
+            if self._schema_version >= 4:
+                return self._filtrer_v4(
+                    conn, cgram=cgram, genre=genre, nombre=nombre,
+                    freq_min=freq_min, freq_max=freq_max, nb_syllabes=nb_syllabes,
+                    age_min=age_min, age_max=age_max,
+                    has_age=has_age, has_phone=has_phone,
+                    mode=mode, temps=temps, personne=personne,
+                    limite=limite,
+                )
+
             conditions, params = self._build_filter_clauses(
                 cgram=cgram, genre=genre, nombre=nombre,
                 freq_min=freq_min, freq_max=freq_max, nb_syllabes=nb_syllabes,
@@ -718,14 +1029,92 @@ class Lexique:
             freq_min=freq_min,
             freq_max=freq_max,
             nb_syllabes=nb_syllabes,
-            age_min=age_min,
-            age_max=age_max,
-            illustrable_min=illustrable_min,
-            categorie=categorie,
-            has_age=has_age,
-            has_phone=has_phone,
             limite=limite,
         )
+
+    def _filtrer_v4(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        cgram: str | None = None,
+        genre: str | None = None,
+        nombre: str | None = None,
+        freq_min: float | None = None,
+        freq_max: float | None = None,
+        nb_syllabes: int | None = None,
+        age_min: float | None = None,
+        age_max: float | None = None,
+        has_age: bool | None = None,
+        has_phone: bool | None = None,
+        mode: str | None = None,
+        temps: str | None = None,
+        personne: str | None = None,
+        limite: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Filtre v4 avec multext patterns et JOIN lemmes."""
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        # Multext pattern pour genre/nombre/mode/temps/personne
+        multext_pattern = _filtre_multext(
+            pos=cgram, mode=mode, temps=temps,
+            personne=personne, nombre=nombre, genre=genre,
+        )
+        if multext_pattern and multext_pattern != "%":
+            conditions.append("f.multext LIKE ?")
+            params.append(multext_pattern)
+        elif cgram:
+            conditions.append("l.cgram LIKE ?")
+            params.append(f"{cgram}%")
+
+        if freq_min is not None:
+            conditions.append("f.freq_opensubs >= ?")
+            params.append(freq_min)
+        if freq_max is not None:
+            conditions.append("f.freq_opensubs <= ?")
+            params.append(freq_max)
+        if nb_syllabes is not None:
+            conditions.append("f.nb_syllabes = ?")
+            params.append(nb_syllabes)
+        if has_age is True:
+            conditions.append("l.age IS NOT NULL")
+        elif has_age is False:
+            conditions.append("l.age IS NULL")
+        if age_min is not None:
+            conditions.append("l.age >= ?")
+            params.append(age_min)
+        if age_max is not None:
+            conditions.append("l.age <= ?")
+            params.append(age_max)
+        if has_phone is True:
+            conditions.append("f.phone IS NOT NULL AND f.phone != ''")
+        elif has_phone is False:
+            conditions.append("(f.phone IS NULL OR f.phone = '')")
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+        query = (
+            "SELECT f.id, f.ortho, f.multext, f.phone, f.nb_syllabes, "
+            "f.freq_opensubs, l.lemme, l.cgram, l.genre, l.age "
+            "FROM formes f "
+            "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+            f"WHERE {where} LIMIT ?"
+        )
+        params.append(limite)
+        cur = conn.execute(query, params)
+        results = []
+        for row in cur.fetchall():
+            entry: dict[str, Any] = dict(row)
+            multext = entry.get("multext") or ""
+            if multext:
+                traits = _decoder_multext(multext)
+                entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                entry["nombre"] = traits.get("nombre", "")
+                entry["mode"] = traits.get("mode", "")
+                entry["temps"] = traits.get("temps", "")
+                entry["personne"] = traits.get("personne", "")
+            entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+            results.append(entry)
+        return results
 
     def compter(
         self,
@@ -746,16 +1135,63 @@ class Lexique:
         """Compte les formes matchant les filtres (sans les charger)."""
         if self._backend == "sqlite":
             conn = self._get_conn()
-            conditions, params = self._build_filter_clauses(
+
+            if self._schema_version >= 4:
+                # v4 : utiliser le meme schema que _filtrer_v4
+                conditions: list[str] = []
+                params: list[Any] = []
+                multext_pattern = _filtre_multext(
+                    pos=cgram, nombre=nombre, genre=genre,
+                )
+                if multext_pattern and multext_pattern != "%":
+                    conditions.append("f.multext LIKE ?")
+                    params.append(multext_pattern)
+                elif cgram:
+                    conditions.append("l.cgram LIKE ?")
+                    params.append(f"{cgram}%")
+                if freq_min is not None:
+                    conditions.append("f.freq_opensubs >= ?")
+                    params.append(freq_min)
+                if freq_max is not None:
+                    conditions.append("f.freq_opensubs <= ?")
+                    params.append(freq_max)
+                if nb_syllabes is not None:
+                    conditions.append("f.nb_syllabes = ?")
+                    params.append(nb_syllabes)
+                if has_age is True:
+                    conditions.append("l.age IS NOT NULL")
+                elif has_age is False:
+                    conditions.append("l.age IS NULL")
+                if age_min is not None:
+                    conditions.append("l.age >= ?")
+                    params.append(age_min)
+                if age_max is not None:
+                    conditions.append("l.age <= ?")
+                    params.append(age_max)
+                if has_phone is True:
+                    conditions.append("f.phone IS NOT NULL AND f.phone != ''")
+                elif has_phone is False:
+                    conditions.append("(f.phone IS NULL OR f.phone = '')")
+                where = " AND ".join(conditions) if conditions else "1=1"
+                query = (
+                    "SELECT COUNT(*) FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    f"WHERE {where}"
+                )
+                cur = conn.execute(query, params)
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+
+            conditions_v3, params_v3 = self._build_filter_clauses(
                 cgram=cgram, genre=genre, nombre=nombre,
                 freq_min=freq_min, freq_max=freq_max, nb_syllabes=nb_syllabes,
                 age_min=age_min, age_max=age_max,
                 illustrable_min=illustrable_min, categorie=categorie,
                 has_age=has_age, has_phone=has_phone,
             )
-            where = " AND ".join(conditions) if conditions else "1=1"
+            where = " AND ".join(conditions_v3) if conditions_v3 else "1=1"
             query = f"SELECT COUNT(*) FROM {self._table} WHERE {where}"  # noqa: S608
-            cur = conn.execute(query, params)
+            cur = conn.execute(query, params_v3)
             row = cur.fetchone()
             return int(row[0]) if row else 0
 
@@ -766,9 +1202,6 @@ class Lexique:
             all_entries,
             cgram=cgram, genre=genre, nombre=nombre,
             freq_min=freq_min, freq_max=freq_max, nb_syllabes=nb_syllabes,
-            age_min=age_min, age_max=age_max,
-            illustrable_min=illustrable_min, categorie=categorie,
-            has_age=has_age, has_phone=has_phone,
             limite=0,
         ))
 
@@ -839,31 +1272,86 @@ class Lexique:
 
         if self._backend == "sqlite":
             conn = self._get_conn()
-            conditions, params = self._build_filter_clauses(**filter_kwargs)
-            where = " AND ".join(conditions) if conditions else "1=1"
 
-            # Determiner les colonnes disponibles
-            cur_cols = conn.execute(f"PRAGMA table_info({self._table})")  # noqa: S608
-            all_cols = [row[1] for row in cur_cols.fetchall()]
+            if self._schema_version >= 4:
+                # v4 : utiliser un JOIN formes+lemmes
+                conditions: list[str] = []
+                params: list[Any] = []
+                cgram = filter_kwargs.get("cgram")
+                if cgram:
+                    conditions.append("l.cgram LIKE ?")
+                    params.append(f"{cgram}%")
+                genre = filter_kwargs.get("genre")
+                if genre:
+                    conditions.append("l.genre = ?")
+                    params.append(genre)
+                freq_min = filter_kwargs.get("freq_min")
+                if freq_min is not None:
+                    conditions.append("f.freq_opensubs >= ?")
+                    params.append(freq_min)
+                freq_max = filter_kwargs.get("freq_max")
+                if freq_max is not None:
+                    conditions.append("f.freq_opensubs <= ?")
+                    params.append(freq_max)
+                nb_syllabes = filter_kwargs.get("nb_syllabes")
+                if nb_syllabes is not None:
+                    conditions.append("f.nb_syllabes = ?")
+                    params.append(nb_syllabes)
+                has_phone = filter_kwargs.get("has_phone")
+                if has_phone is True:
+                    conditions.append("f.phone IS NOT NULL AND f.phone != ''")
+                elif has_phone is False:
+                    conditions.append("(f.phone IS NULL OR f.phone = '')")
 
-            if colonnes:
-                select_cols = [c for c in colonnes if c in all_cols]
+                where = " AND ".join(conditions) if conditions else "1=1"
+                query = (
+                    "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
+                    "f.nb_syllabes, f.syllabes, f.freq_opensubs, f.source, "
+                    "l.lemme, l.cgram, l.genre "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    f"WHERE {where}"
+                )
+                if limite:
+                    query += " LIMIT ?"
+                    params.append(limite)
+
+                cur = conn.execute(query, params)
+                col_names = [desc[0] for desc in cur.description]
+                for row in cur:
+                    entry = dict(zip(col_names, row))
+                    if colonnes:
+                        entry = {k: v for k, v in entry.items() if k in colonnes}
+                    yield entry
+                    count += 1
+                    if callback and count % batch_size == 0:
+                        callback(count)
             else:
-                select_cols = all_cols
+                conditions_v3, params_v3 = self._build_filter_clauses(**filter_kwargs)
+                where = " AND ".join(conditions_v3) if conditions_v3 else "1=1"
 
-            select = ", ".join(select_cols)
-            query = f"SELECT {select} FROM {self._table} WHERE {where}"  # noqa: S608
-            if limite:
-                query += " LIMIT ?"
-                params.append(limite)
+                # Determiner les colonnes disponibles
+                cur_cols = conn.execute(f"PRAGMA table_info({self._table})")  # noqa: S608
+                all_cols = [row[1] for row in cur_cols.fetchall()]
 
-            cur = conn.execute(query, params)
-            for row in cur:
-                entry = dict(zip(select_cols, row))
-                yield entry
-                count += 1
-                if callback and count % batch_size == 0:
-                    callback(count)
+                if colonnes:
+                    select_cols = [c for c in colonnes if c in all_cols]
+                else:
+                    select_cols = all_cols
+
+                select = ", ".join(select_cols)
+                query = f"SELECT {select} FROM {self._table} WHERE {where}"  # noqa: S608
+                if limite:
+                    query += " LIMIT ?"
+                    params_v3.append(limite)
+
+                cur = conn.execute(query, params_v3)
+                for row in cur:
+                    entry = dict(zip(select_cols, row))
+                    yield entry
+                    count += 1
+                    if callback and count % batch_size == 0:
+                        callback(count)
         else:
             ortho_index = self._get_index_ortho()
             all_entries = (e for entries in ortho_index.values() for e in entries)
@@ -1024,37 +1512,199 @@ class Lexique:
 
             # Recuperer les entrees completes pour les candidats
             placeholders = ",".join("?" for _ in candidats)
-            cur2 = conn.execute(
-                f"SELECT * FROM {self._table} "  # noqa: S608
-                f"WHERE ortho IN ({placeholders}) "
-                f"ORDER BY freq_opensubs DESC LIMIT ?",
-                candidats + [limite],
-            )
-            colonnes = [desc[0] for desc in cur2.description]
-            mapping = resoudre_colonnes(colonnes)
-            results: list[dict[str, Any]] = []
-            seen: set[str] = set()
-            for row in cur2.fetchall():
-                entry: dict[str, Any] = {}
-                for col, val in zip(colonnes, row):
-                    canon = mapping.get(col, col)
-                    entry[canon] = val
-                ortho = str(entry.get("ortho", "")).lower()
-                if ortho not in seen:
-                    seen.add(ortho)
-                    results.append(entry)
-            return results
+
+            if self._schema_version >= 4:
+                cur2 = conn.execute(
+                    "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
+                    "f.freq_opensubs, l.lemme, l.cgram "
+                    "FROM formes f "
+                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                    f"WHERE f.ortho IN ({placeholders}) "
+                    "ORDER BY f.freq_opensubs DESC LIMIT ?",
+                    candidats + [limite],
+                )
+                results: list[dict[str, Any]] = []
+                seen: set[str] = set()
+                for row in cur2.fetchall():
+                    entry: dict[str, Any] = dict(row)
+                    entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                    ortho = str(entry.get("ortho", "")).lower()
+                    if ortho not in seen:
+                        seen.add(ortho)
+                        results.append(entry)
+                return results
+            else:
+                cur2 = conn.execute(
+                    f"SELECT * FROM {self._table} "  # noqa: S608
+                    f"WHERE ortho IN ({placeholders}) "
+                    f"ORDER BY freq_opensubs DESC LIMIT ?",
+                    candidats + [limite],
+                )
+                colonnes = [desc[0] for desc in cur2.description]
+                mapping = resoudre_colonnes(colonnes)
+                results = []
+                seen = set()
+                for row in cur2.fetchall():
+                    entry: dict[str, Any] = {}
+                    for col, val in zip(colonnes, row):
+                        canon = mapping.get(col, col)
+                        entry[canon] = val
+                    ortho = str(entry.get("ortho", "")).lower()
+                    if ortho not in seen:
+                        seen.add(ortho)
+                        results.append(entry)
+                return results
 
         ortho_index = self._get_index_ortho()
         return _recherche.anagrammes(ortho_index, mot, limite)
 
-    # --- Methodes : Noms propres ---
+    # --- Methodes v4 : lemmes, concepts, relations ---
+
+    def info_lemme(self, lemme: str, cgram: str | None = None) -> EntreeLemme | None:
+        """Retourne les infos d'un lemme (v4 uniquement).
+
+        Args:
+            lemme: Le lemme a chercher
+            cgram: Filtre categorie grammaticale optionnel
+
+        Returns:
+            EntreeLemme ou None si introuvable
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return None
+        conn = self._get_conn()
+        if cgram:
+            cur = conn.execute(
+                "SELECT * FROM lemmes WHERE lemme = ? COLLATE NOCASE AND cgram = ?",
+                (normaliser_ortho(lemme), cgram),
+            )
+        else:
+            cur = conn.execute(
+                "SELECT * FROM lemmes WHERE lemme = ? COLLATE NOCASE",
+                (normaliser_ortho(lemme),),
+            )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return dict(row)  # type: ignore[return-value]
+
+    def concepts_de(self, lemme: str, cgram: str | None = None) -> list[Concept]:
+        """Retourne les concepts (sens) d'un lemme (v4 uniquement).
+
+        Args:
+            lemme: Le lemme a chercher
+            cgram: Filtre categorie optionnel
+
+        Returns:
+            Liste de Concept ordonnee par sens_num
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        if cgram:
+            cur = conn.execute(
+                "SELECT c.* FROM concepts c "
+                "JOIN lemmes l ON c.lemme_id = l.id "
+                "WHERE l.lemme = ? COLLATE NOCASE AND l.cgram = ? "
+                "ORDER BY c.sens_num",
+                (normaliser_ortho(lemme), cgram),
+            )
+        else:
+            cur = conn.execute(
+                "SELECT c.* FROM concepts c "
+                "JOIN lemmes l ON c.lemme_id = l.id "
+                "WHERE l.lemme = ? COLLATE NOCASE "
+                "ORDER BY c.sens_num",
+                (normaliser_ortho(lemme),),
+            )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def synonymes_de(self, concept_id: int) -> list[Concept]:
+        """Retourne les concepts synonymes d'un concept (v4 uniquement).
+
+        Chaque concept retourne inclut un champ ``_lemme`` avec le nom du lemme.
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT c.*, l.lemme AS _lemme FROM concepts c "
+            "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+            "JOIN concept_synonymes cs ON "
+            "  (cs.concept_b = c.id AND cs.concept_a = ?) OR "
+            "  (cs.concept_a = c.id AND cs.concept_b = ?)",
+            (concept_id, concept_id),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def antonymes_de(self, concept_id: int) -> list[Concept]:
+        """Retourne les concepts antonymes d'un concept (v4 uniquement).
+
+        Chaque concept retourne inclut un champ ``_lemme`` avec le nom du lemme.
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT c.*, l.lemme AS _lemme FROM concepts c "
+            "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+            "JOIN concept_antonymes ca ON "
+            "  (ca.concept_b = c.id AND ca.concept_a = ?) OR "
+            "  (ca.concept_a = c.id AND ca.concept_b = ?)",
+            (concept_id, concept_id),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def exemples_de(self, concept_id: int) -> list[str]:
+        """Retourne les exemples d'usage d'un concept (v4 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT exemple FROM concept_exemples WHERE concept_id = ?",
+            (concept_id,),
+        )
+        return [row[0] for row in cur.fetchall() if row[0]]
+
+    def categories_de(self, concept_id: int) -> list[str]:
+        """Retourne les categories d'un concept (v4 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT cat.label FROM categories cat "
+            "JOIN concept_categories cc ON cc.categorie_id = cat.id "
+            "WHERE cc.concept_id = ?",
+            (concept_id,),
+        )
+        return [row[0] for row in cur.fetchall() if row[0]]
+
+    def decoder_multext(self, tag: str) -> dict[str, str]:
+        """Decode un tag multext en traits lisibles. Delegue a _multext.py."""
+        return _decoder_multext(tag)
+
+    # --- Methodes NP unifiees (v4 : alias vers methodes standard) ---
 
     def info_nom_propre(self, mot: str) -> list[dict[str, Any]]:
         """Retourne les entrees noms propres (SQLite uniquement)."""
         if self._backend != "sqlite":
             return []
         conn = self._get_conn()
+
+        if self._schema_version >= 4:
+            # NP unifies : chercher dans formes+lemmes avec cgram="NOM PROPRE"
+            cur = conn.execute(
+                "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
+                "f.nb_syllabes, f.syllabes, f.freq_opensubs, f.source, "
+                "l.id AS lemme_id, l.lemme, l.cgram, l.genre, "
+                "l.etymologie, l.age "
+                "FROM formes f "
+                "JOIN lemmes l ON f.lemme_id = l.id "
+                "WHERE l.cgram = 'NOM PROPRE' AND f.ortho = ? COLLATE NOCASE",
+                (mot,),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
         try:
             cur = conn.execute(
                 "SELECT * FROM noms_propres WHERE lemme = ? COLLATE NOCASE",
@@ -1075,6 +1725,21 @@ class Lexique:
             return []
         conn = self._get_conn()
         conn.create_function("REGEXP", 2, lambda p, s: bool(regex.search(s)) if s else False)
+
+        if self._schema_version >= 4:
+            try:
+                cur = conn.execute(
+                    "SELECT f.ortho AS lemme, l.cgram, f.phone, f.freq_opensubs, "
+                    "l.etymologie, l.age "
+                    "FROM formes f "
+                    "JOIN lemmes l ON f.lemme_id = l.id "
+                    "WHERE l.cgram = 'NOM PROPRE' AND f.ortho REGEXP ? LIMIT ?",
+                    (pattern, limite),
+                )
+                return [dict(row) for row in cur.fetchall()]
+            except sqlite3.OperationalError:
+                return []
+
         try:
             cur = conn.execute(
                 "SELECT * FROM noms_propres WHERE lemme REGEXP ? LIMIT ?",
@@ -1089,6 +1754,16 @@ class Lexique:
         if self._backend != "sqlite":
             return False
         conn = self._get_conn()
+
+        if self._schema_version >= 4:
+            cur = conn.execute(
+                "SELECT 1 FROM formes f "
+                "JOIN lemmes l ON f.lemme_id = l.id "
+                "WHERE l.cgram = 'NOM PROPRE' AND f.ortho = ? COLLATE NOCASE LIMIT 1",
+                (mot,),
+            )
+            return cur.fetchone() is not None
+
         try:
             cur = conn.execute(
                 "SELECT 1 FROM noms_propres WHERE lemme = ? COLLATE NOCASE LIMIT 1",
@@ -1103,6 +1778,18 @@ class Lexique:
         if self._backend != "sqlite":
             return None
         conn = self._get_conn()
+
+        if self._schema_version >= 4:
+            cur = conn.execute(
+                "SELECT f.phone FROM formes f "
+                "JOIN lemmes l ON f.lemme_id = l.id "
+                "WHERE l.cgram = 'NOM PROPRE' AND f.ortho = ? COLLATE NOCASE "
+                "AND f.phone IS NOT NULL AND f.phone != '' LIMIT 1",
+                (mot,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+
         try:
             cur = conn.execute(
                 "SELECT phone FROM noms_propres "
@@ -1120,6 +1807,17 @@ class Lexique:
         if self._backend != "sqlite":
             return []
         conn = self._get_conn()
+
+        if self._schema_version >= 4:
+            cur = conn.execute(
+                "SELECT f.ortho AS lemme, l.cgram, f.phone "
+                "FROM formes f "
+                "JOIN lemmes l ON f.lemme_id = l.id "
+                "WHERE l.cgram = 'NOM PROPRE' AND f.phone = ?",
+                (phone,),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
         try:
             cur = conn.execute(
                 "SELECT * FROM noms_propres WHERE phone = ?",
@@ -1134,6 +1832,19 @@ class Lexique:
         if self._backend != "sqlite":
             return []
         conn = self._get_conn()
+
+        if self._schema_version >= 4:
+            cur = conn.execute(
+                "SELECT f.ortho AS lemme, l.cgram, f.phone "
+                "FROM formes f "
+                "JOIN lemmes l ON f.lemme_id = l.id "
+                "WHERE l.cgram = 'NOM PROPRE' "
+                "AND f.phone LIKE ? AND f.phone IS NOT NULL AND f.phone != '' "
+                "LIMIT ?",
+                (f"%{phone_suffix}", limite),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
         try:
             cur = conn.execute(
                 "SELECT * FROM noms_propres "

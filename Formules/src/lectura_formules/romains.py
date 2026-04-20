@@ -18,14 +18,8 @@ from lectura_formules._chargeur import (
 # Tables de conversion (chargees depuis JSON)
 # ══════════════════════════════════════════════════════════════════════════════
 
-_MODE_API = False
-try:
-    _INT_TO_ROMAN = _load_int_to_roman()
-    _ROMAN_VALUES = _load_roman_values()
-except FileNotFoundError:
-    _MODE_API = True
-    _INT_TO_ROMAN = []
-    _ROMAN_VALUES = []
+_INT_TO_ROMAN = _load_int_to_roman()
+_ROMAN_VALUES = _load_roman_values()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -97,7 +91,4 @@ def roman_to_int(s: str) -> int:
     return result
 
 
-try:
-    _SINGLE_VALUES = _load_single_values()
-except FileNotFoundError:
-    _SINGLE_VALUES = {}
+_SINGLE_VALUES = _load_single_values()

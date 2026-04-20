@@ -53,12 +53,6 @@ def filtrer(
     freq_min: float | None = None,
     freq_max: float | None = None,
     nb_syllabes: int | None = None,
-    age_min: float | None = None,
-    age_max: float | None = None,
-    illustrable_min: float | None = None,
-    categorie: str | None = None,
-    has_age: bool | None = None,
-    has_phone: bool | None = None,
     limite: int = 100,
 ) -> list[dict[str, Any]]:
     """Filtre multi-critere sur un iterateur d'entrees.
@@ -71,12 +65,6 @@ def filtrer(
         freq_min: Frequence minimale
         freq_max: Frequence maximale
         nb_syllabes: Nombre exact de syllabes
-        age_min: Age d'acquisition minimal (Manulex)
-        age_max: Age d'acquisition maximal (Manulex)
-        illustrable_min: Score illustrable minimal (0.0-1.0)
-        categorie: Categorie semantique exacte
-        has_age: True = age NOT NULL, False = age IS NULL
-        has_phone: True = phone NOT NULL/vide, False = phone NULL/vide
         limite: Nombre max de resultats
 
     Returns:
@@ -114,53 +102,8 @@ def filtrer(
             if nb != nb_syllabes:
                 continue
 
-        # Filtres educatifs
-        if has_age is not None:
-            raw_age = e.get("age")
-            age_present = raw_age is not None and raw_age != ""
-            if has_age and not age_present:
-                continue
-            if not has_age and age_present:
-                continue
-
-        if age_min is not None or age_max is not None:
-            raw_age = e.get("age")
-            if raw_age is None or raw_age == "":
-                continue
-            try:
-                age_val = float(raw_age)
-            except (ValueError, TypeError):
-                continue
-            if age_min is not None and age_val < age_min:
-                continue
-            if age_max is not None and age_val > age_max:
-                continue
-
-        if illustrable_min is not None:
-            raw_ill = e.get("illustrable")
-            if raw_ill is None or raw_ill == "":
-                continue
-            try:
-                ill_val = float(raw_ill)
-            except (ValueError, TypeError):
-                continue
-            if ill_val < illustrable_min:
-                continue
-
-        if categorie is not None:
-            if str(e.get("categorie", "") or "") != categorie:
-                continue
-
-        if has_phone is not None:
-            phone = str(e.get("phone", "") or "")
-            phone_present = bool(phone.strip())
-            if has_phone and not phone_present:
-                continue
-            if not has_phone and phone_present:
-                continue
-
         results.append(e)
-        if limite and len(results) >= limite:
+        if len(results) >= limite:
             break
 
     return results

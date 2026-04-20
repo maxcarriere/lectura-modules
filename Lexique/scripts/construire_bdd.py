@@ -55,11 +55,7 @@ CREATE TABLE IF NOT EXISTS formes (
     definition TEXT,
     registre TEXT,
     etymologie TEXT,
-    exemple TEXT,
-    age REAL,
-    illustrable REAL,
-    categorie TEXT,
-    criteres TEXT
+    exemple TEXT
 )
 """
 
@@ -79,9 +75,7 @@ CREATE TABLE IF NOT EXISTS noms_propres (
     sous_type TEXT,
     definition TEXT,
     etymologie TEXT,
-    phone TEXT,
-    age REAL,
-    illustrable REAL
+    phone TEXT
 )
 """
 
@@ -92,7 +86,6 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_cgram ON formes(cgram)",
     "CREATE INDEX IF NOT EXISTS idx_nb_syllabes ON formes(nb_syllabes)",
     "CREATE INDEX IF NOT EXISTS idx_phone_rev ON formes(phone_reversed)",
-    "CREATE INDEX IF NOT EXISTS idx_illustrable ON formes(illustrable)",
     "CREATE INDEX IF NOT EXISTS idx_rel_lemme ON relations(lemme, type)",
     "CREATE INDEX IF NOT EXISTS idx_rel_cible ON relations(cible, type)",
     "CREATE INDEX IF NOT EXISTS idx_np_lemme ON noms_propres(lemme COLLATE NOCASE)",
@@ -108,11 +101,10 @@ CSV_COLUMNS = [
     "freq_frwac", "freq_opensubs", "source", "synonymes",
     "antonymes", "domaine", "definition", "registre",
     "etymologie", "exemple",
-    "age", "illustrable", "categorie", "criteres",
 ]
 
 # Colonnes numeriques
-FLOAT_COLS = {"freq_frantext", "freq_lm10", "freq_frwac", "freq_opensubs", "age", "illustrable"}
+FLOAT_COLS = {"freq_frantext", "freq_lm10", "freq_frwac", "freq_opensubs"}
 INT_COLS = {"nb_syllabes"}
 
 BATCH_SIZE = 10_000
@@ -188,98 +180,12 @@ def ingerer_noms_propres(conn: sqlite3.Connection, np_csv_path: Path) -> int:
     return nb
 
 
-def enrichir_noms_propres_educatif(
-    conn: sqlite3.Connection, educatif_csv_path: Path,
-) -> int:
-    """Enrichit noms_propres avec age/illustrable depuis le CSV educatif (Mini).
-
-    Le CSV educatif contient des lemmes avec cgram='NP' pour les noms propres.
-    On joint par lemme (case-insensitive).
-
-    - Les NP deja presents dans noms_propres sont mis a jour (age, illustrable).
-    - Les NP absents sont inseres avec cgram='NOM PROPRE'.
-
-    Retourne le nombre total de lignes mises a jour + inserees.
-    """
-    if not educatif_csv_path.exists():
-        print(f"  (fichier educatif introuvable : {educatif_csv_path})")
-        return 0
-
-    # Charger l'index educatif (lemme_lower -> (lemme_original, age, illustrable))
-    edu_index: dict[str, tuple[str, float | None, float | None]] = {}
-    with open(educatif_csv_path, encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row.get("cgram", "").strip() != "NP":
-                continue
-            lemme_orig = row.get("lemme", "").strip()
-            if not lemme_orig:
-                continue
-            lemme_lower = lemme_orig.lower()
-            age_raw = row.get("age", "")
-            ill_raw = row.get("illustrable", "")
-            age = float(age_raw) if age_raw else None
-            ill = float(ill_raw) if ill_raw else None
-            if lemme_lower not in edu_index:
-                edu_index[lemme_lower] = (lemme_orig, age, ill)
-
-    if not edu_index:
-        print("  (aucun nom propre educatif trouve)")
-        return 0
-
-    print(f"  {len(edu_index)} noms propres educatifs a joindre...")
-
-    # Recuperer les lemmes deja presents dans noms_propres
-    cur = conn.execute("SELECT DISTINCT lower(lemme) FROM noms_propres")
-    existing_lemmes = {row[0] for row in cur.fetchall()}
-
-    # Separer en UPDATE (existants) et INSERT (manquants)
-    to_update: list[tuple] = []
-    to_insert: list[tuple] = []
-    for lemme_lower, (lemme_orig, age, ill) in edu_index.items():
-        if lemme_lower in existing_lemmes:
-            to_update.append((age, ill, lemme_lower))
-        else:
-            to_insert.append((lemme_orig, "NOM PROPRE", age, ill))
-
-    # UPDATE existants
-    if to_update:
-        update_sql = "UPDATE noms_propres SET age = ?, illustrable = ? WHERE lower(lemme) = ?"
-        conn.executemany(update_sql, to_update)
-        conn.commit()
-
-    # INSERT manquants
-    if to_insert:
-        insert_sql = (
-            "INSERT INTO noms_propres (lemme, cgram, age, illustrable) "
-            "VALUES (?, ?, ?, ?)"
-        )
-        conn.executemany(insert_sql, to_insert)
-        conn.commit()
-
-    print(f"  {len(to_update)} noms propres mis a jour (age/illustrable)")
-    print(f"  {len(to_insert)} noms propres inseres depuis Manulex")
-
-    # Compter les lignes avec age renseigne
-    cur = conn.execute("SELECT COUNT(*) FROM noms_propres WHERE age IS NOT NULL")
-    actual = cur.fetchone()[0]
-    print(f"  {actual} noms propres avec donnees educatives au total")
-    return len(to_update) + len(to_insert)
-
-
-def construire_bdd(
-    csv_path: Path,
-    db_path: Path,
-    np_csv_path: Path | None = None,
-    educatif_csv_path: Path | None = None,
-) -> None:
+def construire_bdd(csv_path: Path, db_path: Path, np_csv_path: Path | None = None) -> None:
     """Convertit un CSV lexique en base SQLite."""
     print(f"Source CSV : {csv_path}")
     print(f"Sortie DB  : {db_path}")
     if np_csv_path:
         print(f"Noms propres : {np_csv_path}")
-    if educatif_csv_path:
-        print(f"Educatif     : {educatif_csv_path}")
     print()
 
     if db_path.exists():
@@ -306,7 +212,6 @@ def construire_bdd(
         "freq_lm10", "freq_frwac", "freq_opensubs", "source",
         "synonymes", "antonymes", "domaine", "definition",
         "registre", "etymologie", "exemple",
-        "age", "illustrable", "categorie", "criteres",
     ]
     placeholders = ",".join("?" for _ in insert_cols)
     insert_sql = f"INSERT INTO formes ({','.join(insert_cols)}) VALUES ({placeholders})"
@@ -383,9 +288,6 @@ def construire_bdd(
         print("Ingestion des noms propres...")
         nb_np = ingerer_noms_propres(conn, np_csv_path)
         print(f"  {nb_np:>10,} noms propres inseres")
-        if educatif_csv_path:
-            print("Enrichissement educatif des noms propres...")
-            enrichir_noms_propres_educatif(conn, educatif_csv_path)
         print()
 
     # Index
@@ -411,30 +313,19 @@ def construire_bdd(
 
 
 def main() -> None:
-    import argparse
-
     default_csv = _SCRIPT_DIR.parent / "lexique_lectura.csv"
     default_db = _SCRIPT_DIR.parent / "lexique_lectura.db"
     default_np = _SCRIPT_DIR.parent.parent.parent / "Lexique" / "noms_propres.csv"
 
-    parser = argparse.ArgumentParser(description="Convertir le CSV lexique en SQLite")
-    parser.add_argument("csv", nargs="?", type=Path, default=default_csv, help="CSV source")
-    parser.add_argument("db", nargs="?", type=Path, default=default_db, help="DB sortie")
-    parser.add_argument("np", nargs="?", type=Path, default=default_np, help="CSV noms propres")
-    parser.add_argument(
-        "--educatif", type=Path, default=None,
-        help="CSV educatif (Mini lemmes.csv) pour enrichir noms propres avec age/illustrable",
-    )
-    args = parser.parse_args()
+    csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_csv
+    db_path = Path(sys.argv[2]) if len(sys.argv) > 2 else default_db
+    np_csv_path = Path(sys.argv[3]) if len(sys.argv) > 3 else default_np
 
-    if not args.csv.exists():
-        print(f"ERREUR : fichier introuvable : {args.csv}")
+    if not csv_path.exists():
+        print(f"ERREUR : fichier introuvable : {csv_path}")
         sys.exit(1)
 
-    np_path = args.np if args.np.exists() else None
-    edu_path = args.educatif if args.educatif and args.educatif.exists() else None
-
-    construire_bdd(args.csv, args.db, np_path, edu_path)
+    construire_bdd(csv_path, db_path, np_csv_path if np_csv_path.exists() else None)
 
 
 if __name__ == "__main__":

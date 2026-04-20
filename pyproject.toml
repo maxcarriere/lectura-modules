@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura"
-version = "2.0.0"
+version = "1.3.0"
 description = "Suite complète de traitement linguistique du français — tokenisation, phonémisation, alignement, syllabation, formules, lexique"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,18 +24,18 @@ classifiers = [
     "Topic :: Text Processing :: Linguistic",
 ]
 dependencies = [
-    "lectura-tokeniseur>=2.2",
-    "lectura-g2p>=2.0",
-    "lectura-p2g>=2.0",
-    "lectura-aligneur>=3.0",
-    "lectura-formules>=3.0",
-    "lectura-lexique>=1.3",
+    "lectura-tokeniseur>=2.0",
+    "lectura-g2p>=3.0",
+    "lectura-p2g>=3.0",
+    "lectura-aligneur>=2.2",
+    "lectura-formules>=2.0",
+    "lectura-lexique>=1.0",
 ]
 
 [project.optional-dependencies]
 onnx = [
-    "lectura-g2p[onnx]>=2.0",
-    "lectura-p2g[onnx]>=2.0",
+    "lectura-g2p[onnx]>=3.0",
+    "lectura-p2g[onnx]>=3.0",
 ]
 
 [project.urls]
