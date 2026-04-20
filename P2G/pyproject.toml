@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-p2g"
-version = "3.0.0"
+version = "3.0.1"
 description = "Conversion phonème-graphème du français (IPA → orthographe) — P2G + POS + Morpho (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"
