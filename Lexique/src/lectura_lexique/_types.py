@@ -34,6 +34,9 @@ class EntreeForme(TypedDict, total=False):
     nb_syllabes: int
     syllabes: str
     freq_opensubs: float
+    freq_frantext: float
+    freq_lm10: float
+    freq_frwac: float
     source: str
 
 
@@ -48,6 +51,9 @@ class EntreeLemme(TypedDict, total=False):
     sous_type: str
     etymologie: str
     freq_opensubs: float
+    freq_frantext: float
+    freq_lm10: float
+    freq_frwac: float
     age: float
     source: str
 

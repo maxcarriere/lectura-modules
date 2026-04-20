@@ -20,7 +20,7 @@ Modules/
 ├── Tokeniseur/    pip install lectura-tokeniseur
 ├── G2P/           pip install lectura-g2p
 ├── P2G/           pip install lectura-p2g
-├── Syllabeur/     pip install lectura-syllabeur
+├── Aligneur/      pip install lectura-aligneur
 ├── Formules/      pip install lectura-formules
 ├── Correcteur/    pip install lectura-correcteur  (en cours)
 ├── Lexique/       donnees linguistiques partagees
@@ -74,7 +74,7 @@ twine upload dist/*
 Packages PyPI :
 - `lectura` (meta-package)
 - `lectura-tokeniseur`, `lectura-g2p`, `lectura-p2g`
-- `lectura-syllabeur`, `lectura-formules`
+- `lectura-aligneur`, `lectura-formules`
 
 ### Etape 5 — Mettre a jour le site
 
@@ -94,20 +94,21 @@ git push origin main
 
 ### Backends d'inference (G2P, P2G)
 
-Trois backends disponibles, du plus rapide au zero-dependance :
+Quatre backends disponibles :
 
 | Backend | Dependance | Vitesse | Fichier poids |
 |---------|-----------|---------|---------------|
-| ONNX Runtime | `onnxruntime` | ~2 ms/phrase | `*_int8.onnx` (inclus dans pip) |
+| API | aucune | ~100 ms/phrase | aucun (serveur Lectura) |
+| ONNX Runtime | `onnxruntime` | ~2 ms/phrase | `*_int8.onnx` (serveur) |
 | NumPy | `numpy` | ~50 ms/phrase | `*_weights.json` (modeles_numpy/) |
 | Pure Python | aucune | ~200 ms/phrase | `*_weights.json` (modeles_numpy/) |
 
-Les modeles ONNX sont inclus dans le package pip.
-Les poids JSON (numpy/pure) sont dans `modeles_numpy/` et copies par l'exporter.
+Factory `creer_engine(mode)` : auto-detecte local vs API.
+Les modeles ne sont PAS dans le wheel PyPI (Niveau 1). L'utilisateur PyPI passe par l'API.
 
 ### Zero dependance
 
-Tokeniseur, Formules et Syllabeur n'ont aucune dependance Python.
+Tokeniseur, Formules et Aligneur n'ont aucune dependance Python.
 G2P et P2G fonctionnent sans dependance via le backend pur Python.
 
 ### Conventions

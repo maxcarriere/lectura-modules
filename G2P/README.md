@@ -2,14 +2,14 @@
 
 **Modèle unifié G2P + POS + Morphologie + Liaison pour le français**
 
-Un seul modèle BiLSTM char-level multi-tête (1.75M paramètres, ONNX INT8 = 1.8 Mo) qui prédit simultanément :
+Un seul modèle BiLSTM char-level multi-tête avec features lexicales (ONNX INT8) qui prédit simultanément :
 
 - **G2P** : transcription phonémique IPA (98.5% word accuracy)
-- **POS** : étiquetage morpho-syntaxique — 19 tags (98.2% accuracy)
-- **Morphologie** : genre, nombre, temps, mode, personne, forme verbale (95-99%)
+- **POS** : étiquetage morpho-syntaxique — 19 tags (98.5% accuracy)
+- **Morphologie** : genre, nombre, temps, mode, personne, forme verbale (96-99.8%)
 - **Liaison** : prédiction des liaisons obligatoires/facultatives (F1 90.6%)
 
-Trois backends d'inférence : ONNX Runtime, NumPy, ou pur Python (zéro dépendance).
+Quatre backends d'inférence : ONNX Runtime, NumPy, pur Python (zéro dépendance), ou API serveur.
 
 ## Démarrage rapide
 
@@ -21,15 +21,14 @@ pip install lectura-g2p[numpy]      # backend NumPy
 pip install lectura-g2p[onnx]       # backend ONNX Runtime (le plus rapide)
 ```
 
-### Utilisation minimale (ONNX — recommande)
+### Utilisation rapide (factory — recommande)
 
 ```python
-from lectura_nlp import get_model_path
-from lectura_nlp.inference_onnx import OnnxInferenceEngine
+from lectura_nlp import creer_engine
 from lectura_nlp.tokeniseur import tokeniser
 
-engine = OnnxInferenceEngine(get_model_path("unifie_int8.onnx"),
-                              get_model_path("unifie_vocab.json"))
+# Mode auto : utilise les modeles locaux si presents, sinon l'API
+engine = creer_engine()
 
 tokens = tokeniser("Les enfants sont arrives a la maison.")
 result = engine.analyser(tokens)
@@ -40,24 +39,31 @@ print(result["liaison"])  # ['Lz', 'none', 'Lt', 'none', 'none', 'none', 'none']
 print(result["morpho"])   # {'Number': ['Plur', ...], 'Gender': [...], ...}
 ```
 
+Modes disponibles : `"auto"` (defaut), `"local"`, `"api"`, `"onnx"`, `"numpy"`, `"pure"`.
+
+## Mode API (zero config)
+
+Sans modeles locaux, `creer_engine()` utilise automatiquement l'API Lectura :
+
+```python
+engine = creer_engine()  # mode="auto" → API si pas de modeles locaux
+# ou explicitement :
+engine = creer_engine(mode="api", api_url="https://api.lec-tu-ra.com")
+```
+
+Variables d'environnement : `LECTURA_API_URL`, `LECTURA_API_KEY`.
+
 ## Poids NumPy / Pure Python (optionnel)
 
-Le package pip inclut uniquement le modele ONNX INT8 (1.8 Mo).
-Pour utiliser les backends **NumPy** ou **Pure Python**, il faut telecharger
-le fichier de poids JSON (18 Mo) depuis GitHub :
+Les backends **NumPy** et **Pure Python** necessitent les poids JSON depuis GitHub :
 
 ```bash
-# Telecharger les poids NumPy/Pure
-curl -L -o unifie_weights.json \
-  https://github.com/maxcarriere/lectura-modules/raw/main/G2P/modeles_numpy/unifie_weights.json
+curl -L -o unifie_v2_weights.json \
+  https://github.com/maxcarriere/lectura-modules/raw/main/G2P/modeles_numpy/unifie_v2_weights.json
 ```
 
 ```python
-from lectura_nlp.inference_numpy import NumpyInferenceEngine
-from lectura_nlp import get_model_path
-
-engine = NumpyInferenceEngine("unifie_weights.json",
-                              get_model_path("unifie_vocab.json"))
+engine = creer_engine(mode="numpy")
 result = engine.analyser(tokeniser("Bonjour le monde."))
 ```
 
@@ -65,26 +71,27 @@ result = engine.analyser(tokeniser("Bonjour le monde."))
 
 | Backend | Dépendances | Vitesse | Usage |
 |---------|------------|---------|-------|
-| **ONNX Runtime** | `onnxruntime` | ~2 ms/phrase | Production |
-| **NumPy** | `numpy` | ~50 ms/phrase | Léger, recommandé |
-| **Pur Python** | aucune | ~200 ms/phrase | Embarqué, portabilité max |
+| **API** | aucune | ~100 ms/phrase | Defaut (Niveau 1), zero config |
+| **ONNX Runtime** | `onnxruntime` | ~2 ms/phrase | Production locale |
+| **NumPy** | `numpy` | ~50 ms/phrase | Leger |
+| **Pur Python** | aucune | ~200 ms/phrase | Embarque, portabilite max |
 
-Les trois backends produisent des résultats identiques (vérification croisée dans les tests).
+Les backends locaux (ONNX, NumPy, Pure) produisent des résultats identiques.
 
-## Benchmarks (test set)
+## Benchmarks (dev set, modele V2 avec features lexicales)
 
 | Tâche | Métrique | Score |
 |-------|----------|-------|
 | **G2P** | Word Accuracy | **98.5%** |
 | **G2P** | PER (Phone Error Rate) | **0.5%** |
-| **POS** | Accuracy | **98.2%** |
+| **POS** | Accuracy | **98.5%** |
 | **Liaison** | Macro F1 | **90.6%** |
-| **Morpho** — Number | Accuracy | **97.0%** |
-| **Morpho** — Gender | Accuracy | **95.1%** |
-| **Morpho** — VerbForm | Accuracy | **98.8%** |
-| **Morpho** — Mood | Accuracy | **97.7%** |
-| **Morpho** — Tense | Accuracy | **97.8%** |
-| **Morpho** — Person | Accuracy | **99.2%** |
+| **Morpho** — Number | Accuracy | **96.4%** |
+| **Morpho** — Gender | Accuracy | **98.3%** |
+| **Morpho** — VerbForm | Accuracy | **99.6%** |
+| **Morpho** — Mood | Accuracy | **99.8%** |
+| **Morpho** — Tense | Accuracy | **99.8%** |
+| **Morpho** — Person | Accuracy | **99.7%** |
 
 Voir [EVALUATION.md](EVALUATION.md) pour les résultats détaillés.
 
@@ -94,7 +101,11 @@ Voir [EVALUATION.md](EVALUATION.md) pour les résultats détaillés.
 
 Tokenise une phrase française (gestion apostrophes, ponctuation, contractions).
 
-### `engine.analyser(tokens) -> dict`
+### `creer_engine(mode, api_url, api_key, lexicon_path)`
+
+Factory pour creer un engine d'inference. Modes : `"auto"`, `"local"`, `"api"`, `"onnx"`, `"numpy"`, `"pure"`.
+
+### `engine.analyser(tokens, *, use_lex=True) -> dict`
 
 Analyse une liste de tokens et retourne un dictionnaire :
 - `tokens` : liste des tokens d'entrée
@@ -102,6 +113,8 @@ Analyse une liste de tokens et retourne un dictionnaire :
 - `pos` : étiquette POS par token
 - `liaison` : label liaison par token (`none`, `Lz`, `Lt`, `Ln`, `Lr`, `Lp`)
 - `morpho` : dict de listes par trait (`Number`, `Gender`, `VerbForm`, `Mood`, `Tense`, `Person`)
+
+Le parametre `use_lex=False` desactive les features lexicales (utile pour le benchmarking).
 
 ### `corriger_g2p(mot, ipa) -> str`
 
@@ -111,23 +124,25 @@ Applique la table de corrections puis les règles (ex+consonne, ex+voyelle, yod)
 
 Applique les consonnes de liaison entre tokens consécutifs.
 
-## Architecture du modèle
+## Architecture du modèle (V2)
 
 ```
 Phrase → Char Embedding (64d) → Shared BiLSTM (2×160h → 320d)
                                         │
                     ┌───────────────────┼───────────────────┐
                     ↓                                       ↓
-              G2P Head (per-char)              Word BiLSTM (128h → 256d)
+              G2P Head (per-char)         Word repr (320d) + Lex Features (24d)
               Linear(320→40)                        │
+                                          Word BiLSTM (128h → 256d)
+                                                │
                                     ┌───┬───┬───┬───┬───┬───┬───┐
                                    POS Num Gen VF  Mood Tns Per Liaison
 ```
 
 - **Entrée** : séquence de caractères avec `<BOS>`, `<SEP>`, `<EOS>`
+- **Lex Features** : 24d par mot (21 POS one-hot + known + n_candidates + unambiguous)
 - **G2P** : prédiction par caractère avec labels `_CONT` (continuation)
-- **Têtes mot** : représentation mot = fwd[dernier_char] || bwd[premier_char]
-- **Paramètres** : 1,747,108 (~1.75M)
+- **Têtes mot** : représentation mot = fwd[dernier_char] || bwd[premier_char] + lex_proj(24→24)
 
 ## Limites connues
 
