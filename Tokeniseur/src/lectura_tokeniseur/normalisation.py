@@ -170,14 +170,14 @@ def _normalize_dashes(text: str) -> str:
         if next_.isdigit() and (prev.isdigit() or prev.lower() in ("e",)):
             continue
         # Signe négatif devant un chiffre en début ou après opérateur : -12, (-3
-        if next_.isdigit() and (prev == "" or prev in " ([:=<>≤≥≠,;"):
+        if next_.isdigit() and (prev == "" or prev in "([:=<>≤≥≠,;"):
             continue
         # Signe négatif devant un symbole maths (√, ∑, ∏, ∫) : -√3
-        if next_ in "√∑∏∫∂∇" and (prev == "" or prev in " ([:=<>≤≥≠,;"):
+        if next_ in "√∑∏∫∂∇" and (prev == "" or prev in "([:=<>≤≥≠,;"):
             continue
         # Signe négatif devant une variable (1 lettre seule) : -x, -a
         # Mais pas devant un mot : -bonjour doit être normalisé
-        if next_.isalpha() and (prev == "" or prev in " ([:=<>≤≥≠,;"):
+        if next_.isalpha() and (prev == "" or prev in "([:=<>≤≥≠,;"):
             after = chars[i + 2] if i + 2 < n else ""
             if not after.isalpha():
                 continue

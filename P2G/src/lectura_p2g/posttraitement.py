@@ -7,34 +7,17 @@ Deux stratégies complémentaires :
 
 from __future__ import annotations
 
-_HOMOPHONES_POS: dict[tuple[str, str], str] | None = None
-_PLUR_DET: frozenset[str] | None = None
-_SING_DET: frozenset[str] | None = None
-_NO_PLURAL_S: frozenset[str] | None = None
+from lectura_p2g._chargeur import (
+    homophones_pos as _load_homophones_pos,
+    determinants_pluriel as _load_plur_det,
+    determinants_singulier as _load_sing_det,
+    invariables_pluriel as _load_no_plural_s,
+)
 
-
-def _get_homophones_pos() -> dict[tuple[str, str], str]:
-    global _HOMOPHONES_POS
-    if _HOMOPHONES_POS is None:
-        from lectura_p2g._chargeur import homophones_pos
-        _HOMOPHONES_POS = homophones_pos()
-    return _HOMOPHONES_POS
-
-
-def _get_plur_det() -> frozenset[str]:
-    global _PLUR_DET
-    if _PLUR_DET is None:
-        from lectura_p2g._chargeur import determinants_pluriel
-        _PLUR_DET = determinants_pluriel()
-    return _PLUR_DET
-
-
-def _get_no_plural_s() -> frozenset[str]:
-    global _NO_PLURAL_S
-    if _NO_PLURAL_S is None:
-        from lectura_p2g._chargeur import invariables_pluriel
-        _NO_PLURAL_S = invariables_pluriel()
-    return _NO_PLURAL_S
+_HOMOPHONES_POS = _load_homophones_pos()
+_PLUR_DET = _load_plur_det()
+_SING_DET = _load_sing_det()
+_NO_PLURAL_S = _load_no_plural_s()
 
 
 # ── Correction par mot (v1, morpho-based) ──────────────────────────
@@ -58,9 +41,8 @@ def corriger_p2g(
 
     # ── Correction homophones POS-aware (priorité haute) ──
     key = (ortho.lower(), pos)
-    homophones = _get_homophones_pos()
-    if key in homophones:
-        return homophones[key]
+    if key in _HOMOPHONES_POS:
+        return _HOMOPHONES_POS[key]
 
     if morpho is None:
         return ortho
@@ -153,8 +135,6 @@ def corriger_phrase_v2(
 
     result = list(ortho_words)
     n = len(result)
-    plur_det = _get_plur_det()
-    no_plural_s = _get_no_plural_s()
 
     for i in range(n):
         pos = pos_tags[i] if i < len(pos_tags) else ""
@@ -164,10 +144,10 @@ def corriger_phrase_v2(
         if i > 0 and pos in ("NOM", "ADJ"):
             prev = result[i - 1].lower()
             if (
-                prev in plur_det
+                prev in _PLUR_DET
                 and not curr.endswith(("s", "x", "z"))
                 and len(curr) > 1
-                and curr.lower() not in no_plural_s
+                and curr.lower() not in _NO_PLURAL_S
             ):
                 candidate = curr + "s"
                 if lexique is None or candidate.lower() in lexique:
@@ -181,10 +161,10 @@ def corriger_phrase_v2(
         ):
             prev2 = result[i - 2].lower()
             if (
-                prev2 in plur_det
+                prev2 in _PLUR_DET
                 and not result[i].endswith(("s", "x", "z"))
                 and len(result[i]) > 1
-                and result[i].lower() not in no_plural_s
+                and result[i].lower() not in _NO_PLURAL_S
             ):
                 candidate = result[i] + "s"
                 if lexique is None or candidate.lower() in lexique:

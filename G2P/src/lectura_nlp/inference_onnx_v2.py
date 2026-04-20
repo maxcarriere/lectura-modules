@@ -105,7 +105,7 @@ class OnnxInferenceEngineV2:
             self.lexicon = None
 
     def _encode_sentence(
-        self, tokens: list[str]
+        self, tokens: list[str], *, use_lex: bool = True,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str]]:
         """Encode tokens en inputs ONNX (char_ids, word_starts, word_ends, lex_features)."""
         chars: list[str] = ["<BOS>"]
@@ -133,17 +133,28 @@ class OnnxInferenceEngineV2:
         # Build lex features
         lex_feats = []
         for token in tokens:
-            lex_feats.append(_build_lex_features(token, self.lexicon))
+            if use_lex:
+                lex_feats.append(_build_lex_features(token, self.lexicon))
+            else:
+                lex_feats.append([0.0] * self.lex_feature_dim)
         lex_features = np.array([lex_feats], dtype=np.float32)
 
         return char_ids, ws, we, lex_features, chars
 
-    def analyser(self, tokens: list[str]) -> dict[str, Any]:
-        """API V1-compatible. Retourne le résultat standard (argmax)."""
+    def analyser(self, tokens: list[str], *, use_lex: bool = True) -> dict[str, Any]:
+        """API V1-compatible. Retourne le résultat standard (argmax).
+
+        Args:
+            tokens: Liste de tokens.
+            use_lex: Si True (defaut), utilise les features lexicales.
+                     Si False, envoie des zeros (comportement V1).
+        """
         if not tokens:
             return {"tokens": [], "g2p": [], "pos": [], "liaison": [], "morpho": {}}
 
-        char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(tokens)
+        char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(
+            tokens, use_lex=use_lex,
+        )
 
         outputs = self.session.run(
             None,
@@ -208,6 +219,8 @@ class OnnxInferenceEngineV2:
         tokens: list[str],
         top_k: int = 3,
         candidates: dict[str, list[str]] | None = None,
+        *,
+        use_lex: bool = True,
     ) -> dict[str, Any]:
         """API V2 : comme analyser() + top-K POS/Morpho avec scores de confiance.
 
@@ -216,6 +229,7 @@ class OnnxInferenceEngineV2:
             top_k: Nombre de candidats POS/Morpho à retourner.
             candidates: Candidats POS par mot {mot: [pos1, pos2, ...]}.
                         Si None, utilise le lexique interne.
+            use_lex: Si True (defaut), utilise les features lexicales.
 
         Returns:
             Résultat standard + :
@@ -229,7 +243,9 @@ class OnnxInferenceEngineV2:
                 "pos_scores": [], "morpho_scores": {}, "confiance_pos": [],
             }
 
-        char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(tokens)
+        char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(
+            tokens, use_lex=use_lex,
+        )
 
         outputs = self.session.run(
             None,

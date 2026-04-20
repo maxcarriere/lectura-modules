@@ -99,6 +99,7 @@ class OnnxInferenceEngineV2:
 
     def _encode_sentence(
         self, ipa_words: list[str], ortho_words: list[str] | None = None,
+        *, use_lex: bool = True,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str]]:
         """Encode IPA words en inputs ONNX.
 
@@ -106,6 +107,7 @@ class OnnxInferenceEngineV2:
             ipa_words: Mots IPA.
             ortho_words: Mots orthographiques pour lookup lexique.
                          Si None, pas de lex features.
+            use_lex: Si True, utilise les features lexicales.
         """
         chars: list[str] = ["<BOS>"]
         word_starts: list[int] = []
@@ -129,10 +131,10 @@ class OnnxInferenceEngineV2:
         ws = np.array([word_starts], dtype=np.int64)
         we = np.array([word_ends], dtype=np.int64)
 
-        # Build lex features from ortho_words (if available)
+        # Build lex features from ortho_words (if available and use_lex)
         lex_feats = []
         for w_idx in range(len(ipa_words)):
-            if ortho_words and w_idx < len(ortho_words):
+            if use_lex and ortho_words and w_idx < len(ortho_words):
                 lex_feats.append(_build_lex_features(ortho_words[w_idx], self.lexicon))
             else:
                 lex_feats.append([0.0] * self.lex_feature_dim)
@@ -143,18 +145,20 @@ class OnnxInferenceEngineV2:
 
     def analyser(
         self, ipa_words: list[str], ortho_words: list[str] | None = None,
+        *, use_lex: bool = True,
     ) -> dict[str, Any]:
         """API V1-compatible.
 
         Args:
             ipa_words: Mots IPA.
             ortho_words: Mots orthographiques pour lookup lexique (optionnel).
+            use_lex: Si True (defaut), utilise les features lexicales.
         """
         if not ipa_words:
             return {"ipa_words": [], "ortho": [], "pos": [], "morpho": {}}
 
         char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(
-            ipa_words, ortho_words
+            ipa_words, ortho_words, use_lex=use_lex,
         )
 
         outputs = self.session.run(
@@ -211,6 +215,8 @@ class OnnxInferenceEngineV2:
         ipa_words: list[str],
         ortho_words: list[str] | None = None,
         top_k: int = 3,
+        *,
+        use_lex: bool = True,
     ) -> dict[str, Any]:
         """API V2 : comme analyser() + top-K POS/Morpho avec scores."""
         if not ipa_words:
@@ -220,7 +226,7 @@ class OnnxInferenceEngineV2:
             }
 
         char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(
-            ipa_words, ortho_words
+            ipa_words, ortho_words, use_lex=use_lex,
         )
 
         outputs = self.session.run(
@@ -310,6 +316,8 @@ class OnnxInferenceEngineV2:
         ipa_words: list[str],
         ortho_words: list[str] | None = None,
         k: int = 5,
+        *,
+        use_lex: bool = True,
     ) -> dict[str, Any]:
         """Retourne alternatives P2G + top-K POS/Morpho.
 
@@ -324,7 +332,7 @@ class OnnxInferenceEngineV2:
             }
 
         char_ids, word_starts, word_ends, lex_features, chars = self._encode_sentence(
-            ipa_words, ortho_words
+            ipa_words, ortho_words, use_lex=use_lex,
         )
 
         outputs = self.session.run(

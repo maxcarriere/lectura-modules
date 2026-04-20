@@ -1,4 +1,4 @@
-"""Inférence NumPy (sans PyTorch/ONNX) pour le modèle unifié.
+"""Inférence NumPy (sans PyTorch/ONNX) pour le modèle unifié V2 (avec lex_features).
 
 Charge les poids depuis le JSON et effectue l'inférence en NumPy pur.
 Dépendance : numpy
@@ -18,6 +18,38 @@ from typing import Any
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# POS keys for lex features (same order as training)
+ALL_LEX_POS = [
+    "ADJ", "ADJ:dem", "ADJ:ind", "ADJ:int", "ADJ:num", "ADJ:pos",
+    "ADV", "ART:def", "ART:ind", "AUX", "CON", "INTJ",
+    "NOM", "PRE",
+    "PRO:dem", "PRO:ind", "PRO:int", "PRO:per", "PRO:pos", "PRO:rel",
+    "VER",
+]
+
+LEX_FEATURE_DIM = len(ALL_LEX_POS) + 3  # 24
+
+
+def _build_lex_features(word: str, lexicon: dict[str, list[str]] | None) -> list[float]:
+    """Construit le vecteur lex features (24d) pour un mot."""
+    feats = [0.0] * LEX_FEATURE_DIM
+    if lexicon is None:
+        return feats
+    candidates = lexicon.get(word.lower())
+    if candidates is None:
+        return feats
+    feats[len(ALL_LEX_POS)] = 1.0  # known
+    feats[len(ALL_LEX_POS) + 1] = min(len(candidates) / 5.0, 1.0)  # n_cands
+    feats[len(ALL_LEX_POS) + 2] = 1.0 if len(candidates) == 1 else 0.0  # unambiguous
+    for pos in candidates:
+        if pos in ALL_LEX_POS:
+            feats[ALL_LEX_POS.index(pos)] = 1.0
+        else:
+            for i, lex_pos in enumerate(ALL_LEX_POS):
+                if lex_pos.startswith(pos + ":") or lex_pos == pos:
+                    feats[i] = 1.0
+    return feats
 
 
 def _sigmoid(x: np.ndarray) -> np.ndarray:
@@ -97,9 +129,15 @@ class BiLSTM:
 
 
 class NumpyInferenceEngine:
-    """Inférence NumPy pour le modèle unifié."""
+    """Inférence NumPy pour le modèle unifié V2."""
 
-    def __init__(self, weights_path: str | Path, vocab_path: str | Path):
+    def __init__(
+        self,
+        weights_path: str | Path,
+        vocab_path: str | Path,
+        lexicon_path: str | Path | None = None,
+        lexicon: dict[str, list[str]] | None = None,
+    ):
         logger.info("Loading G2P NumPy model from %s", weights_path)
         with open(vocab_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -113,6 +151,18 @@ class NumpyInferenceEngine:
         self.idx2morpho = {}
         for feat, vocab in vocabs["morpho_vocabs"].items():
             self.idx2morpho[feat] = {int(v): k for k, v in vocab.items()}
+
+        self.lex_feature_dim = self.config.get("lex_feature_dim", LEX_FEATURE_DIM)
+
+        # Load lexicon
+        if lexicon is not None:
+            self.lexicon = lexicon
+        elif lexicon_path is not None:
+            with open(lexicon_path, encoding="utf-8") as f:
+                self.lexicon = json.load(f)
+            logger.info("Loaded lexicon: %d words", len(self.lexicon))
+        else:
+            self.lexicon = None
 
         # Load weights
         with open(weights_path, encoding="utf-8") as f:
@@ -159,6 +209,12 @@ class NumpyInferenceEngine:
         self.g2p_weight = self._get("g2p_head.weight")
         self.g2p_bias = self._get("g2p_head.bias")
 
+        # Lex features projection (V2)
+        self.has_lex_proj = "lex_proj.weight" in self.weights
+        if self.has_lex_proj:
+            self.lex_proj_weight = self._get("lex_proj.weight")
+            self.lex_proj_bias = self._get("lex_proj.bias")
+
         # Word BiLSTM
         self.word_bilstm = self._build_lstm(
             "word_lstm", self.config.get("word_num_layers", 1)
@@ -202,7 +258,7 @@ class NumpyInferenceEngine:
         char_ids = [self.char2idx.get(ch, 1) for ch in chars]
         return char_ids, word_starts, word_ends
 
-    def analyser(self, tokens: list[str]) -> dict[str, Any]:
+    def analyser(self, tokens: list[str], *, use_lex: bool = True) -> dict[str, Any]:
         logger.debug("analyser() called with %s tokens", len(tokens))
         if not tokens:
             return {"tokens": [], "g2p": [], "pos": [], "liaison": [], "morpho": {}}
@@ -239,6 +295,15 @@ class NumpyInferenceEngine:
         for w in range(n_words):
             word_repr[w, :char_hidden] = fwd[word_ends[w]]
             word_repr[w, char_hidden:] = bwd[word_starts[w]]
+
+        # Lex features
+        if use_lex and self.has_lex_proj:
+            lex_feats = np.array(
+                [_build_lex_features(t, self.lexicon) for t in tokens],
+                dtype=np.float32,
+            )
+            lex_proj = self._linear(lex_feats, self.lex_proj_weight, self.lex_proj_bias)
+            word_repr = np.concatenate([word_repr, lex_proj], axis=-1)
 
         # Word BiLSTM
         word_out = self.word_bilstm.forward(word_repr)

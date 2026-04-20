@@ -1,4 +1,4 @@
-"""Inférence pur Python (zéro dépendance) pour le modèle unifié.
+"""Inférence pur Python (zéro dépendance) pour le modèle unifié V2 (avec lex_features).
 
 N'utilise que la bibliothèque standard Python. Charge les poids depuis JSON.
 Plus lent que NumPy/ONNX mais totalement portable.
@@ -17,6 +17,38 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# POS keys for lex features (same order as training)
+ALL_LEX_POS = [
+    "ADJ", "ADJ:dem", "ADJ:ind", "ADJ:int", "ADJ:num", "ADJ:pos",
+    "ADV", "ART:def", "ART:ind", "AUX", "CON", "INTJ",
+    "NOM", "PRE",
+    "PRO:dem", "PRO:ind", "PRO:int", "PRO:per", "PRO:pos", "PRO:rel",
+    "VER",
+]
+
+LEX_FEATURE_DIM = len(ALL_LEX_POS) + 3  # 24
+
+
+def _build_lex_features_pure(word: str, lexicon: dict[str, list[str]] | None) -> list[float]:
+    """Construit le vecteur lex features (24d) pour un mot (pure Python)."""
+    feats = [0.0] * LEX_FEATURE_DIM
+    if lexicon is None:
+        return feats
+    candidates = lexicon.get(word.lower())
+    if candidates is None:
+        return feats
+    feats[len(ALL_LEX_POS)] = 1.0
+    feats[len(ALL_LEX_POS) + 1] = min(len(candidates) / 5.0, 1.0)
+    feats[len(ALL_LEX_POS) + 2] = 1.0 if len(candidates) == 1 else 0.0
+    for pos in candidates:
+        if pos in ALL_LEX_POS:
+            feats[ALL_LEX_POS.index(pos)] = 1.0
+        else:
+            for i, lex_pos in enumerate(ALL_LEX_POS):
+                if lex_pos.startswith(pos + ":") or lex_pos == pos:
+                    feats[i] = 1.0
+    return feats
 
 
 # ── Vector operations (pure Python lists) ──────────────────────────
@@ -129,9 +161,15 @@ class _BiLSTM:
 
 
 class PureInferenceEngine:
-    """Inférence pur Python pour le modèle unifié."""
+    """Inférence pur Python pour le modèle unifié V2."""
 
-    def __init__(self, weights_path: str | Path, vocab_path: str | Path):
+    def __init__(
+        self,
+        weights_path: str | Path,
+        vocab_path: str | Path,
+        lexicon_path: str | Path | None = None,
+        lexicon: dict[str, list[str]] | None = None,
+    ):
         logger.info("Loading G2P pure-Python model from %s", weights_path)
         with open(vocab_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -145,6 +183,18 @@ class PureInferenceEngine:
         self.idx2morpho = {}
         for feat, vocab in vocabs["morpho_vocabs"].items():
             self.idx2morpho[feat] = {int(v): k for k, v in vocab.items()}
+
+        self.lex_feature_dim = self.config.get("lex_feature_dim", LEX_FEATURE_DIM)
+
+        # Load lexicon
+        if lexicon is not None:
+            self.lexicon = lexicon
+        elif lexicon_path is not None:
+            with open(lexicon_path, encoding="utf-8") as f:
+                self.lexicon = json.load(f)
+            logger.info("Loaded lexicon: %d words", len(self.lexicon))
+        else:
+            self.lexicon = None
 
         # Load weights
         with open(weights_path, encoding="utf-8") as f:
@@ -163,7 +213,6 @@ class PureInferenceEngine:
                     mat.append(flat[r * cols:(r + 1) * cols])
                 self.weights[name] = mat
             else:
-                # Store flat for now (shouldn't happen for our architecture)
                 self.weights[name] = flat
 
         self._build_model()
@@ -203,6 +252,12 @@ class PureInferenceEngine:
 
         self.g2p_weight = self._get("g2p_head.weight")
         self.g2p_bias = self._get("g2p_head.bias")
+
+        # Lex features projection (V2)
+        self.has_lex_proj = "lex_proj.weight" in self.weights
+        if self.has_lex_proj:
+            self.lex_proj_weight = self._get("lex_proj.weight")
+            self.lex_proj_bias = self._get("lex_proj.bias")
 
         self.word_bilstm = self._build_lstm(
             "word_lstm",
@@ -245,7 +300,7 @@ class PureInferenceEngine:
         char_ids = [self.char2idx.get(ch, 1) for ch in chars]
         return char_ids, word_starts, word_ends
 
-    def analyser(self, tokens: list[str]) -> dict[str, Any]:
+    def analyser(self, tokens: list[str], *, use_lex: bool = True) -> dict[str, Any]:
         logger.debug("analyser() called with %s tokens", len(tokens))
         if not tokens:
             return {"tokens": [], "g2p": [], "pos": [], "liaison": [], "morpho": {}}
@@ -279,7 +334,13 @@ class PureInferenceEngine:
         for w in range(n_words):
             fwd_at_end = char_out[word_ends[w]][:char_hidden]
             bwd_at_start = char_out[word_starts[w]][char_hidden:]
-            word_repr.append(fwd_at_end + bwd_at_start)
+            wr = fwd_at_end + bwd_at_start
+            # Lex features projection
+            if use_lex and self.has_lex_proj:
+                lex_feats = _build_lex_features_pure(tokens[w], self.lexicon)
+                lex_proj = self._linear(lex_feats, self.lex_proj_weight, self.lex_proj_bias)
+                wr = wr + lex_proj
+            word_repr.append(wr)
 
         # Word BiLSTM
         word_out = self.word_bilstm.forward(word_repr)
