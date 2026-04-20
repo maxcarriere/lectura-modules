@@ -29,7 +29,7 @@ Exemple avec backend local::
 
 from pathlib import Path
 
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
