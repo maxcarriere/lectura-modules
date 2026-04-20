@@ -276,7 +276,8 @@ class Lexique:
         """info() pour schema v4 : JOIN formes + lemmes."""
         cur = conn.execute(
             "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
-            "f.nb_syllabes, f.syllabes, f.freq_opensubs AS freq_opensubs, f.source, "
+            "f.nb_syllabes, f.syllabes, f.freq_opensubs AS freq_opensubs, "
+            "f.freq_frantext, f.freq_lm10, f.freq_frwac, f.source, "
             "l.id AS lemme_id, l.lemme, l.cgram, l.genre, l.contrainte_nombre, "
             "l.etymologie, l.freq_opensubs AS lemme_freq, l.age "
             "FROM formes f "
@@ -1306,7 +1307,8 @@ class Lexique:
                 where = " AND ".join(conditions) if conditions else "1=1"
                 query = (
                     "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
-                    "f.nb_syllabes, f.syllabes, f.freq_opensubs, f.source, "
+                    "f.nb_syllabes, f.syllabes, f.freq_opensubs, f.freq_frantext, "
+                    "f.freq_lm10, f.freq_frwac, f.source, "
                     "l.lemme, l.cgram, l.genre "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
