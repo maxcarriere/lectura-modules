@@ -98,6 +98,24 @@ result = engine.analyser(tokeniser("Bonjour le monde."))
 
 Les backends locaux (ONNX, NumPy, Pure) produisent des résultats identiques.
 
+## Features lexicales (optionnel)
+
+Le modele V2 accepte en entree optionnelle un vecteur de 24 dimensions par mot, construit a partir d'un lexique de candidats POS. Cela ameliore la prediction POS, la morphologie et les liaisons.
+
+Le lexique est detecte automatiquement dans cet ordre :
+1. Parametre `lexicon_path` passe a `creer_engine()`
+2. Fichier `lexique_pos_candidates.json` dans le dossier modeles
+3. Module `lectura-lexique` (si installe : `pip install lectura-lexique`)
+4. Sans lexique : le modele fonctionne normalement (features = zeros)
+
+```python
+# Avec lexique (automatique si disponible)
+engine = creer_engine()
+
+# Desactiver les features lexicales
+result = engine.analyser(tokens, use_lex=False)
+```
+
 ## Benchmarks (dev set, modele V2 avec features lexicales)
 
 | Tâche | Métrique | Score |
