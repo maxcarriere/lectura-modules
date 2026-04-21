@@ -149,5 +149,6 @@ L'Aligneur-Syllabeur est le **pivot central** de Lectura :
 
 ## Licence
 
-AGPL-3.0-or-later — voir [LICENCE.txt](LICENCE.txt)
-Licence commerciale disponible — voir [LICENCE-COMMERCIALE.md](LICENCE-COMMERCIALE.md)
+Double licence :
+- **AGPL-3.0** — usage libre (voir [LICENCE.txt](LICENCE.txt))
+- **Licence commerciale** — usage proprietaire, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com)

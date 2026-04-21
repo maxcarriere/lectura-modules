@@ -57,13 +57,13 @@ Les modules Lectura NLP sont distribues sous **double licence** :
 
 - **[AGPL-3.0-or-later](LICENCE.txt)** — libre, avec obligation de publication
   du code source pour tout logiciel derive.
-- **[Licence Commerciale](LICENCE-COMMERCIALE.md)** — payante, pour integration
-  dans des logiciels proprietaires sans obligation de publication.
+- **Licence commerciale** — payante, pour integration dans des logiciels
+  proprietaires sans obligation de publication.
 
 Les modeles pre-entraines (.onnx) sont soumis a des conditions specifiques :
 voir [MODEL_LICENCE.md](MODEL_LICENCE.md).
 
-Pour obtenir une licence commerciale : **https://www.lec-tu-ra.com/solutions/services/**
+Pour obtenir une licence commerciale : **[contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com)**
 
 ## Auteur
 
