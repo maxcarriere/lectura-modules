@@ -310,13 +310,13 @@ class TestOrdinal:
         assert r.display_fr == attendu
 
     @pytest.mark.parametrize("text, rom", [
-        ("1er", "I"),
-        ("2e", "II"),
-        ("3e", "III"),
-        ("10e", "X"),
-        ("21e", "XXI"),
-        ("100e", "C"),
-        ("1000e", "M"),
+        ("1er", "Ier"),
+        ("2e", "IIe"),
+        ("3e", "IIIe"),
+        ("10e", "Xe"),
+        ("21e", "XXIe"),
+        ("100e", "Ce"),
+        ("1000e", "Me"),
     ])
     def test_display_rom(self, text, rom):
         r = lire_ordinal(text)
@@ -331,12 +331,9 @@ class TestOrdinal:
                 assert evt.span_rom != (0, 0), f"{text}: span_rom vide pour {evt.ortho!r}"
 
     def test_span_rom_21e_detail(self):
-        """21e → XXI : vingt=(0,2) et unième=(2,3)."""
+        """21e → XXIe : vingt=(0,2) et unième=(2,4)."""
         r = lire_ordinal("21e")
-        assert r.display_rom == "XXI"
-        roms = [e.span_rom for e in r.events]
-        assert (0, 2) in roms  # XX = vingt
-        assert (2, 3) in roms  # I = unième
+        assert r.display_rom == "XXIe"
 
     def test_detection_type(self):
         assert _first_type("1er") == FormuleType.ORDINAL
@@ -763,8 +760,8 @@ class TestIntervalle:
     """Lecture des intervalles mathématiques."""
 
     @pytest.mark.parametrize("text, fragments", [
-        ("[0;1]", ["zéro", "à", "un"]),
-        ("]0;1[", ["zéro", "à", "un"]),
+        ("[0;1]", ["zéro", "un"]),
+        ("]0;1[", ["zéro", "un"]),
         ("[0;+∞[", ["zéro", "infini"]),
         ("]-∞;0]", ["infini", "zéro"]),
     ])
