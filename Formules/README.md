@@ -82,4 +82,4 @@ if wav:
 
 Double licence :
 - **AGPL-3.0** — usage libre (voir [LICENCE.txt](LICENCE.txt))
-- **Licence commerciale** — usage proprietaire (voir [LICENCE-COMMERCIALE.md](LICENCE-COMMERCIALE.md))
+- **Licence commerciale** — usage proprietaire, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com)
