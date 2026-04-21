@@ -1,0 +1,4588 @@
+{
+  "aastais": {
+    "ADJ": "aastɛ",
+    "NOM": "astɛ"
+  },
+  "abaissée": {
+    "ADJ": "abese",
+    "NOM": "abɛse",
+    "VER": "abese"
+  },
+  "abandonnée": {
+    "ADJ": "abɑ̃done",
+    "NOM": "abɑ̃dɔne",
+    "VER": "abɑ̃done"
+  },
+  "abbécourtois": {
+    "ADJ": "abekuʁtwa",
+    "NOM": "abekuʁtwaz"
+  },
+  "abonde": {
+    "NOM": "abøɔ̃d",
+    "VER": "abɔ̃d"
+  },
+  "abriessois": {
+    "ADJ": "abʁijeswa",
+    "NOM": "abʁijɛswa"
+  },
+  "absolue": {
+    "ADJ": "apsoly",
+    "NOM": "absɔly"
+  },
+  "absorbeur": {
+    "ADJ": "absɔʁbœʁ",
+    "NOM": "apsɔʁbœʁ"
+  },
+  "abstentionniste": {
+    "ADJ": "abstɑ̃sjɔnist",
+    "NOM": "apstɑ̃sjonist"
+  },
+  "accelerando": {
+    "ADV": "akseleʁando",
+    "NOM": "akseleʁɑ̃do"
+  },
+  "acceptions": {
+    "NOM": "aksɛpsjɔ̃",
+    "VER": "aksɛptjɔ̃"
+  },
+  "accolé": {
+    "ADJ": "akɔle",
+    "VER": "akole"
+  },
+  "accoté": {
+    "ADJ": "akɔte",
+    "VER": "akote"
+  },
+  "acheminé": {
+    "ADJ": "aʃmine",
+    "VER": "aʃəmine"
+  },
+  "acheminée": {
+    "ADJ": "aʃmine",
+    "VER": "aʃəmine"
+  },
+  "achetois": {
+    "ADJ": "aʃɛtwa",
+    "NOM": "aʃetwa"
+  },
+  "acoquiné": {
+    "ADJ": "akɔkine",
+    "VER": "akokine"
+  },
+  "actions": {
+    "NOM": "aksjɔ̃",
+    "VER": "aktjɔ̃"
+  },
+  "adamswillerois": {
+    "ADJ": "adamsvilɛʁwa",
+    "NOM": "adamsviləʁwa"
+  },
+  "adonnais": {
+    "ADJ": "adɔnɛ",
+    "NOM": "adɔnɛ",
+    "VER": "adonɛ"
+  },
+  "adoptions": {
+    "NOM": "adɔpsjɔ̃",
+    "VER": "adɔptjɔ̃"
+  },
+  "adoré": {
+    "ADJ": "adɔʁe",
+    "VER": "adoʁe"
+  },
+  "adressant": {
+    "ADJ": "adʁesɑ̃",
+    "VER": "adʁɛsɑ̃"
+  },
+  "affaiblie": {
+    "ADJ": "afɛbli",
+    "NOM": "afebli",
+    "VER": "afɛbli"
+  },
+  "affections": {
+    "NOM": "afɛksjɔ̃",
+    "VER": "afɛktjɔ̃"
+  },
+  "affluent": {
+    "ADJ": "aflyɑ̃",
+    "NOM": "aflyɑ̃",
+    "VER": "afly"
+  },
+  "afropolitain": {
+    "ADJ": "afʁɔpɔlitɛ̃",
+    "NOM": "afʁopɔlitɛ̃"
+  },
+  "agioteur": {
+    "ADJ": "aʒjɔtœʁ",
+    "NOM": "aʒjotœʁ"
+  },
+  "aiguillonnant": {
+    "ADJ": "eɥijɔnɑ̃",
+    "VER": "eɡɥijonɑ̃"
+  },
+  "aiguillonne": {
+    "NOM": "ɛɡyijɔn",
+    "VER": "eɡɥijɔn"
+  },
+  "aiguillonné": {
+    "ADJ": "eɥijɔne",
+    "VER": "eɡɥijone"
+  },
+  "aiguillé": {
+    "ADJ": "eɥije",
+    "VER": "eɡɥije"
+  },
+  "aiguiseur": {
+    "ADJ": "ɛɡizœʁ",
+    "NOM": "eɡizœʁ"
+  },
+  "aillonais": {
+    "ADJ": "ajonɛ",
+    "NOM": "ajɔnɛ"
+  },
+  "akkariote": {
+    "ADJ": "akaʁjɔt",
+    "NOM": "akaʁjot"
+  },
+  "albertin": {
+    "ADJ": "albɛʁtɛ̃",
+    "NOM": "albeʁtɛ̃"
+  },
+  "alençonnaise": {
+    "ADJ": "alɑ̃sonɛz",
+    "NOM": "alɑ̃sɔnɛz"
+  },
+  "alepien": {
+    "ADJ": "alɛpjɛn",
+    "NOM": "alɛpjɛ̃"
+  },
+  "algorithmique": {
+    "ADJ": "alɡoʁitmik",
+    "NOM": "alɔʁitmik"
+  },
+  "alur": {
+    "ADJ": "alyʁ",
+    "NOM": "aluʁ"
+  },
+  "alverton": {
+    "ADJ": "alvɛʁtɔ̃",
+    "NOM": "alvəʁtɔn"
+  },
+  "amazigh": {
+    "ADJ": "amazi",
+    "NOM": "amaziʁ"
+  },
+  "amazonienne": {
+    "ADJ": "amazonjɛn",
+    "NOM": "amazɔnjɛn"
+  },
+  "ambertois": {
+    "ADJ": "ɑ̃bɛʁtwaz",
+    "NOM": "ɑ̃bɛʁtwa"
+  },
+  "ambitionné": {
+    "ADJ": "ɑ̃bisjɔne",
+    "VER": "ɑ̃bisjone"
+  },
+  "ambrusien": {
+    "ADJ": "ɑ̃bʁyzjɛ",
+    "NOM": "ɑ̃bʁyzjɛ̃"
+  },
+  "amenuisé": {
+    "ADJ": "amənɥize",
+    "VER": "amønɥize"
+  },
+  "amené": {
+    "NOM": "aməne",
+    "VER": "amne"
+  },
+  "amerloque": {
+    "ADJ": "ameʁlɔk",
+    "NOM": "amɛʁlɔk"
+  },
+  "amoché": {
+    "ADJ": "amɔʃe",
+    "VER": "amoʃe"
+  },
+  "amolli": {
+    "ADJ": "amɔli",
+    "VER": "amoli"
+  },
+  "amorgien": {
+    "ADJ": "amɔʁʒjjɛ̃",
+    "NOM": "amɔʁʒjɛ̃"
+  },
+  "amuréen": {
+    "ADJ": "amyʁeɛn",
+    "NOM": "amyʁeɛ̃"
+  },
+  "améliorant": {
+    "ADJ": "ameljɔʁɑ̃",
+    "VER": "ameljoʁɑ̃"
+  },
+  "anale": {
+    "ADJ": "anal",
+    "NOM": "ana"
+  },
+  "andillacois": {
+    "ADJ": "ɑ̃dijakwaz",
+    "NOM": "ɑ̃dijakwa"
+  },
+  "andillois": {
+    "ADJ": "ɑ̃dijwaz",
+    "NOM": "ɑ̃dijwa"
+  },
+  "andoléen": {
+    "ADJ": "ɑ̃dɔleɛn",
+    "NOM": "ɑ̃dɔleɛ̃"
+  },
+  "anecdotier": {
+    "ADJ": "anɛkdɔtje",
+    "NOM": "anɛkdotje"
+  },
+  "angelin": {
+    "ADJ": "ɑ̃ʒlɛ̃",
+    "NOM": "ɑ̃ʒelɛ̃"
+  },
+  "angillonnais": {
+    "ADJ": "ɑ̃ijɔnɛ",
+    "NOM": "ɑ̃ʒijɔnɛ"
+  },
+  "annellois": {
+    "ADJ": "anɛlwa",
+    "NOM": "ɑ̃nɛlwa"
+  },
+  "anneyronnais": {
+    "ADJ": "aneʁɔnɛz",
+    "NOM": "aneʁɔnɛ"
+  },
+  "annonvillois": {
+    "ADJ": "anɔ̃vilwa",
+    "NOM": "anɔ̃vilwaz"
+  },
+  "annuelle": {
+    "ADJ": "anɥɛl",
+    "NOM": "annɥɛl"
+  },
+  "anoblie": {
+    "ADJ": "anobli",
+    "NOM": "anɔbli",
+    "VER": "anobli"
+  },
+  "anoblissant": {
+    "ADJ": "anɔblisɑ̃",
+    "VER": "anoblisɑ̃"
+  },
+  "anodisé": {
+    "ADJ": "anɔdize",
+    "VER": "anodize"
+  },
+  "anthenois": {
+    "ADJ": "ɑ̃tenwa",
+    "NOM": "ɑ̃tənwa"
+  },
+  "anticoagulant": {
+    "ADJ": "ɑ̃tikɔaɡylɑ̃",
+    "NOM": "ɑ̃tikoaɡylɑ̃"
+  },
+  "antrainais": {
+    "ADJ": "ɑ̃tʁɛnɛ",
+    "NOM": "ɑ̃tʁɛ̃nɛ"
+  },
+  "aoriste": {
+    "ADJ": "aɔʁist",
+    "NOM": "aoʁist"
+  },
+  "apaisé": {
+    "ADJ": "apɛze",
+    "VER": "apeze"
+  },
+  "apostrophé": {
+    "NOM": "apɔstʁɔfe",
+    "VER": "apostʁofe"
+  },
+  "approbateur": {
+    "ADJ": "apʁobatœʁ",
+    "NOM": "apʁɔbatœʁ"
+  },
+  "approbatrice": {
+    "ADJ": "apʁobatʁis",
+    "NOM": "apʁɔbatʁis"
+  },
+  "approfondissant": {
+    "ADJ": "apʁɔfɔ̃disɑ̃",
+    "VER": "apʁofɔ̃disɑ̃"
+  },
+  "arachnoïde": {
+    "ADJ": "aʁaknɔid",
+    "NOM": "aʁaknoid"
+  },
+  "aramonais": {
+    "ADJ": "aʁamɔnɛ",
+    "NOM": "aʁamɔ̃nɛ"
+  },
+  "arborais": {
+    "ADJ": "aʁbɔʁɛ",
+    "NOM": "aʁbɔʁɛ",
+    "VER": "aʁboʁɛ"
+  },
+  "arboré": {
+    "ADJ": "aʁbɔʁe",
+    "VER": "aʁboʁe"
+  },
+  "archéromontain": {
+    "ADJ": "aʁʃeʁomɔ̃tɛ̃",
+    "NOM": "aʁʃeʁɔmɔ̃tɛ̃"
+  },
+  "arde": {
+    "NOM": "aʁ",
+    "VER": "aʁd"
+  },
+  "argile": {
+    "ADJ": "alal",
+    "NOM": "aʁʒil"
+  },
+  "arioso": {
+    "ADV": "aʁjɔso",
+    "NOM": "aʁjozo"
+  },
+  "aristotélicienne": {
+    "ADJ": "aʁistotelisjɛn",
+    "NOM": "aʁistɔtelisjɛn"
+  },
+  "armoricaine": {
+    "ADJ": "aʁmoʁikɛn",
+    "NOM": "aʁmɔʁikɛn"
+  },
+  "armorié": {
+    "ADJ": "aʁmɔʁje",
+    "VER": "aʁmoʁje"
+  },
+  "aromatisé": {
+    "ADJ": "aʁɔmatize",
+    "VER": "aʁomatize"
+  },
+  "arubéen": {
+    "ADJ": "aʁubeɛ̃",
+    "NOM": "aʁybeɛ̃"
+  },
+  "as": {
+    "AUX": "a",
+    "NOM": "as",
+    "VER": "a"
+  },
+  "asexuelle": {
+    "ADJ": "aseksɥɛl",
+    "NOM": "asɛksɥɛl"
+  },
+  "ashanti": {
+    "ADJ": "aʃanti",
+    "NOM": "aʃɑ̃ti"
+  },
+  "aspachois": {
+    "ADJ": "aspaʃwa",
+    "NOM": "aspakwa"
+  },
+  "assaisonné": {
+    "ADJ": "asɛzɔne",
+    "VER": "asɛzone"
+  },
+  "assujettie": {
+    "NOM": "asyʒeti",
+    "VER": "asyʒɛti"
+  },
+  "asticoté": {
+    "ADJ": "astikɔte",
+    "VER": "astikote"
+  },
+  "astrophysique": {
+    "ADJ": "astʁɔfizik",
+    "NOM": "astʁofizik"
+  },
+  "astéroïde": {
+    "ADJ": "asteʁoidə",
+    "NOM": "asteʁoid"
+  },
+  "atrophiée": {
+    "ADJ": "atʁofje",
+    "NOM": "atʁɔfje",
+    "VER": "atʁofje"
+  },
+  "auditionné": {
+    "NOM": "odisjɔne",
+    "VER": "odisjone"
+  },
+  "auditionnée": {
+    "NOM": "odisjɔne",
+    "VER": "odisjone"
+  },
+  "autocrate": {
+    "ADJ": "otokʁat",
+    "NOM": "ɔtɔkʁat"
+  },
+  "automotrice": {
+    "ADJ": "otomotʁis",
+    "NOM": "otomɔtʁis"
+  },
+  "autoproclamé": {
+    "ADJ": "ɔtopʁɔklame",
+    "VER": "otopʁoklame"
+  },
+  "auverpin": {
+    "ADJ": "ɔvɛʁpɛ̃",
+    "NOM": "ovɛʁpɛ̃"
+  },
+  "auxerrois": {
+    "ADJ": "oseʁwa",
+    "NOM": "osɛʁwa"
+  },
+  "auxiliaire": {
+    "ADJ": "oɡziljɛʁ",
+    "NOM": "oksiljɛʁ"
+  },
+  "avignonnais": {
+    "ADJ": "aviɲɔnɛ",
+    "NOM": "aviɲonɛ"
+  },
+  "avocat": {
+    "ADJ": "avɔka",
+    "NOM": "avoka"
+  },
+  "bactériophage": {
+    "ADJ": "bakteʁjofaʒ",
+    "NOM": "bakteʁjɔfaʒ"
+  },
+  "baignant": {
+    "ADJ": "beɲɑ̃",
+    "VER": "bɛɲɑ̃"
+  },
+  "baisé": {
+    "NOM": "bɛze",
+    "VER": "beze"
+  },
+  "ballottant": {
+    "ADJ": "balɔtɑ̃",
+    "VER": "balotɑ̃"
+  },
+  "ban": {
+    "NOM": "bɑ̃",
+    "VER": "ban"
+  },
+  "bandolais": {
+    "ADJ": "bɑ̃dɔle",
+    "NOM": "bɑ̃dɔlɛ"
+  },
+  "banqueroutier": {
+    "ADJ": "bɑ̃kʁutje",
+    "NOM": "bɑ̃kəʁutje"
+  },
+  "barbera": {
+    "NOM": "baʁbeʁa",
+    "VER": "baʁbəʁa"
+  },
+  "barbudien": {
+    "ADJ": "baʁbudjɛ̃",
+    "NOM": "baʁbydjɛ̃"
+  },
+  "basa": {
+    "NOM": "basa",
+    "VER": "baza"
+  },
+  "bastognard": {
+    "ADJ": "bastɔɲaʁ",
+    "NOM": "bastɔnjaʁ"
+  },
+  "bateleur": {
+    "ADJ": "batlœʁ",
+    "NOM": "batəlœʁ"
+  },
+  "bauju": {
+    "ADJ": "boʒy",
+    "NOM": "bɔʒy"
+  },
+  "bavotant": {
+    "ADJ": "bavɔtɑ̃",
+    "VER": "bavotɑ̃"
+  },
+  "beaucairien": {
+    "ADJ": "bokɛʁʁjɛ̃",
+    "NOM": "bokɛʁjɛ̃"
+  },
+  "beauceron": {
+    "ADJ": "bosəʁɔ̃",
+    "NOM": "bosʁɔ̃"
+  },
+  "becqueté": {
+    "ADJ": "bɛkte",
+    "VER": "bɛkəte"
+  },
+  "bellevillois": {
+    "ADJ": "beləvilwa",
+    "NOM": "bɛlvilwa"
+  },
+  "besogneuse": {
+    "ADJ": "bøzoɲøz",
+    "NOM": "bəzɔɲøz"
+  },
+  "besson": {
+    "ADJ": "bɛsɔ̃",
+    "NOM": "besɔ̃"
+  },
+  "betteravier": {
+    "ADJ": "bɛtʁavje",
+    "NOM": "bɛtəʁavje"
+  },
+  "beydane": {
+    "ADJ": "bejdan",
+    "NOM": "bɛjdan"
+  },
+  "biardais": {
+    "ADJ": "bjaʁdɛ",
+    "NOM": "bjaʁdɛ̃"
+  },
+  "biberonne": {
+    "NOM": "bibʁɔn",
+    "VER": "bibəʁɔn"
+  },
+  "biologisé": {
+    "ADJ": "bjɔlɔʒize",
+    "VER": "bjoloʒize"
+  },
+  "biomécanique": {
+    "ADJ": "bjɔmekanik",
+    "NOM": "bjomekanik"
+  },
+  "bisexuelle": {
+    "ADJ": "biseksɥɛl",
+    "NOM": "bisɛksɥɛl"
+  },
+  "bistrotier": {
+    "ADJ": "bistʁɔtje",
+    "NOM": "bistʁotje"
+  },
+  "bluffant": {
+    "ADJ": "bløfɑ̃",
+    "VER": "blœfɑ̃"
+  },
+  "blêmissant": {
+    "ADJ": "blemisɑ̃",
+    "VER": "blɛmisɑ̃"
+  },
+  "bochiman": {
+    "ADJ": "bɔʃimɑ̃",
+    "NOM": "boʃimɑ̃"
+  },
+  "boer": {
+    "ADJ": "buʁ",
+    "NOM": "bœʁ"
+  },
+  "bolchevik": {
+    "ADJ": "bɔlʃevik",
+    "NOM": "bɔlʃəvik"
+  },
+  "bolognais": {
+    "ADJ": "boloɲɛ",
+    "NOM": "bɔlɔɲɛ"
+  },
+  "bomba": {
+    "NOM": "bomba",
+    "VER": "bɔ̃ba"
+  },
+  "bonapartiste": {
+    "ADJ": "bɔnapaʁtist",
+    "NOM": "bonapaʁtist"
+  },
+  "bonard": {
+    "ADJ": "bonaʁ",
+    "NOM": "bɔnaʁ"
+  },
+  "bonifié": {
+    "ADJ": "bɔnifje",
+    "VER": "bonifje"
+  },
+  "boomer": {
+    "NOM": "bumœʁ",
+    "VER": "bume"
+  },
+  "borderline": {
+    "ADJ": "bɔʁdœʁlajn",
+    "NOM": "bɔʁdɛʁlin"
+  },
+  "boréal": {
+    "ADJ": "boʁeal",
+    "NOM": "bɔʁeal"
+  },
+  "bossue": {
+    "ADJ": "bosy",
+    "NOM": "bɔsy",
+    "VER": "bosy"
+  },
+  "bostonienne": {
+    "ADJ": "bɔstonjɛn",
+    "NOM": "bɔstɔnjɛn"
+  },
+  "bottiné": {
+    "ADJ": "bɔtine",
+    "VER": "botine"
+  },
+  "bottée": {
+    "ADJ": "bote",
+    "NOM": "bɔte",
+    "VER": "bote"
+  },
+  "boueuse": {
+    "ADJ": "bwøz",
+    "NOM": "buøz"
+  },
+  "bouillonnais": {
+    "ADJ": "bujɔnɛ",
+    "NOM": "bujɔnɛ",
+    "VER": "bujonɛ"
+  },
+  "boulevardière": {
+    "ADJ": "buləvaʁdjɛʁ",
+    "NOM": "bulvaʁdjɛʁ"
+  },
+  "boulonnais": {
+    "ADJ": "bulonɛ",
+    "NOM": "bulɔnɛ"
+  },
+  "bouquetier": {
+    "ADJ": "buktje",
+    "NOM": "bukətje"
+  },
+  "bourbonienne": {
+    "ADJ": "buʁbonjɛn",
+    "NOM": "buʁbɔnjɛn"
+  },
+  "bourdonnais": {
+    "ADJ": "buʁdɔnɛ",
+    "VER": "buʁdonɛ"
+  },
+  "bourdonné": {
+    "ADJ": "buʁdɔne",
+    "VER": "buʁdone"
+  },
+  "boutonnais": {
+    "ADJ": "butɔnɛ",
+    "NOM": "butɔnɛ",
+    "VER": "butonɛ"
+  },
+  "boxer": {
+    "NOM": "bɔksɛʁ",
+    "VER": "bɔkse"
+  },
+  "brandebourgeois": {
+    "ADJ": "bʁɑ̃dəbuʁʒwa",
+    "NOM": "bʁɑ̃dbuʁʒwa"
+  },
+  "branlochant": {
+    "ADJ": "bʁɑ̃lɔʃɑ̃",
+    "VER": "bʁɑ̃loʃɑ̃"
+  },
+  "bressan": {
+    "ADJ": "bʁɛsɑ̃",
+    "NOM": "bʁɛsa"
+  },
+  "brevetée": {
+    "ADJ": "bʁøvəte",
+    "NOM": "bʁəvte",
+    "VER": "bʁøvəte"
+  },
+  "bringuebale": {
+    "NOM": "bʁɛ̃ɡbal",
+    "VER": "bʁɛ̃ɡəbal"
+  },
+  "briochin": {
+    "ADJ": "bʁijɔʃɛ̃",
+    "NOM": "bʁijoʃɛ̃"
+  },
+  "briquetier": {
+    "ADJ": "bʁiktje",
+    "NOM": "bʁikətje"
+  },
+  "brochée": {
+    "ADJ": "bʁoʃe",
+    "NOM": "bʁɔʃe",
+    "VER": "bʁoʃe"
+  },
+  "brossée": {
+    "NOM": "bʁɔse",
+    "VER": "bʁose"
+  },
+  "burger": {
+    "NOM": "bœʁɡœʁ",
+    "VER": "byʁʒe"
+  },
+  "burkinabè": {
+    "ADJ": "buʁkinabɛ",
+    "NOM": "byʁkinabɛ"
+  },
+  "burundais": {
+    "ADJ": "buʁundɛ",
+    "NOM": "byʁyndɛ"
+  },
+  "bus": {
+    "NOM": "bys",
+    "VER": "by"
+  },
+  "but": {
+    "NOM": "byt",
+    "VER": "by"
+  },
+  "bâfre": {
+    "NOM": "bafʁe",
+    "VER": "bafʁ"
+  },
+  "bâillonné": {
+    "ADJ": "bajɔne",
+    "VER": "bajone"
+  },
+  "bâtonnée": {
+    "NOM": "batɔne",
+    "VER": "batone"
+  },
+  "bégayé": {
+    "ADJ": "beɡɛje",
+    "VER": "beɡeje"
+  },
+  "bœotien": {
+    "ADJ": "beɔsjɛ",
+    "NOM": "beɔsjɛ̃"
+  },
+  "cabocharde": {
+    "ADJ": "kaboʃaʁd",
+    "NOM": "kabɔʃaʁd"
+  },
+  "cabossé": {
+    "ADJ": "kabɔse",
+    "VER": "kabose"
+  },
+  "cabriolant": {
+    "ADJ": "kabʁijɔlɑ̃",
+    "VER": "kabʁijolɑ̃"
+  },
+  "cacaoyer": {
+    "ADJ": "kakaɔje",
+    "NOM": "kakawaje"
+  },
+  "cachemire": {
+    "ADJ": "kaʃmiʁ",
+    "NOM": "kaʃəmiʁ"
+  },
+  "cacheté": {
+    "ADJ": "kaʃte",
+    "VER": "kaʃəte"
+  },
+  "cadenassé": {
+    "ADJ": "kadnase",
+    "VER": "kadənase"
+  },
+  "cafeté": {
+    "ADJ": "kafte",
+    "VER": "kafəte"
+  },
+  "calotin": {
+    "ADJ": "kalɔtɛ̃",
+    "NOM": "kalotɛ̃"
+  },
+  "calédonien": {
+    "ADJ": "kaledonjɛ̃",
+    "NOM": "kaledɔnjɛ̃"
+  },
+  "calédonienne": {
+    "ADJ": "kaledonjɛn",
+    "NOM": "kaledɔnjɛn"
+  },
+  "cambriolée": {
+    "NOM": "kɑ̃bʁijɔle",
+    "VER": "kɑ̃bʁijole"
+  },
+  "camera": {
+    "NOM": "kamʁa",
+    "VER": "kaməʁa"
+  },
+  "camerounaise": {
+    "ADJ": "kaməʁunɛz",
+    "NOM": "kamʁunɛz"
+  },
+  "cancel": {
+    "NOM": "kɑ̃sɛl",
+    "VER": "kansɛl"
+  },
+  "canotier": {
+    "ADJ": "kanɔtje",
+    "NOM": "kanotje"
+  },
+  "canter": {
+    "NOM": "kɑ̃tœʁ",
+    "VER": "kɑ̃te"
+  },
+  "cantonale": {
+    "ADJ": "kɑ̃tonal",
+    "NOM": "kɑ̃tɔnal"
+  },
+  "cantonnais": {
+    "NOM": "kɑ̃tɔnɛ",
+    "VER": "kɑ̃tonɛ"
+  },
+  "cantonné": {
+    "ADJ": "kɑ̃tɔne",
+    "VER": "kɑ̃tone"
+  },
+  "caparaçonné": {
+    "ADJ": "kapaʁasɔne",
+    "VER": "kapaʁasone"
+  },
+  "capoté": {
+    "ADJ": "kapɔte",
+    "VER": "kapote"
+  },
+  "capotée": {
+    "NOM": "kapɔte",
+    "VER": "kapote"
+  },
+  "capouan": {
+    "ADJ": "kapuɑ̃",
+    "NOM": "kapwɑ̃"
+  },
+  "capriote": {
+    "ADJ": "kapʁiot",
+    "NOM": "kapʁijɔt"
+  },
+  "caressé": {
+    "ADJ": "kaʁɛse",
+    "VER": "kaʁese"
+  },
+  "carillonnant": {
+    "ADJ": "kaʁijɔnɑ̃",
+    "VER": "kaʁijonɑ̃"
+  },
+  "caroline": {
+    "ADJ": "kaʁolin",
+    "NOM": "kaʁɔlin"
+  },
+  "carolingien": {
+    "ADJ": "kaʁolɛ̃ʒjɛ̃",
+    "NOM": "kaʁɔlɛ̃ʒjɛ̃"
+  },
+  "carotide": {
+    "ADJ": "kaʁɔtid",
+    "NOM": "kaʁotid"
+  },
+  "carotteuse": {
+    "ADJ": "kaʁotøz",
+    "NOM": "kaʁɔtøz"
+  },
+  "carottier": {
+    "ADJ": "kaʁotje",
+    "NOM": "kaʁɔtje"
+  },
+  "carrossier": {
+    "ADJ": "kaʁɔsje",
+    "NOM": "kaʁosje"
+  },
+  "carrossée": {
+    "NOM": "kaʁɔse",
+    "VER": "kaʁose"
+  },
+  "carter": {
+    "NOM": "kaʁtɛʁ",
+    "VER": "kaʁte"
+  },
+  "cartonneuse": {
+    "ADJ": "kaʁtonøz",
+    "NOM": "kaʁtɔnøz"
+  },
+  "cartonnier": {
+    "ADJ": "kaʁtɔnje",
+    "NOM": "kaʁtonje"
+  },
+  "cartonné": {
+    "ADJ": "kaʁtɔne",
+    "VER": "kaʁtone"
+  },
+  "cartonnée": {
+    "NOM": "kaʁtɔne",
+    "VER": "kaʁtone"
+  },
+  "catastrophé": {
+    "ADJ": "katastʁɔfe",
+    "VER": "katastʁofe"
+  },
+  "cautionnaire": {
+    "ADJ": "kosjɔnɛʁ",
+    "NOM": "kosjonɛʁ"
+  },
+  "cautérisant": {
+    "ADJ": "kɔteʁizɑ̃",
+    "VER": "koteʁizɑ̃"
+  },
+  "ce": {
+    "ADJ": "sɑ̃tjɛm",
+    "ADJ:dem": "sø",
+    "PRO:dem": "sø"
+  },
+  "cesserais": {
+    "ADJ": "sɛsʁɛ",
+    "VER": "sɛsəʁɛ"
+  },
+  "challenger": {
+    "NOM": "tʃalɛndʒe",
+    "VER": "ʃalɑ̃ʒe"
+  },
+  "chalonnais": {
+    "ADJ": "ʃalɔnɛ",
+    "NOM": "ʃalɔn"
+  },
+  "champcueillois": {
+    "ADJ": "ʃɑ̃køjwa",
+    "NOM": "ʃɑ̃kœjwa"
+  },
+  "champelien": {
+    "ADJ": "ʃapəljɛ̃",
+    "NOM": "ʃɑ̃pəljɛ̃"
+  },
+  "chansonnier": {
+    "ADJ": "ʃɑ̃sɔnje",
+    "NOM": "ʃɑ̃sonje"
+  },
+  "chantonné": {
+    "ADJ": "ʃɑ̃tɔne",
+    "VER": "ʃɑ̃tone"
+  },
+  "chao": {
+    "ADV": "kao",
+    "NOM": "ʃao"
+  },
+  "chaperonné": {
+    "ADJ": "ʃapʁɔne",
+    "VER": "ʃapəʁone"
+  },
+  "charbonné": {
+    "ADJ": "ʃaʁbɔne",
+    "VER": "ʃaʁbone"
+  },
+  "charretier": {
+    "ADJ": "ʃaʁtje",
+    "NOM": "ʃaʁətje"
+  },
+  "chatte": {
+    "ADJ": "tʃat",
+    "NOM": "ʃat"
+  },
+  "cheminot": {
+    "ADJ": "ʃmino",
+    "NOM": "ʃəmino"
+  },
+  "chemisier": {
+    "ADJ": "ʃmizje",
+    "NOM": "ʃəmizje"
+  },
+  "chevrotant": {
+    "ADJ": "ʃəvʁɔtɑ̃",
+    "VER": "ʃəvʁotɑ̃"
+  },
+  "chia": {
+    "NOM": "kja",
+    "VER": "ʃja"
+  },
+  "chiffonnier": {
+    "ADJ": "ʃifɔnje",
+    "NOM": "ʃifonje"
+  },
+  "chinonais": {
+    "ADJ": "ʃinɔne",
+    "NOM": "ʃinɔnɛ"
+  },
+  "chipoteur": {
+    "ADJ": "ʃipotœʁ",
+    "NOM": "ʃipɔtœʁ"
+  },
+  "chipoteuse": {
+    "ADJ": "ʃipotøz",
+    "NOM": "ʃipɔtøz"
+  },
+  "chopper": {
+    "NOM": "ʃɔpɛʁ",
+    "VER": "ʃɔpe"
+  },
+  "choquée": {
+    "ADJ": "ʃoke",
+    "NOM": "ʃɔke",
+    "VER": "ʃoke"
+  },
+  "chrysostome": {
+    "ADJ": "kʁizɔstɔm",
+    "NOM": "kʁizostom"
+  },
+  "chuchoté": {
+    "ADJ": "ʃyʃɔte",
+    "VER": "ʃyʃote"
+  },
+  "churrigueresque": {
+    "ADJ": "ʃyʁiɡəʁɛsk",
+    "NOM": "tʃuʁieʁɛsk"
+  },
+  "chut": {
+    "ONO": "ʃyt",
+    "VER": "ʃy"
+  },
+  "châtié": {
+    "ADJ": "ʃatje",
+    "VER": "ʃasje"
+  },
+  "chênedolien": {
+    "ADJ": "ʃɛndɔljɛ̃",
+    "NOM": "ʃɛndɔliɛ̃"
+  },
+  "cilentain": {
+    "ADJ": "silɑ̃tɛ̃",
+    "NOM": "salɑ̃tɛ̃"
+  },
+  "cinghalais": {
+    "ADJ": "sɛ̃ɡalɛ",
+    "NOM": "sɛ̃alɛ"
+  },
+  "cinquantenaire": {
+    "ADJ": "sɛ̃kɑ̃tnɛʁ",
+    "NOM": "sɛ̃kɑ̃tənɛʁ"
+  },
+  "cipolin": {
+    "ADJ": "sipɔlɛ̃",
+    "NOM": "sipolɛ̃"
+  },
+  "claquemuré": {
+    "ADJ": "klakmyʁe",
+    "VER": "klakəmyʁe"
+  },
+  "clipper": {
+    "NOM": "klipœʁ",
+    "VER": "klipe"
+  },
+  "clitoridienne": {
+    "ADJ": "klitoʁidjɛn",
+    "NOM": "klitɔʁidjɛn"
+  },
+  "cloché": {
+    "ADJ": "klɔʃe",
+    "VER": "kloʃe"
+  },
+  "clopant": {
+    "ADJ": "klɔpɑ̃",
+    "VER": "klopɑ̃"
+  },
+  "clopinant": {
+    "ADJ": "klɔpinɑ̃",
+    "VER": "klopinɑ̃"
+  },
+  "coagulé": {
+    "ADJ": "kɔaɡyle",
+    "VER": "koaɡyle"
+  },
+  "coalisée": {
+    "ADJ": "koalize",
+    "NOM": "kɔalize",
+    "VER": "koalize"
+  },
+  "coassant": {
+    "ADJ": "kɔasɑ̃",
+    "VER": "koasɑ̃"
+  },
+  "cocher": {
+    "ADJ": "kɔʃe",
+    "NOM": "koʃe",
+    "VER": "koʃe"
+  },
+  "cochinchinois": {
+    "ADJ": "koʃɛ̃ʃinwa",
+    "NOM": "kɔʃɛ̃ʃinwa"
+  },
+  "cochonné": {
+    "ADJ": "kɔʃɔne",
+    "VER": "koʃone"
+  },
+  "cochère": {
+    "ADJ": "koʃɛʁ",
+    "NOM": "kɔʃɛʁ"
+  },
+  "cocorico": {
+    "NOM": "kokoʁiko",
+    "ONO": "kɔkɔʁiko"
+  },
+  "coexistant": {
+    "ADJ": "kɔezistɑ̃",
+    "VER": "koeɡzistɑ̃"
+  },
+  "collagène": {
+    "ADJ": "kɔlaʒɛn",
+    "NOM": "kolaʒɛn"
+  },
+  "collapse": {
+    "NOM": "kɔlaps",
+    "VER": "kolaps"
+  },
+  "collectionneur": {
+    "ADJ": "kɔlɛksjɔnœʁ",
+    "NOM": "kolɛksjonœʁ"
+  },
+  "collective": {
+    "ADJ": "kolɛktiv",
+    "NOM": "kɔlɛktiv"
+  },
+  "collectrice": {
+    "ADJ": "kolɛktʁis",
+    "NOM": "kɔllɛktʁis"
+  },
+  "collecté": {
+    "ADJ": "kɔlɛkte",
+    "VER": "kolɛkte"
+  },
+  "colloquant": {
+    "NOM": "kɔlɔkɑ̃",
+    "VER": "kolokɑ̃"
+  },
+  "colloïde": {
+    "ADJ": "kɔlɔid",
+    "NOM": "koloid"
+  },
+  "colombier": {
+    "ADJ": "kɔlɔ̃bje",
+    "NOM": "kolɔ̃bje"
+  },
+  "colombine": {
+    "ADJ": "kolɔ̃bin",
+    "NOM": "kɔlɔ̃bin"
+  },
+  "colonel": {
+    "ADJ": "kɔlɔnɛl",
+    "NOM": "kolonɛl"
+  },
+  "coloniale": {
+    "ADJ": "kolonjal",
+    "NOM": "kɔlɔnjal"
+  },
+  "colonisateur": {
+    "ADJ": "kɔlɔnizatœʁ",
+    "NOM": "kolonizatœʁ"
+  },
+  "colonisatrice": {
+    "ADJ": "kolonizatʁis",
+    "NOM": "kɔlɔnizatʁis"
+  },
+  "colopathie": {
+    "ADJ": "kɔlɔpati",
+    "NOM": "kolopati"
+  },
+  "coléoptère": {
+    "ADJ": "kɔleɔptɛʁ",
+    "NOM": "koleɔptɛʁ"
+  },
+  "commandeur": {
+    "ADJ": "kɔmɑ̃dœʁ",
+    "NOM": "komɑ̃dœʁ"
+  },
+  "commensal": {
+    "ADJ": "kɔmɑ̃sal",
+    "NOM": "komɑ̃sal"
+  },
+  "commençante": {
+    "ADJ": "komɑ̃sɑ̃t",
+    "NOM": "kɔmɑ̃sɑ̃t"
+  },
+  "commissionné": {
+    "ADJ": "kɔmisjɔne",
+    "VER": "komisjone"
+  },
+  "commit": {
+    "NOM": "kɔmi",
+    "VER": "komi"
+  },
+  "communard": {
+    "ADJ": "kɔmynaʁ",
+    "NOM": "komynaʁ"
+  },
+  "communicant": {
+    "ADJ": "kɔmynikɑ̃",
+    "NOM": "komynikɑ̃"
+  },
+  "communiquant": {
+    "ADJ": "kɔmynikɑ̃",
+    "VER": "komynikɑ̃"
+  },
+  "compromis": {
+    "ADJ": "kɔ̃pʁɔmi",
+    "NOM": "kɔ̃pʁomi",
+    "VER": "kɔ̃pʁomi"
+  },
+  "computer": {
+    "NOM": "kɔ̃pyte",
+    "VER": "kɔ̃pjutœʁ"
+  },
+  "conasse": {
+    "ADJ": "kɔnas",
+    "NOM": "konas"
+  },
+  "concussionnaire": {
+    "ADJ": "kɔ̃kysjonɛʁ",
+    "NOM": "kɔ̃kysjɔnɛʁ"
+  },
+  "conditionnel": {
+    "ADJ": "kɔ̃disjɔnɛl",
+    "NOM": "kɔ̃disjonɛl"
+  },
+  "conditionnelle": {
+    "ADJ": "kɔ̃disjonɛl",
+    "NOM": "kɔ̃disjɔnɛl"
+  },
+  "confluent": {
+    "ADJ": "kɔ̃flyɑ̃",
+    "NOM": "kɔ̃flyɑ̃",
+    "VER": "kɔ̃fly"
+  },
+  "conifère": {
+    "ADJ": "kɔnifɛʁ",
+    "NOM": "konifɛʁ"
+  },
+  "conjuguée": {
+    "ADJ": "kɔ̃ʒyɡe",
+    "NOM": "kɔ̃ʒye",
+    "VER": "kɔ̃ʒyɡe"
+  },
+  "connaissant": {
+    "ADJ": "konɛsɑ̃",
+    "NOM": "kɔnɛsɑ̃",
+    "VER": "konɛsɑ̃"
+  },
+  "conoïde": {
+    "ADJ": "konoid",
+    "NOM": "kɔnɔid"
+  },
+  "consens": {
+    "NOM": "kɔsɑ̃s",
+    "VER": "kɔ̃sɑ̃"
+  },
+  "consolante": {
+    "ADJ": "kɔ̃solɑ̃t",
+    "NOM": "kɔ̃sɔlɑ̃t"
+  },
+  "consolidés": {
+    "ADJ": "kɔ̃solide",
+    "NOM": "kɔ̃sɔlide",
+    "VER": "kɔ̃solide"
+  },
+  "constitutionnel": {
+    "ADJ": "kɔ̃stitysjonɛl",
+    "NOM": "kɔ̃stitysjɔnɛl"
+  },
+  "contaminateur": {
+    "ADJ": "kɔ̃taminɑ̃tœʁ",
+    "NOM": "kɔ̃taminatœʁ"
+  },
+  "contenant": {
+    "ADJ": "kɔ̃tnɑ̃",
+    "NOM": "kɔ̃tənɑ̃",
+    "VER": "kɔ̃tənɑ̃"
+  },
+  "content": {
+    "ADJ": "kɔ̃tɑ̃",
+    "NOM": "kɔ̃tɑ̃",
+    "VER": "kɔ̃t"
+  },
+  "contorsionné": {
+    "ADJ": "kɔ̃tɔʁsjɔne",
+    "VER": "kɔ̃tɔʁsijone"
+  },
+  "contractions": {
+    "NOM": "kɔ̃tʁaksjɔ̃",
+    "VER": "kɔ̃tʁaktjɔ̃"
+  },
+  "convergent": {
+    "ADJ": "kɔ̃vɛʁʒɑ̃",
+    "VER": "kɔ̃vɛʁʒ"
+  },
+  "copieur": {
+    "ADJ": "kɔpjœʁ",
+    "NOM": "kopjœʁ"
+  },
+  "coproduit": {
+    "NOM": "kopʁɔdɥi",
+    "VER": "kopʁodɥi"
+  },
+  "coprophile": {
+    "ADJ": "kɔpʁɔfil",
+    "NOM": "kopʁofil"
+  },
+  "coprésident": {
+    "NOM": "kopʁezid",
+    "VER": "kɔpʁezid"
+  },
+  "coquinet": {
+    "ADJ": "kokinɛ",
+    "NOM": "kɔkinɛ"
+  },
+  "corbiérais": {
+    "ADJ": "kɔʁbjeʁɛz",
+    "NOM": "kɔʁbjeʁɛ"
+  },
+  "corentin": {
+    "ADJ": "koʁɑ̃tɛ̃",
+    "NOM": "kɔʁɑ̃tɛ̃"
+  },
+  "corner": {
+    "NOM": "koʁnɛʁ",
+    "VER": "koʁne"
+  },
+  "cornouaillais": {
+    "ADJ": "kɔʁnwajɛ",
+    "NOM": "kɔʁnuajɛ"
+  },
+  "coronale": {
+    "ADJ": "koʁonal",
+    "NOM": "kɔʁɔnal"
+  },
+  "correctrice": {
+    "ADJ": "koʁɛktʁis",
+    "NOM": "kɔʁɛktʁis"
+  },
+  "corrélative": {
+    "ADJ": "koʁelativ",
+    "NOM": "kɔʁelativ"
+  },
+  "cosaque": {
+    "ADJ": "kɔzak",
+    "NOM": "kozak"
+  },
+  "cosmo": {
+    "ADV": "kɔsmo",
+    "NOM": "kosmo"
+  },
+  "cotise": {
+    "NOM": "kɔtiz",
+    "VER": "kotiz"
+  },
+  "coudehardais": {
+    "ADJ": "kudəaʁdɛ",
+    "NOM": "kudəʒaʁdɛ"
+  },
+  "coulonchois": {
+    "ADJ": "kulɔ̃ʃwa",
+    "NOM": "kulɔ̃swa"
+  },
+  "country": {
+    "ADJ": "kawntʁi",
+    "NOM": "kuntʁi"
+  },
+  "couronnant": {
+    "ADJ": "kuʁɔnɑ̃",
+    "VER": "kuʁonɑ̃"
+  },
+  "coïncident": {
+    "ADJ": "kɔɛ̃sidɑ̃",
+    "VER": "kɔɛ̃sid"
+  },
+  "cracker": {
+    "NOM": "kʁakɛʁ",
+    "VER": "kʁake"
+  },
+  "cramponné": {
+    "ADJ": "kʁɑ̃pɔne",
+    "VER": "kʁɑ̃pone"
+  },
+  "craonnais": {
+    "ADJ": "kʁaonɛ",
+    "NOM": "kʁanɛ"
+  },
+  "crayonné": {
+    "NOM": "kʁɛjɔne",
+    "VER": "kʁɛjone"
+  },
+  "crevettier": {
+    "ADJ": "kʁəvɛtje",
+    "NOM": "kʁəvətje"
+  },
+  "criminologiste": {
+    "ADJ": "kʁiminɔlɔʒist",
+    "NOM": "kʁiminoloʒist"
+  },
+  "criminologue": {
+    "ADJ": "kʁiminɔlɔ",
+    "NOM": "kʁiminolɔɡ"
+  },
+  "croché": {
+    "ADJ": "kʁɔʃe",
+    "VER": "kʁoʃe"
+  },
+  "croquante": {
+    "ADJ": "kʁokɑ̃t",
+    "NOM": "kʁɔkɑ̃t"
+  },
+  "crouttésien": {
+    "ADJ": "kʁutesjɛ̃",
+    "NOM": "kʁutezjɛ̃"
+  },
+  "cryotechnique": {
+    "ADJ": "kʁijotɛknik",
+    "NOM": "kʁiotɛknik"
+  },
+  "cryptomère": {
+    "ADJ": "kʁiptɔmɛʁ",
+    "NOM": "kʁiptomɛʁ"
+  },
+  "créolophone": {
+    "ADJ": "kʁeɔlɔfɔn",
+    "NOM": "kʁeɔlofɔn"
+  },
+  "crêpé": {
+    "NOM": "kʁɛpe",
+    "VER": "kʁepe"
+  },
+  "cynocéphale": {
+    "ADJ": "sinɔsefal",
+    "NOM": "sinosefal"
+  },
+  "cénozoïque": {
+    "ADJ": "senɔzɔik",
+    "NOM": "sɛnɔzɔik"
+  },
+  "cévenol": {
+    "ADJ": "sevnɔl",
+    "NOM": "sevənɔl"
+  },
+  "daltonienne": {
+    "ADJ": "daltonjɛn",
+    "NOM": "daltɔnjɛn"
+  },
+  "destitué": {
+    "ADJ": "dɛstitɥe",
+    "VER": "destitɥe"
+  },
+  "digestive": {
+    "ADJ": "diʒɛstiv",
+    "NOM": "dajʒɛstiv"
+  },
+  "dijonnais": {
+    "ADJ": "diʒonɛ",
+    "NOM": "diʒɔnɛ"
+  },
+  "dionysiaques": {
+    "ADJ": "djonizjak",
+    "NOM": "djɔnizjak"
+  },
+  "dionysien": {
+    "ADJ": "djonizjɛ̃",
+    "NOM": "djɔnizjɛ̃"
+  },
+  "disgracié": {
+    "ADJ": "disɡʁasje",
+    "NOM": "dizɡʁasje",
+    "VER": "disɡʁasje"
+  },
+  "disgraciée": {
+    "ADJ": "disɡʁasje",
+    "NOM": "dizɡʁasje",
+    "VER": "disɡʁasje"
+  },
+  "disposant": {
+    "ADJ": "dispɔzɑ̃",
+    "NOM": "dispozɑ̃",
+    "VER": "dispozɑ̃"
+  },
+  "dissociant": {
+    "ADJ": "disɔsjɑ̃",
+    "VER": "disosjɑ̃"
+  },
+  "divergent": {
+    "ADJ": "divɛʁʒɑ̃",
+    "VER": "divɛʁʒ"
+  },
+  "do": {
+    "ADV": "dito",
+    "NOM": "do"
+  },
+  "dolente": {
+    "ADJ": "dolɑ̃t",
+    "NOM": "dɔlɑ̃t"
+  },
+  "doloriste": {
+    "ADJ": "dɔlɔʁist",
+    "NOM": "doloʁist"
+  },
+  "domestiqué": {
+    "ADJ": "dɔmɛstike",
+    "VER": "domɛstike"
+  },
+  "domina": {
+    "NOM": "dɔmina",
+    "VER": "domina"
+  },
+  "dominicale": {
+    "ADJ": "dominikal",
+    "NOM": "dɔminikal"
+  },
+  "dominé": {
+    "NOM": "dɔmine",
+    "VER": "domine"
+  },
+  "dominés": {
+    "NOM": "dɔmine",
+    "VER": "domine"
+  },
+  "donaldvillois": {
+    "ADJ": "donaldvillwa",
+    "NOM": "donaldvilwa"
+  },
+  "donc": {
+    "ADV": "dɔ̃",
+    "CON": "dɔ̃k"
+  },
+  "dong": {
+    "NOM": "dɔ̃ŋ",
+    "ONO": "dɔ̃ɡ"
+  },
+  "douairière": {
+    "ADJ": "dweʁjɛʁ",
+    "NOM": "dwɛʁjɛʁ"
+  },
+  "doutai": {
+    "NOM": "dute",
+    "VER": "dutɛ"
+  },
+  "drelin": {
+    "NOM": "dʁølɛ̃",
+    "ONO": "dʁəlɛ̃"
+  },
+  "dressée": {
+    "ADJ": "dʁese",
+    "NOM": "dʁɛse",
+    "VER": "dʁese"
+  },
+  "drifter": {
+    "NOM": "dʁiftœʁ",
+    "VER": "dʁifte"
+  },
+  "driver": {
+    "NOM": "dʁajvœʁ",
+    "VER": "dʁajve"
+  },
+  "duel": {
+    "ADJ": "dyɛl",
+    "NOM": "dɥɛl"
+  },
+  "débloqué": {
+    "ADJ": "deblɔke",
+    "VER": "debloke"
+  },
+  "déboussolé": {
+    "ADJ": "debusɔle",
+    "VER": "debusole"
+  },
+  "déboutonné": {
+    "NOM": "debutɔne",
+    "VER": "debutone"
+  },
+  "décalotté": {
+    "ADJ": "dekalɔte",
+    "VER": "dekalote"
+  },
+  "décennale": {
+    "ADJ": "desɛnal",
+    "NOM": "desenal"
+  },
+  "décisionnaire": {
+    "ADJ": "desizjɔ̃nɛʁ",
+    "NOM": "desizjonɛʁ"
+  },
+  "déconnant": {
+    "ADJ": "dekɔnɑ̃",
+    "VER": "dekonɑ̃"
+  },
+  "déconnecté": {
+    "ADJ": "dekɔnɛkte",
+    "VER": "dekonɛkte"
+  },
+  "décroché": {
+    "ADJ": "dekʁɔʃe",
+    "VER": "dekʁoʃe"
+  },
+  "dédoré": {
+    "ADJ": "dedɔʁe",
+    "VER": "dedoʁe"
+  },
+  "défavorisée": {
+    "ADJ": "defavoʁize",
+    "NOM": "defavɔʁize",
+    "VER": "defavoʁize"
+  },
+  "dégringolant": {
+    "ADJ": "deʁɛ̃ɔlɑ̃",
+    "VER": "deɡʁɛ̃ɡolɑ̃"
+  },
+  "dégringolé": {
+    "ADJ": "deʁɛ̃ɔle",
+    "VER": "deɡʁɛ̃ɡole"
+  },
+  "délogé": {
+    "ADJ": "delɔʒe",
+    "VER": "deloʒe"
+  },
+  "délogée": {
+    "NOM": "delɔʒe",
+    "VER": "deloʒe"
+  },
+  "dématérialisé": {
+    "ADJ": "demateʁjalize",
+    "VER": "demateʁijalize"
+  },
+  "démolisseur": {
+    "ADJ": "demɔlisœʁ",
+    "NOM": "demolisœʁ"
+  },
+  "démonétisé": {
+    "ADJ": "demɔnetize",
+    "VER": "demonetize"
+  },
+  "démêlé": {
+    "NOM": "demɛle",
+    "VER": "demele"
+  },
+  "dépossédé": {
+    "NOM": "depɔsede",
+    "VER": "deposede"
+  },
+  "dépossédée": {
+    "NOM": "depɔsede",
+    "VER": "deposede"
+  },
+  "dépressive": {
+    "ADJ": "depʁesiv",
+    "NOM": "depʁɛsiv"
+  },
+  "dérobeuse": {
+    "ADJ": "deʁobøz",
+    "NOM": "deʁɔbøz"
+  },
+  "dérobée": {
+    "ADJ": "deʁobe",
+    "NOM": "deʁɔbe",
+    "VER": "deʁobe"
+  },
+  "désagrégeant": {
+    "ADJ": "dezaʁeʒɑ̃",
+    "VER": "dezaɡʁeʒɑ̃"
+  },
+  "désapprobateur": {
+    "ADJ": "dezapʁobatœʁ",
+    "NOM": "dezapʁɔbatœʁ"
+  },
+  "désapprobatrice": {
+    "ADJ": "dezapʁobatʁis",
+    "NOM": "dezapʁɔbatʁis"
+  },
+  "désengagé": {
+    "ADJ": "dezɑ̃aʒe",
+    "VER": "dezɑ̃ɡaʒe"
+  },
+  "déshonoré": {
+    "ADJ": "dezɔnɔʁe",
+    "VER": "dezonoʁe"
+  },
+  "désillusionné": {
+    "ADJ": "dezilyzjɔne",
+    "VER": "dezilyzjone"
+  },
+  "désobligeante": {
+    "ADJ": "dezobliʒɑ̃t",
+    "NOM": "dezɔbliʒɑ̃t"
+  },
+  "désorientant": {
+    "ADJ": "dezɔʁjɑ̃tɑ̃",
+    "VER": "dezoʁjɑ̃tɑ̃"
+  },
+  "détériorant": {
+    "ADJ": "deteʁjɔʁɑ̃",
+    "VER": "deteʁjoʁɑ̃"
+  },
+  "détérioré": {
+    "ADJ": "deteʁjɔʁe",
+    "VER": "deteʁjoʁe"
+  },
+  "dévonien": {
+    "ADJ": "devɔnjɛ̃",
+    "NOM": "devonjɛ̃"
+  },
+  "ecsta": {
+    "ADV": "øksta",
+    "NOM": "ɛksta"
+  },
+  "edmontonien": {
+    "ADJ": "ɛdmɔntɔnjɛ̃",
+    "NOM": "ɛdməntənjɛ̃"
+  },
+  "effiloché": {
+    "ADJ": "efilɔʃe",
+    "VER": "efiloʃe"
+  },
+  "effluent": {
+    "ADJ": "ɛfly",
+    "NOM": "eflyɑ̃"
+  },
+  "einsteinienne": {
+    "ADJ": "ɛ̃stɛnjɛn",
+    "NOM": "ajnʃtajnjɛn"
+  },
+  "embobiné": {
+    "ADJ": "ɑ̃bɔbine",
+    "VER": "ɑ̃bobine"
+  },
+  "embossé": {
+    "ADJ": "ɑ̃bɔse",
+    "VER": "ɑ̃bose"
+  },
+  "empoisonné": {
+    "ADJ": "ɑ̃pwazɔne",
+    "VER": "ɑ̃pwazone"
+  },
+  "encodeur": {
+    "ADJ": "ɑ̃kɔdœʁ",
+    "NOM": "ɑ̃kodœʁ"
+  },
+  "engageable": {
+    "ADJ": "ɑ̃aʒabl",
+    "NOM": "ɑ̃ɡaʒabl"
+  },
+  "engageante": {
+    "ADJ": "ɑ̃ɡaʒɑ̃t",
+    "NOM": "ɑ̃aʒɑ̃t"
+  },
+  "enrayé": {
+    "ADJ": "ɑ̃ʁɛje",
+    "VER": "ɑ̃ʁeje"
+  },
+  "enrobant": {
+    "ADJ": "ɑ̃ʁɔbɑ̃",
+    "VER": "ɑ̃ʁobɑ̃"
+  },
+  "entête": {
+    "NOM": "antɛtə",
+    "VER": "ɑ̃tɛt"
+  },
+  "envolé": {
+    "ADJ": "ɑ̃vɔle",
+    "VER": "ɑ̃vole"
+  },
+  "es": {
+    "AUX": "ɛ",
+    "NOM": "ɛs",
+    "VER": "ɛ"
+  },
+  "esclavagé": {
+    "ADJ": "esklavaʒe",
+    "VER": "ɛsklavaʒe"
+  },
+  "essorant": {
+    "ADJ": "ɛsɔʁɑ̃",
+    "VER": "ɛsoʁɑ̃"
+  },
+  "essoufflant": {
+    "ADJ": "esuflɑ̃",
+    "VER": "ɛsuflɑ̃"
+  },
+  "est": {
+    "ADJ": "ɛst",
+    "AUX": "ɛ",
+    "NOM": "ɛst",
+    "VER": "ɛ"
+  },
+  "ester": {
+    "NOM": "estɛʁ",
+    "VER": "este"
+  },
+  "estomaqué": {
+    "ADJ": "ɛstɔmake",
+    "VER": "ɛstomake"
+  },
+  "exacerbant": {
+    "ADJ": "ɛzasɛʁbɑ̃",
+    "VER": "ɛɡzasɛʁbɑ̃"
+  },
+  "exalta": {
+    "NOM": "ɛzalta",
+    "VER": "ɛɡzalta"
+  },
+  "exaspéré": {
+    "ADJ": "ɛzaspeʁe",
+    "VER": "ɛɡzaspeʁe"
+  },
+  "excellent": {
+    "ADJ": "eksɛlɑ̃",
+    "VER": "eksɛl"
+  },
+  "exceptions": {
+    "NOM": "eksɛpsjɔ̃",
+    "VER": "eksɛptjɔ̃"
+  },
+  "excommuniée": {
+    "NOM": "ɛkskɔmynje",
+    "VER": "ɛkskomynje"
+  },
+  "exfoliant": {
+    "ADJ": "ɛksfoljɑ̃",
+    "NOM": "ɛksfɔljɑ̃"
+  },
+  "exhibitionniste": {
+    "ADJ": "ɛzibisjɔnist",
+    "NOM": "ɛɡzibisjonist"
+  },
+  "exilent": {
+    "NOM": "ɛzil",
+    "VER": "ɛɡzil"
+  },
+  "expectorant": {
+    "ADJ": "ɛkspɛktɔʁɑ̃",
+    "NOM": "ɛkspɛktoʁɑ̃",
+    "VER": "ɛkspɛktoʁɑ̃"
+  },
+  "exploré": {
+    "ADJ": "ɛksplɔʁe",
+    "VER": "ɛksploʁe"
+  },
+  "exponentielle": {
+    "ADJ": "ɛksponɑ̃sjɛl",
+    "NOM": "ɛkspɔnɑ̃sjɛl"
+  },
+  "exproprié": {
+    "NOM": "ɛkspʁɔpʁije",
+    "VER": "ɛkspʁopʁije"
+  },
+  "expédient": {
+    "ADJ": "ekspedjɑ̃",
+    "NOM": "ɛkspedjɑ̃",
+    "VER": "ekspedi"
+  },
+  "exécutant": {
+    "ADJ": "ɛzekytɑ̃",
+    "NOM": "ɛɡzekytɑ̃",
+    "VER": "ɛɡzekytɑ̃"
+  },
+  "exécuteur": {
+    "ADJ": "ɛzekytœʁ",
+    "NOM": "ɛɡzekytœʁ"
+  },
+  "exécutions": {
+    "NOM": "eɡzekysjɔ̃",
+    "VER": "eɡzekytjɔ̃"
+  },
+  "faiblissant": {
+    "ADJ": "feblisɑ̃",
+    "VER": "fɛblisɑ̃"
+  },
+  "faignante": {
+    "ADJ": "fɛɲɑ̃t",
+    "NOM": "feɲɑ̃t",
+    "VER": "fɛɲɑ̃t"
+  },
+  "favorisant": {
+    "ADJ": "favɔʁizɑ̃",
+    "VER": "favoʁizɑ̃"
+  },
+  "favorisé": {
+    "NOM": "favɔʁize",
+    "VER": "favoʁize"
+  },
+  "favorisée": {
+    "NOM": "favɔʁize",
+    "VER": "favoʁize"
+  },
+  "façonné": {
+    "ADJ": "fasɔne",
+    "NOM": "fasone",
+    "VER": "fasone"
+  },
+  "feldgrau": {
+    "ADJ": "fɛldɡʁaw",
+    "NOM": "fɛldɡʁo"
+  },
+  "fellinien": {
+    "ADJ": "fɛlinjɛ̃",
+    "NOM": "fəlinjɛ̃"
+  },
+  "ferment": {
+    "NOM": "fɛʁmɑ̃",
+    "VER": "fɛʁm"
+  },
+  "ferronnier": {
+    "ADJ": "fɛʁɔnje",
+    "NOM": "fɛʁonje"
+  },
+  "festonné": {
+    "ADJ": "fɛstɔne",
+    "VER": "fɛstone"
+  },
+  "fiance": {
+    "NOM": "fijɑ̃s",
+    "VER": "fjɑ̃s"
+  },
+  "fidélien": {
+    "ADJ": "fideljɛn",
+    "NOM": "fideljɛ̃"
+  },
+  "fier": {
+    "ADJ": "fjɛʁ",
+    "VER": "fje"
+  },
+  "filioque": {
+    "ADJ": "filjɔk",
+    "NOM": "filjɔkwe"
+  },
+  "filochard": {
+    "ADJ": "filɔʃaʁ",
+    "NOM": "filoʃaʁ"
+  },
+  "flagellée": {
+    "ADJ": "flaʒɛle",
+    "NOM": "flaʒele",
+    "VER": "flaʒɛle"
+  },
+  "flagellés": {
+    "ADJ": "flaʒɛle",
+    "NOM": "flaʒele",
+    "VER": "flaʒɛle"
+  },
+  "fleurie": {
+    "ADJ": "flœʁi",
+    "NOM": "fløʁi",
+    "VER": "flœʁi"
+  },
+  "floculent": {
+    "ADJ": "flɔkyl",
+    "VER": "flokyl"
+  },
+  "florentin": {
+    "ADJ": "floʁɑ̃tɛ̃",
+    "NOM": "flɔʁɑ̃tɛ̃"
+  },
+  "florentine": {
+    "ADJ": "floʁɑ̃tin",
+    "NOM": "flɔʁɑ̃tin"
+  },
+  "florès": {
+    "ADJ": "flɔʁɛs",
+    "ADV": "floʁɛs"
+  },
+  "flottais": {
+    "ADJ": "flotɛ",
+    "NOM": "flɔtɛ",
+    "VER": "flotɛ"
+  },
+  "flotté": {
+    "ADJ": "flɔte",
+    "VER": "flote"
+  },
+  "follette": {
+    "ADJ": "folɛt",
+    "NOM": "fɔlɛt"
+  },
+  "fonctionnelle": {
+    "ADJ": "fɔ̃ksjonɛl",
+    "NOM": "fɔ̃ksjɔnɛl"
+  },
+  "forestière": {
+    "ADJ": "foʁɛstjɛʁ",
+    "NOM": "fɔʁɛstjɛʁ"
+  },
+  "fossilisé": {
+    "ADJ": "fɔsilize",
+    "VER": "fosilize"
+  },
+  "fouettant": {
+    "ADJ": "fwetɑ̃",
+    "VER": "fwɛtɑ̃"
+  },
+  "fouettée": {
+    "NOM": "fwɛte",
+    "VER": "fwete"
+  },
+  "fractionné": {
+    "NOM": "fʁaksjɔne",
+    "VER": "fʁaksjone"
+  },
+  "franconien": {
+    "ADJ": "fʁɑ̃kɔnjɛ̃",
+    "NOM": "fʁɑ̃konjɛ̃"
+  },
+  "fraye": {
+    "NOM": "fʁɛj",
+    "VER": "fʁej"
+  },
+  "frayé": {
+    "ADJ": "fʁɛje",
+    "VER": "fʁeje"
+  },
+  "fricoteur": {
+    "ADJ": "fʁikɔtœʁ",
+    "NOM": "fʁikotœʁ"
+  },
+  "fromental": {
+    "ADJ": "fʁɔmɑ̃tal",
+    "NOM": "fʁomɑ̃tal"
+  },
+  "frottée": {
+    "NOM": "fʁɔte",
+    "VER": "fʁote"
+  },
+  "frétillant": {
+    "ADJ": "fʁetijɑ̃",
+    "VER": "LEX"
+  },
+  "fun": {
+    "ADJ": "fœn",
+    "NOM": "fyn"
+  },
+  "funk": {
+    "ADJ": "fœ̃k",
+    "NOM": "fœŋk"
+  },
+  "funky": {
+    "ADJ": "fœnki",
+    "NOM": "fœŋki"
+  },
+  "fureteuse": {
+    "ADJ": "fyʁətøz",
+    "NOM": "fyʁtøz"
+  },
+  "féculent": {
+    "ADJ": "fekyl",
+    "NOM": "fekylɑ̃"
+  },
+  "gagne": {
+    "NOM": "aɲ",
+    "VER": "ɡaɲ"
+  },
+  "gagée": {
+    "NOM": "aʒe",
+    "VER": "ɡaʒe"
+  },
+  "gaminement": {
+    "ADV": "ɡaminmɑ̃",
+    "NOM": "ɡaminəmɑ̃"
+  },
+  "gaujacois": {
+    "ADJ": "oʒakwa",
+    "NOM": "ɔʒakwa"
+  },
+  "gaziote": {
+    "ADJ": "ɡazjɔt",
+    "NOM": "ɡaziɔt"
+  },
+  "genre": {
+    "ADV": "ʒɑ̃ʁə",
+    "NOM": "ʒɑ̃ʁ"
+  },
+  "germanophile": {
+    "ADJ": "ʒɛʁmanɔfil",
+    "NOM": "ʒɛʁmanofil"
+  },
+  "germanophone": {
+    "ADJ": "ʒɛʁmanɔfɔn",
+    "NOM": "ʒɛʁmanofɔn"
+  },
+  "gigogne": {
+    "ADJ": "ʒiɡɔɲ",
+    "NOM": "ʒiɔɲ"
+  },
+  "gigotant": {
+    "ADJ": "ʒiɔtɑ̃",
+    "VER": "ʒiɡotɑ̃"
+  },
+  "gnole": {
+    "ADJ": "ɲɔl",
+    "NOM": "ɲol"
+  },
+  "godaille": {
+    "NOM": "ɔdaj",
+    "VER": "ɡodaj"
+  },
+  "gommant": {
+    "ADJ": "ɡɔmɑ̃",
+    "VER": "ɡomɑ̃"
+  },
+  "gongoriste": {
+    "ADJ": "ɡɔ̃ɡoʁist",
+    "NOM": "ɔ̃ɔʁist"
+  },
+  "goth": {
+    "ADJ": "ɔ",
+    "NOM": "ɡo"
+  },
+  "gouailleuse": {
+    "ADJ": "ɡwajøz",
+    "NOM": "wajøz"
+  },
+  "goyesque": {
+    "ADJ": "ɔjɛsk",
+    "NOM": "ɡojɛsk"
+  },
+  "grasseyé": {
+    "ADJ": "ɡʁasɛje",
+    "VER": "ɡʁaseje"
+  },
+  "gratos": {
+    "ADJ": "ɡʁato",
+    "ADV": "ɡʁatos"
+  },
+  "gravosse": {
+    "ADJ": "ɡʁavɔs",
+    "NOM": "ɡʁavos"
+  },
+  "grief": {
+    "ADJ": "ɡʁiɛf",
+    "NOM": "ɡʁijɛf"
+  },
+  "grisonné": {
+    "ADJ": "ɡʁizɔne",
+    "VER": "ɡʁizone"
+  },
+  "grivelée": {
+    "ADJ": "ɡʁivəle",
+    "NOM": "ɡʁivle"
+  },
+  "grognard": {
+    "ADJ": "ʁɔɲaʁ",
+    "NOM": "ɡʁoɲaʁ"
+  },
+  "grognonne": {
+    "ADJ": "ɡʁoɲɔn",
+    "NOM": "ʁɔɲɔn",
+    "VER": "ɡʁoɲɔn"
+  },
+  "gruge": {
+    "NOM": "ʁyʒ",
+    "VER": "ɡʁyʒ"
+  },
+  "grégorien": {
+    "ADJ": "ɡʁeɡoʁjɛ̃",
+    "NOM": "ʁeɔʁjɛ̃"
+  },
+  "gueulée": {
+    "NOM": "ɡøle",
+    "VER": "ɡœle"
+  },
+  "guyanais": {
+    "ADJ": "ɡɥijanɛ",
+    "NOM": "ɡyijanɛ"
+  },
+  "gâchée": {
+    "NOM": "aʃe",
+    "VER": "ɡaʃe"
+  },
+  "gênée": {
+    "ADJ": "ʒɛne",
+    "NOM": "ʒene",
+    "VER": "ʒɛne"
+  },
+  "hacker": {
+    "NOM": "akœʁ",
+    "VER": "ake"
+  },
+  "hagiographe": {
+    "ADJ": "aʒjɔʁaf",
+    "NOM": "aʒjoɡʁaf"
+  },
+  "haillonneuse": {
+    "ADJ": "ajonøz",
+    "NOM": "ajɔnøz"
+  },
+  "han": {
+    "ADJ": "ɑ̃",
+    "NOM": "ɑ̃",
+    "ONO": "an"
+  },
+  "hanovrien": {
+    "ADJ": "anɔvʁiɛ̃",
+    "NOM": "anɔvʁjɛ̃"
+  },
+  "harmonisant": {
+    "ADJ": "aʁmɔnizɑ̃",
+    "VER": "aʁmonizɑ̃"
+  },
+  "hindoustani": {
+    "ADJ": "industani",
+    "NOM": "ɛ̃dustani"
+  },
+  "hispanophone": {
+    "ADJ": "ispanɔfɔn",
+    "NOM": "ispanofɔn"
+  },
+  "honorée": {
+    "ADJ": "onoʁe",
+    "NOM": "ɔnɔʁe",
+    "VER": "onoʁe"
+  },
+  "humbug": {
+    "ADJ": "œmbœɡ",
+    "NOM": "əmbə"
+  },
+  "huîtrier": {
+    "ADJ": "ɥitʁije",
+    "NOM": "ɥitʁie"
+  },
+  "hydrographe": {
+    "ADJ": "idʁoɡʁaf",
+    "NOM": "idʁɔɡʁaf"
+  },
+  "hydrophyte": {
+    "ADJ": "idʁɔfit",
+    "NOM": "idʁofit"
+  },
+  "hyper": {
+    "ADV": "ipɛʁ",
+    "NOM": "ajpe"
+  },
+  "hyperborée": {
+    "ADJ": "ipɛʁbɔʁe",
+    "NOM": "ipɛʁboʁe"
+  },
+  "hypnotisant": {
+    "ADJ": "ipnɔtizɑ̃",
+    "VER": "ipnotizɑ̃"
+  },
+  "héroïnomane": {
+    "ADJ": "eʁɔinɔman",
+    "NOM": "eʁoinoman"
+  },
+  "hétérosexuelle": {
+    "ADJ": "eteʁoseksɥɛl",
+    "NOM": "eteʁɔsɛksɥɛl"
+  },
+  "illyrien": {
+    "ADJ": "illiʁjɛ̃",
+    "NOM": "iliʁjɛ̃"
+  },
+  "immoraliste": {
+    "ADJ": "imɔʁalist",
+    "NOM": "imoʁalist"
+  },
+  "implorant": {
+    "ADJ": "ɛ̃ploʁɑ̃",
+    "NOM": "ɛ̃plɔʁɑ̃",
+    "VER": "ɛ̃ploʁɑ̃"
+  },
+  "implorante": {
+    "ADJ": "ɛ̃ploʁɑ̃t",
+    "NOM": "ɛ̃plɔʁɑ̃t"
+  },
+  "incognito": {
+    "ADJ": "ɛ̃kɔɲito",
+    "ADV": "ɛ̃koɲito",
+    "NOM": "ɛ̃koɲito"
+  },
+  "incorporant": {
+    "ADJ": "ɛ̃kɔʁpɔʁɑ̃",
+    "VER": "ɛ̃kɔʁpoʁɑ̃"
+  },
+  "incus": {
+    "ADJ": "ɛ̃ky",
+    "NOM": "inkys"
+  },
+  "indolente": {
+    "ADJ": "ɛ̃dolɑ̃t",
+    "NOM": "ɛ̃dɔlɑ̃t"
+  },
+  "influent": {
+    "ADJ": "ɛ̃flyɑ̃",
+    "VER": "ɛ̃fly"
+  },
+  "insolent": {
+    "ADJ": "ɛ̃sɔlɑ̃",
+    "NOM": "ɛ̃sɔl",
+    "VER": "ɛ̃sɔl"
+  },
+  "insolente": {
+    "ADJ": "ɛ̃solɑ̃t",
+    "NOM": "ɛ̃sɔlɑ̃t"
+  },
+  "insonorisé": {
+    "ADJ": "ɛ̃sɔnɔʁize",
+    "VER": "ɛ̃sonoʁize"
+  },
+  "inspections": {
+    "NOM": "ɛ̃spɛksjɔ̃",
+    "VER": "ɛ̃spɛktjɔ̃"
+  },
+  "instauré": {
+    "ADJ": "ɛ̃stɔʁe",
+    "VER": "ɛ̃stoʁe"
+  },
+  "insurgent": {
+    "NOM": "ɛ̃syʁʒɑ̃",
+    "VER": "ɛ̃syʁʒ"
+  },
+  "intello": {
+    "ADJ": "ɛ̃telo",
+    "NOM": "ɛ̃tɛlo"
+  },
+  "intentions": {
+    "NOM": "ɛ̃tɑ̃sjɔ̃",
+    "VER": "ɛ̃tɑ̃tjɔ̃"
+  },
+  "interceptions": {
+    "NOM": "ɛ̃tɛʁsepsjɔ̃",
+    "VER": "ɛ̃tɛʁsɛptjɔ̃"
+  },
+  "interpellé": {
+    "NOM": "ɛ̃tɛʁpəle",
+    "VER": "ɛ̃tɛʁpele"
+  },
+  "interviewer": {
+    "NOM": "ɛ̃tɛʁvjuvœʁ",
+    "VER": "ɛ̃tɛʁvjuve"
+  },
+  "intolérante": {
+    "ADJ": "ɛ̃toleʁɑ̃t",
+    "NOM": "ɛ̃tɔleʁɑ̃t"
+  },
+  "intérieure": {
+    "ADJ": "ɛ̃teʁjœʁ",
+    "NOM": "ɛ̃tɛʁjœʁ"
+  },
+  "inuit": {
+    "ADJ": "inwit",
+    "NOM": "inɥit"
+  },
+  "inventions": {
+    "NOM": "ɛ̃vɑ̃sjɔ̃",
+    "VER": "ɛ̃vɑ̃tjɔ̃"
+  },
+  "ionienne": {
+    "ADJ": "jonjɛn",
+    "NOM": "jɔnjɛn"
+  },
+  "ionique": {
+    "ADJ": "jonik",
+    "NOM": "jɔnik"
+  },
+  "iraquienne": {
+    "ADJ": "iʁakijɛn",
+    "NOM": "iʁakjɛn"
+  },
+  "iroquoise": {
+    "ADJ": "iʁokwaz",
+    "NOM": "iʁɔkwaz"
+  },
+  "irrésolue": {
+    "ADJ": "iʁezoly",
+    "NOM": "iʁezɔly"
+  },
+  "isomère": {
+    "ADJ": "izomɛʁ",
+    "NOM": "izɔmɛʁ"
+  },
+  "isséen": {
+    "ADJ": "iseɛn",
+    "NOM": "iseɛ̃"
+  },
+  "jacobine": {
+    "ADJ": "ʒakobin",
+    "NOM": "ʒakɔbin"
+  },
+  "jargonnant": {
+    "ADJ": "ʒaʁɔnɑ̃",
+    "VER": "ʒaʁɡonɑ̃"
+  },
+  "jigger": {
+    "NOM": "dʒiɡœʁ",
+    "VER": "dʒie"
+  },
+  "joliette": {
+    "ADJ": "ʒoljɛt",
+    "NOM": "ʒɔljɛt"
+  },
+  "jongle": {
+    "NOM": "ʒɔ̃l",
+    "VER": "ʒɔ̃ɡl"
+  },
+  "jonglé": {
+    "NOM": "ʒɔ̃le",
+    "VER": "ʒɔ̃ɡle"
+  },
+  "juche": {
+    "NOM": "dʒutʃe",
+    "VER": "ʒyʃ"
+  },
+  "juché": {
+    "NOM": "dʒutʃe",
+    "VER": "ʒyʃe"
+  },
+  "jumelé": {
+    "ADJ": "ʒymle",
+    "VER": "ʒyməle"
+  },
+  "jusques": {
+    "ADV": "ʒysk",
+    "PRE": "ʒyskəz"
+  },
+  "kleptomane": {
+    "ADJ": "klɛptɔman",
+    "NOM": "klɛptoman"
+  },
+  "lampadophore": {
+    "ADJ": "lɑ̃padofɔʁ",
+    "NOM": "lɑ̃padɔfɔʁ"
+  },
+  "laotien": {
+    "ADJ": "laosjɛ̃",
+    "NOM": "laɔsjɛ̃"
+  },
+  "laotienne": {
+    "ADJ": "laosjɛn",
+    "NOM": "laɔsjɛn"
+  },
+  "laputien": {
+    "ADJ": "lapysjɛ̃",
+    "NOM": "lapytjɛ̃"
+  },
+  "laser": {
+    "ADJ": "laze",
+    "NOM": "lazɛʁ"
+  },
+  "latillacois": {
+    "ADJ": "latijakwaz",
+    "NOM": "latijakwa"
+  },
+  "lauréate": {
+    "ADJ": "loʁeat",
+    "NOM": "lɔʁeat"
+  },
+  "legato": {
+    "ADV": "leɡato",
+    "NOM": "ləɡato"
+  },
+  "let": {
+    "ADJ": "lɛ",
+    "NOM": "lɛt"
+  },
+  "lettrée": {
+    "ADJ": "letʁe",
+    "NOM": "lɛtʁe"
+  },
+  "limonadier": {
+    "ADJ": "limɔnadje",
+    "NOM": "limonadje"
+  },
+  "limonier": {
+    "ADJ": "limɔnje",
+    "NOM": "limonje"
+  },
+  "lingala": {
+    "ADJ": "linala",
+    "NOM": "linɡala"
+  },
+  "linguale": {
+    "ADJ": "lɛ̃ɡwal",
+    "NOM": "lɛ̃ɡal"
+  },
+  "lis": {
+    "NOM": "lis",
+    "VER": "li"
+  },
+  "lite": {
+    "ADJ": "lajt",
+    "VER": "lit"
+  },
+  "lithuanienne": {
+    "ADJ": "lityanjɛn",
+    "NOM": "litɥanjɛn"
+  },
+  "lituanienne": {
+    "ADJ": "lityanjɛn",
+    "NOM": "litɥanjɛn"
+  },
+  "lobotomisé": {
+    "ADJ": "lɔbɔtɔmize",
+    "VER": "lobotomize"
+  },
+  "lobé": {
+    "ADJ": "lɔbe",
+    "VER": "lobe"
+  },
+  "localisant": {
+    "ADJ": "lɔkalizɑ̃",
+    "VER": "lokalizɑ̃"
+  },
+  "logeais": {
+    "ADJ": "lɔʒɛ",
+    "VER": "loʒɛ"
+  },
+  "login": {
+    "ADJ": "lɔɡin",
+    "NOM": "lɔin"
+  },
+  "lolo": {
+    "ADJ": "lɔlo",
+    "NOM": "lolo"
+  },
+  "londonien": {
+    "ADJ": "lɔ̃donjɛ̃",
+    "NOM": "lɔ̃dɔnjɛ̃"
+  },
+  "londonienne": {
+    "ADJ": "lɔ̃donjɛn",
+    "NOM": "lɔ̃dɔnjɛn"
+  },
+  "loquedu": {
+    "ADJ": "lɔkdy",
+    "NOM": "lɔkədy"
+  },
+  "loqueteuse": {
+    "ADJ": "lɔkətøz",
+    "NOM": "lɔktøz"
+  },
+  "loquette": {
+    "NOM": "lɔkɛt",
+    "VER": "lokɛt"
+  },
+  "lotie": {
+    "ADJ": "loti",
+    "NOM": "lɔti",
+    "VER": "loti"
+  },
+  "lotois": {
+    "ADJ": "lotwa",
+    "NOM": "lɔtwa"
+  },
+  "lové": {
+    "NOM": "lɔve",
+    "VER": "love"
+  },
+  "luger": {
+    "NOM": "lyʒe",
+    "VER": "luœʁ"
+  },
+  "lyonnaise": {
+    "ADJ": "ljonɛz",
+    "NOM": "ljɔnɛz"
+  },
+  "lédonien": {
+    "ADJ": "ledoɲɛ̃",
+    "NOM": "ledɔɲɛ̃"
+  },
+  "machiste": {
+    "ADJ": "matʃist",
+    "NOM": "makist"
+  },
+  "macrophage": {
+    "ADJ": "makʁofaʒ",
+    "NOM": "makʁɔfaʒ"
+  },
+  "magnum": {
+    "ADJ": "manɔm",
+    "NOM": "maɡnɔm"
+  },
+  "magyar": {
+    "ADJ": "maɡjaʁ",
+    "NOM": "maʒjaʁ"
+  },
+  "mahométane": {
+    "ADJ": "maometan",
+    "NOM": "maɔmetan"
+  },
+  "majoral": {
+    "ADJ": "maʒɔʁal",
+    "NOM": "maʒoʁal"
+  },
+  "majorquais": {
+    "ADJ": "majɔʁkɛ",
+    "NOM": "maʒɔʁkɛ"
+  },
+  "majorquin": {
+    "ADJ": "majɔʁk",
+    "NOM": "majɔʁkɛ̃"
+  },
+  "malinké": {
+    "ADJ": "malinke",
+    "NOM": "malɛ̃ke"
+  },
+  "malintentionnée": {
+    "ADJ": "malɛ̃tɑ̃sjone",
+    "NOM": "malɛ̃tɑ̃sjɔne"
+  },
+  "malpolie": {
+    "ADJ": "malpoli",
+    "NOM": "malpɔli"
+  },
+  "manager": {
+    "NOM": "manadʒœʁ",
+    "VER": "manadʒe"
+  },
+  "mandchou": {
+    "ADJ": "mɑ̃ʃu",
+    "NOM": "mɑ̃tʃu"
+  },
+  "mandchoue": {
+    "ADJ": "mɑ̃dʃu",
+    "NOM": "mɑ̃tʃu"
+  },
+  "maniacodépressive": {
+    "ADJ": "manjakodepʁɛsiv",
+    "NOM": "manjakɔdepʁesiv"
+  },
+  "mannequine": {
+    "NOM": "mankin",
+    "VER": "manəkin"
+  },
+  "mapuche": {
+    "ADJ": "maputʃ",
+    "NOM": "maputʃe"
+  },
+  "marinois": {
+    "ADJ": "maʁinwa",
+    "NOM": "maʁinwaz"
+  },
+  "marmonnant": {
+    "ADJ": "maʁmɔnɑ̃",
+    "VER": "maʁmonɑ̃"
+  },
+  "marmottant": {
+    "ADJ": "maʁmɔtɑ̃",
+    "VER": "maʁmotɑ̃"
+  },
+  "maronite": {
+    "ADJ": "maʁonit",
+    "NOM": "maʁɔnit"
+  },
+  "maroquin": {
+    "ADJ": "maʁɔkɛ̃",
+    "NOM": "maʁokɛ̃"
+  },
+  "marron": {
+    "ADJ": "maʁɔ̃",
+    "ADV": "maʁɔŋ",
+    "NOM": "maʁɔ̃"
+  },
+  "matelot": {
+    "ADJ": "matlo",
+    "NOM": "matəlo"
+  },
+  "mayen": {
+    "ADJ": "majɛ̃",
+    "NOM": "majən"
+  },
+  "maçonné": {
+    "ADJ": "masɔne",
+    "VER": "masone"
+  },
+  "mecklembourgeois": {
+    "ADJ": "mɛklɑ̃buʁʒwa",
+    "NOM": "meklɑ̃buʁʒwa"
+  },
+  "mentholée": {
+    "ADJ": "mɑ̃tole",
+    "NOM": "mɑ̃tɔle"
+  },
+  "mentions": {
+    "NOM": "mɑ̃sjɔ̃",
+    "VER": "mɑ̃tjɔ̃"
+  },
+  "messin": {
+    "ADJ": "mɛsɛ̃",
+    "NOM": "mɛs"
+  },
+  "miao": {
+    "ADJ": "miao",
+    "NOM": "mjao"
+  },
+  "miaou": {
+    "NOM": "mjau",
+    "ONO": "miu"
+  },
+  "michetonne": {
+    "NOM": "miʃtɔn",
+    "VER": "miʃətɔn"
+  },
+  "mijoté": {
+    "NOM": "miʒɔte",
+    "VER": "miʒote"
+  },
+  "minoenne": {
+    "ADJ": "minɔen",
+    "NOM": "minoɛn"
+  },
+  "miribelan": {
+    "ADJ": "miʁibɛlɑ̃",
+    "NOM": "miʁibəlɑ̃"
+  },
+  "mis": {
+    "ADJ": "mi",
+    "NOM": "maʁki",
+    "VER": "mi"
+  },
+  "mitonnant": {
+    "ADJ": "mitɔnɑ̃",
+    "VER": "mitonɑ̃"
+  },
+  "mixer": {
+    "NOM": "miksœʁ",
+    "VER": "mikse"
+  },
+  "mobilisé": {
+    "NOM": "mɔbilize",
+    "VER": "mobilize"
+  },
+  "modulant": {
+    "ADJ": "mɔdylɑ̃",
+    "VER": "modylɑ̃"
+  },
+  "moghol": {
+    "ADJ": "moɡɔl",
+    "NOM": "mɔɡɔl"
+  },
+  "mollissant": {
+    "ADJ": "mɔlisɑ̃",
+    "VER": "molisɑ̃"
+  },
+  "molosse": {
+    "ADJ": "mɔlɔs",
+    "NOM": "molɔs"
+  },
+  "monarchique": {
+    "ADJ": "monaʁʃik",
+    "NOM": "mɔnaʁʃik"
+  },
+  "mono": {
+    "ADJ": "mɔno",
+    "NOM": "mono"
+  },
+  "monocorde": {
+    "ADJ": "monokɔʁd",
+    "NOM": "mɔnɔkɔʁd"
+  },
+  "monomane": {
+    "ADJ": "mɔnɔman",
+    "NOM": "monoman"
+  },
+  "monosyllabe": {
+    "ADJ": "mɔnosilab",
+    "NOM": "monosilab"
+  },
+  "montera": {
+    "NOM": "mɔ̃teʁa",
+    "VER": "mɔ̃təʁa"
+  },
+  "montjolien": {
+    "ADJ": "mɔ̃ʒɔljɛn",
+    "NOM": "mɔ̃ʒɔljɛ̃"
+  },
+  "moquetté": {
+    "ADJ": "mɔkɛte",
+    "VER": "mokete"
+  },
+  "moralisatrice": {
+    "ADJ": "moʁalizatʁis",
+    "NOM": "mɔʁalizatʁis"
+  },
+  "motivateur": {
+    "ADJ": "mɔtivatœʁ",
+    "NOM": "motivatœʁ"
+  },
+  "motocycliste": {
+    "ADJ": "mɔtɔsiklist",
+    "NOM": "motosiklist"
+  },
+  "moucheron": {
+    "ADJ": "muʃʁɔ̃",
+    "NOM": "muʃəʁɔ̃"
+  },
+  "moulue": {
+    "ADJ": "muly",
+    "NOM": "mully",
+    "VER": "muly"
+  },
+  "moutonnière": {
+    "ADJ": "mutonjɛʁ",
+    "NOM": "mutɔnjɛʁ"
+  },
+  "muretin": {
+    "ADJ": "myʁtɛ̃",
+    "NOM": "myʁətɛ̃"
+  },
+  "mus": {
+    "ADJ": "my",
+    "NOM": "muʃ",
+    "VER": "my"
+  },
+  "mussolinienne": {
+    "ADJ": "mysolinjɛn",
+    "NOM": "mysɔlinjɛn"
+  },
+  "mâconnaise": {
+    "ADJ": "makonɛz",
+    "NOM": "makɔnɛz"
+  },
+  "méconnue": {
+    "ADJ": "mekony",
+    "NOM": "mekɔny",
+    "VER": "mekony"
+  },
+  "médecin": {
+    "ADJ": "medsɛ̃",
+    "NOM": "mɛdsɛ̃"
+  },
+  "méridionale": {
+    "ADJ": "meʁidjonal",
+    "NOM": "meʁidjɔnal"
+  },
+  "mérovingien": {
+    "ADJ": "meʁovɛ̃ʒjɛ̃",
+    "NOM": "meʁɔvɛ̃ʒjɛ̃"
+  },
+  "mésopotamien": {
+    "ADJ": "mezopotamjɛ̃",
+    "NOM": "mezɔpɔtamjɛ̃"
+  },
+  "métropolitaine": {
+    "ADJ": "metʁopolitɛn",
+    "NOM": "metʁopɔlitɛn"
+  },
+  "narcoleptique": {
+    "ADJ": "naʁkolɛptik",
+    "NOM": "naʁkɔlɛptik"
+  },
+  "naturopathe": {
+    "ADJ": "natyʁɔpat",
+    "NOM": "natyʁopat"
+  },
+  "neigé": {
+    "ADJ": "nɛʒe",
+    "VER": "neʒe"
+  },
+  "neuchâtelois": {
+    "ADJ": "nøʃatɛlwa",
+    "NOM": "nøʃatəlwa"
+  },
+  "neuroleptique": {
+    "ADJ": "nøʁɔlɛptik",
+    "NOM": "nøʁolɛptik"
+  },
+  "neustrien": {
+    "ADJ": "nøstʁjɛ̃",
+    "NOM": "nøstʁijɛ̃"
+  },
+  "niakoué": {
+    "ADJ": "njakwe",
+    "NOM": "njakue"
+  },
+  "nicaraguayen": {
+    "ADJ": "nikaʁaɡwajɛ̃",
+    "NOM": "nikaʁawajɛ̃"
+  },
+  "niveleur": {
+    "ADJ": "nivlœʁ",
+    "NOM": "nivəlœʁ"
+  },
+  "nivelée": {
+    "NOM": "nivle",
+    "VER": "nivəle"
+  },
+  "nième": {
+    "ADJ": "enjɛm",
+    "NOM": "njɛm"
+  },
+  "nominatif": {
+    "ADJ": "nominatif",
+    "NOM": "nɔminatif"
+  },
+  "nominé": {
+    "NOM": "nɔmine",
+    "VER": "nomine"
+  },
+  "nommée": {
+    "ADJ": "nome",
+    "NOM": "nɔme",
+    "VER": "nome"
+  },
+  "notifié": {
+    "ADJ": "nɔtifje",
+    "VER": "notifje"
+  },
+  "notions": {
+    "NOM": "nɔsjɔ̃",
+    "VER": "nɔtjɔ̃"
+  },
+  "noueuse": {
+    "ADJ": "nwøz",
+    "NOM": "nuøz"
+  },
+  "novatrice": {
+    "ADJ": "novatʁis",
+    "NOM": "nɔvatʁis"
+  },
+  "négligent": {
+    "ADJ": "neɡliʒɑ̃",
+    "NOM": "neɡliʒɑ̃",
+    "VER": "neɡliʒ"
+  },
+  "néonazie": {
+    "ADJ": "neonazi",
+    "NOM": "neɔnazi"
+  },
+  "névropathe": {
+    "ADJ": "nevʁɔpat",
+    "NOM": "nevʁopat"
+  },
+  "névrosée": {
+    "ADJ": "nevʁoze",
+    "NOM": "nevʁɔze"
+  },
+  "objections": {
+    "NOM": "ɔbʒɛksjɔ̃",
+    "VER": "ɔbʒɛktjɔ̃"
+  },
+  "obsédée": {
+    "ADJ": "opsede",
+    "NOM": "ɔbsede",
+    "VER": "opsede"
+  },
+  "occasionnelle": {
+    "ADJ": "okazjonɛl",
+    "NOM": "ɔkazjɔnɛl"
+  },
+  "occultant": {
+    "ADJ": "okyltɑ̃",
+    "VER": "ɔkyltɑ̃"
+  },
+  "ocré": {
+    "ADJ": "ɔkʁe",
+    "VER": "okʁe"
+  },
+  "octosyllabe": {
+    "ADJ": "ɔktɔsilab",
+    "NOM": "ɔktosilab"
+  },
+  "offensée": {
+    "ADJ": "ofɑ̃se",
+    "NOM": "ɔfɑ̃se",
+    "VER": "ofɑ̃se"
+  },
+  "offerte": {
+    "NOM": "ɔfɛʁt",
+    "VER": "ofɛʁt"
+  },
+  "oiseleur": {
+    "ADJ": "wazlœʁ",
+    "NOM": "wazəlœʁ"
+  },
+  "olympien": {
+    "ADJ": "olɛ̃pjɛ̃",
+    "NOM": "ɔlɛ̃pjɛ̃"
+  },
+  "olympienne": {
+    "ADJ": "olɛ̃pjɛn",
+    "NOM": "ɔlɛ̃pjɛn"
+  },
+  "oléagineux": {
+    "ADJ": "ɔleaʒinø",
+    "NOM": "oleaʒinø"
+  },
+  "omani": {
+    "ADJ": "omani",
+    "NOM": "ɔmani"
+  },
+  "ombrien": {
+    "ADJ": "ɔ̃bʁijɛ̃",
+    "NOM": "ɔ̃bʁiɛ̃"
+  },
+  "ommiade": {
+    "ADJ": "ɔmjad",
+    "NOM": "ɔmiad"
+  },
+  "ona": {
+    "ADJ": "ɔna",
+    "NOM": "ona"
+  },
+  "opacifiant": {
+    "NOM": "ɔpasifjɑ̃",
+    "VER": "opasifjɑ̃"
+  },
+  "opinant": {
+    "NOM": "ɔpinɑ̃",
+    "VER": "opinɑ̃"
+  },
+  "opposée": {
+    "ADJ": "opoze",
+    "NOM": "ɔpɔze",
+    "VER": "opoze"
+  },
+  "options": {
+    "NOM": "opsjɔ̃",
+    "VER": "ɔptjɔ̃"
+  },
+  "opérationnelle": {
+    "ADJ": "opeʁasjonɛl",
+    "NOM": "opeʁasjɔnɛl"
+  },
+  "opérée": {
+    "ADJ": "opeʁe",
+    "NOM": "ɔpeʁe",
+    "VER": "opeʁe"
+  },
+  "oranais": {
+    "ADJ": "oʁanɛ",
+    "NOM": "ɔʁanɛ"
+  },
+  "oranaise": {
+    "ADJ": "oʁanɛz",
+    "NOM": "ɔʁanɛz"
+  },
+  "orant": {
+    "ADJ": "ɔʁɑ̃",
+    "NOM": "oʁɑ̃"
+  },
+  "oratorien": {
+    "ADJ": "ɔʁatɔʁjɛ̃",
+    "NOM": "oʁatoʁjɛ̃"
+  },
+  "ordonnée": {
+    "ADJ": "ɔʁdone",
+    "NOM": "ɔʁdɔne",
+    "VER": "ɔʁdone"
+  },
+  "orthographie": {
+    "NOM": "ɔʁtɔɡʁafi",
+    "VER": "ɔʁtoɡʁafi"
+  },
+  "osage": {
+    "ADJ": "ɔsaʒe",
+    "NOM": "ɔsaʒ"
+  },
+  "oscille": {
+    "NOM": "ɔsil",
+    "VER": "osij"
+  },
+  "ossifié": {
+    "ADJ": "ɔsifje",
+    "VER": "osifje"
+  },
+  "ouighour": {
+    "ADJ": "wiɡuʁ",
+    "NOM": "uiɡuʁ"
+  },
+  "ouïgour": {
+    "ADJ": "wiɡuʁ",
+    "NOM": "uiɡuʁ"
+  },
+  "oïl": {
+    "ADV": "wi",
+    "NOM": "ɔjl"
+  },
+  "pachyderme": {
+    "ADJ": "pakidɛʁm",
+    "NOM": "paʃidɛʁm"
+  },
+  "padouan": {
+    "ADJ": "padwɑ̃",
+    "NOM": "paduɑ̃"
+  },
+  "palmer": {
+    "NOM": "palmɛʁ",
+    "VER": "palme"
+  },
+  "paléozoïque": {
+    "ADJ": "paleozɔik",
+    "NOM": "paleozoik"
+  },
+  "pan": {
+    "ADJ": "pan",
+    "NOM": "pɑ̃",
+    "ONO": "pɑ̃"
+  },
+  "papelarde": {
+    "ADJ": "papəlaʁd",
+    "NOM": "paplaʁd"
+  },
+  "paperassier": {
+    "ADJ": "papʁasje",
+    "NOM": "papəʁasje"
+  },
+  "papilionacées": {
+    "ADJ": "papiljonase",
+    "NOM": "papiljɔnase"
+  },
+  "paraguayenne": {
+    "ADJ": "paʁaɡwajɛn",
+    "NOM": "paʁawajɛn"
+  },
+  "parent": {
+    "ADJ": "paʁɑ̃",
+    "NOM": "paʁɑ̃",
+    "VER": "paʁ"
+  },
+  "parkinsonienne": {
+    "ADJ": "paʁkinsonjɛn",
+    "NOM": "paʁkinsɔnjɛn"
+  },
+  "parpaing": {
+    "ADJ": "paʁpɛ̃ɡ",
+    "NOM": "paʁpɛ̃"
+  },
+  "passionnée": {
+    "ADJ": "pasjone",
+    "NOM": "pasjɔne",
+    "VER": "pasjone"
+  },
+  "pataugeant": {
+    "ADJ": "patɔʒɑ̃",
+    "VER": "patoʒɑ̃"
+  },
+  "pateline": {
+    "ADJ": "patəlin",
+    "NOM": "patlin"
+  },
+  "pater": {
+    "NOM": "patɛʁ",
+    "VER": "pate"
+  },
+  "pectorale": {
+    "ADJ": "pɛktoʁal",
+    "NOM": "pɛktɔʁal"
+  },
+  "peinant": {
+    "ADJ": "penɑ̃",
+    "VER": "pɛnɑ̃"
+  },
+  "pelliculé": {
+    "ADJ": "pɛlikyle",
+    "VER": "pelikyle"
+  },
+  "peloteur": {
+    "ADJ": "pəlɔtœʁ",
+    "NOM": "pəlotœʁ"
+  },
+  "peloteuse": {
+    "ADJ": "pəlotøz",
+    "NOM": "pəlɔtøz"
+  },
+  "pentagone": {
+    "ADJ": "pɑ̃taɡon",
+    "NOM": "pɛ̃taɡon"
+  },
+  "perfectionné": {
+    "ADJ": "pɛʁfɛksjɔne",
+    "VER": "pɛʁfɛksjone"
+  },
+  "perforateur": {
+    "ADJ": "pɛʁfɔʁatœʁ",
+    "NOM": "pɛʁfoʁatœʁ"
+  },
+  "permissionnaire": {
+    "ADJ": "pɛʁmisjɔnɛʁ",
+    "NOM": "pɛʁmisjonɛʁ"
+  },
+  "peuple": {
+    "ADJ": "pœpl",
+    "NOM": "pøpl",
+    "VER": "pøpl"
+  },
+  "peureuse": {
+    "ADJ": "pøʁøz",
+    "NOM": "pœʁøz"
+  },
+  "philhellène": {
+    "ADJ": "filelɛn",
+    "NOM": "filɛlɛn"
+  },
+  "philosophant": {
+    "ADJ": "filozofɑ̃",
+    "NOM": "filɔzɔfɑ̃",
+    "VER": "filozofɑ̃"
+  },
+  "phocéenne": {
+    "ADJ": "foseɛn",
+    "NOM": "fɔseɛn"
+  },
+  "photographiable": {
+    "ADJ": "fɔtɔʁafjabl",
+    "NOM": "fotoɡʁafjabl"
+  },
+  "picoté": {
+    "ADJ": "pikɔte",
+    "VER": "pikote"
+  },
+  "piochant": {
+    "ADJ": "pjɔʃɑ̃",
+    "VER": "pjoʃɑ̃"
+  },
+  "piper": {
+    "NOM": "pajpe",
+    "VER": "pipe"
+  },
+  "piqueté": {
+    "ADJ": "pikte",
+    "VER": "pikəte"
+  },
+  "placer": {
+    "NOM": "plasɛʁ",
+    "VER": "plase"
+  },
+  "plafonnant": {
+    "ADJ": "plafɔnɑ̃",
+    "VER": "plafonɑ̃"
+  },
+  "plagioclase": {
+    "ADJ": "plaʒjɔklaz",
+    "NOM": "plaʒjoklaz"
+  },
+  "plaidant": {
+    "ADJ": "pledɑ̃",
+    "VER": "plɛdɑ̃"
+  },
+  "plastronnant": {
+    "ADJ": "plastʁɔnɑ̃",
+    "VER": "plastʁonɑ̃"
+  },
+  "plastronneur": {
+    "ADJ": "plastʁɔnœʁ",
+    "NOM": "plastʁonœʁ"
+  },
+  "platonicienne": {
+    "ADJ": "platonisjɛn",
+    "NOM": "platɔnisjɛn"
+  },
+  "play": {
+    "ADV": "plɛ",
+    "NOM": "plɛj"
+  },
+  "plaît": {
+    "NOM": "ple",
+    "VER": "plɛ"
+  },
+  "pleurarde": {
+    "ADJ": "pløʁaʁd",
+    "NOM": "plœʁaʁd"
+  },
+  "pliocène": {
+    "ADJ": "plijɔsɛn",
+    "NOM": "plijosɛn"
+  },
+  "pluma": {
+    "NOM": "pluma",
+    "VER": "plyma"
+  },
+  "plus": {
+    "ADV": "ply",
+    "CON": "ply",
+    "NOM": "plys",
+    "VER": "ply"
+  },
+  "plutonien": {
+    "ADJ": "plytonjɛ̃",
+    "NOM": "plytɔnjɛ̃"
+  },
+  "pléistocène": {
+    "ADJ": "pleistɔsɛn",
+    "NOM": "pleistosɛn"
+  },
+  "pochée": {
+    "ADJ": "poʃe",
+    "NOM": "pɔʃe",
+    "VER": "poʃe"
+  },
+  "pointer": {
+    "NOM": "pwɛ̃tœʁ",
+    "VER": "pwɛ̃te"
+  },
+  "poinçonné": {
+    "NOM": "pwɛ̃sɔne",
+    "VER": "pwɛ̃sone"
+  },
+  "poissonnier": {
+    "ADJ": "pwasɔnje",
+    "NOM": "pwasonje"
+  },
+  "poker": {
+    "NOM": "pokɛʁ",
+    "VER": "poke"
+  },
+  "polarde": {
+    "ADJ": "polaʁd",
+    "NOM": "pɔlaʁd"
+  },
+  "polisseur": {
+    "ADJ": "pɔlisœʁ",
+    "NOM": "polisœʁ"
+  },
+  "polynésienne": {
+    "ADJ": "polinezjɛn",
+    "NOM": "pɔlinezjɛn"
+  },
+  "polytechnicien": {
+    "ADJ": "pɔlitɛknisjɛ̃",
+    "NOM": "politɛknisjɛ̃"
+  },
+  "pommé": {
+    "ADJ": "pɔme",
+    "VER": "pome"
+  },
+  "pomponnant": {
+    "ADJ": "pɔ̃pɔnɑ̃",
+    "VER": "pɔ̃ponɑ̃"
+  },
+  "pomponné": {
+    "ADJ": "pɔ̃pɔne",
+    "VER": "pɔ̃pone"
+  },
+  "poméranien": {
+    "ADJ": "pomeʁanjɛ̃",
+    "NOM": "pɔmeʁanjɛ̃"
+  },
+  "pondu": {
+    "NOM": "pɔndy",
+    "VER": "pɔ̃dy"
+  },
+  "porter": {
+    "NOM": "pɔʁtɛʁ",
+    "VER": "poʁte"
+  },
+  "portions": {
+    "NOM": "poʁsjɔ̃",
+    "VER": "pɔʁtjɔ̃"
+  },
+  "possédante": {
+    "ADJ": "posedɑ̃t",
+    "NOM": "pɔsedɑ̃t"
+  },
+  "post": {
+    "ADV": "pɔst",
+    "NOM": "post"
+  },
+  "postillonnant": {
+    "ADJ": "pɔstijɔnɑ̃",
+    "VER": "pɔstijonɑ̃"
+  },
+  "potache": {
+    "ADJ": "pɔtaʃ",
+    "NOM": "potaʃ"
+  },
+  "potine": {
+    "NOM": "pɔtin",
+    "VER": "potin"
+  },
+  "pr": {
+    "NOM": "pʁɔfɛsœʁ",
+    "PRE": "puʁ"
+  },
+  "pressure": {
+    "NOM": "pʁɛsyʁ",
+    "VER": "pʁesyʁ"
+  },
+  "primer": {
+    "NOM": "pʁajmœʁ",
+    "VER": "pʁime"
+  },
+  "probant": {
+    "ADJ": "pʁobɑ̃",
+    "NOM": "pʁɔbɑ̃"
+  },
+  "prochinois": {
+    "ADJ": "pʁoʃinwa",
+    "NOM": "pʁɔʃinwa"
+  },
+  "prochinoise": {
+    "ADJ": "pʁoʃinwaz",
+    "NOM": "pʁɔʃinwaz"
+  },
+  "procréatrice": {
+    "ADJ": "pʁokʁeatʁis",
+    "NOM": "pʁɔkʁeatʁis"
+  },
+  "procédurière": {
+    "ADJ": "pʁosedyʁjɛʁ",
+    "NOM": "pʁɔsedyʁjɛʁ"
+  },
+  "profanant": {
+    "ADJ": "pʁɔfanɑ̃",
+    "VER": "pʁofanɑ̃"
+  },
+  "profiteur": {
+    "ADJ": "pʁɔfitœʁ",
+    "NOM": "pʁofitœʁ"
+  },
+  "profonde": {
+    "ADJ": "pʁofɔ̃d",
+    "NOM": "pʁɔfɔ̃d"
+  },
+  "proférant": {
+    "ADJ": "pʁɔfeʁɑ̃",
+    "VER": "pʁofeʁɑ̃"
+  },
+  "prophylactique": {
+    "ADJ": "pʁofilaktik",
+    "NOM": "pʁɔfilaktik"
+  },
+  "propriétaire": {
+    "ADJ": "pʁɔpʁijetɛʁ",
+    "NOM": "pʁopʁijetɛʁ"
+  },
+  "propulseur": {
+    "ADJ": "pʁɔpylsœʁ",
+    "NOM": "pʁopylsœʁ"
+  },
+  "prospections": {
+    "NOM": "pʁospɛksjɔ̃",
+    "VER": "pʁɔspɛktjɔ̃"
+  },
+  "prospecté": {
+    "ADJ": "pʁɔspəkte",
+    "VER": "pʁɔspɛkte"
+  },
+  "protesté": {
+    "ADJ": "pʁɔtɛste",
+    "VER": "pʁotɛste"
+  },
+  "protège": {
+    "NOM": "pʁɔtɛʒ",
+    "VER": "pʁotɛʒ"
+  },
+  "provençal": {
+    "ADJ": "pʁovɑ̃sal",
+    "NOM": "pʁɔvɑ̃sal"
+  },
+  "provençale": {
+    "ADJ": "pʁovɑ̃sal",
+    "NOM": "pʁɔvɑ̃sal"
+  },
+  "provinciale": {
+    "ADJ": "pʁovɛ̃sjal",
+    "NOM": "pʁɔvɛ̃sjal"
+  },
+  "provoquant": {
+    "ADJ": "pʁɔvɔkɑ̃",
+    "VER": "pʁovokɑ̃"
+  },
+  "précolombien": {
+    "ADJ": "pʁekolɔ̃bjɛ̃",
+    "NOM": "pʁekɔlɔ̃bjɛ̃"
+  },
+  "président": {
+    "NOM": "pʁezidɑ̃",
+    "VER": "pʁezid"
+  },
+  "présélectionnée": {
+    "NOM": "pʁeselɛksjɔne",
+    "VER": "pʁeselɛksjone"
+  },
+  "psalmodiant": {
+    "ADJ": "psalmɔdjɑ̃",
+    "VER": "psalmodjɑ̃"
+  },
+  "pst": {
+    "NOM": "peɛste",
+    "ONO": "pst"
+  },
+  "psycholinguistique": {
+    "ADJ": "psikolɛ̃ɡɥistik",
+    "NOM": "psikɔlɛ̃ɥistik"
+  },
+  "psychopathe": {
+    "ADJ": "psikɔpat",
+    "NOM": "psikopat"
+  },
+  "pueblo": {
+    "ADJ": "pyəblo",
+    "NOM": "pweblo"
+  },
+  "punk": {
+    "ADJ": "pœŋk",
+    "NOM": "pœ̃k"
+  },
+  "put": {
+    "ONO": "put",
+    "VER": "py"
+  },
+  "pythagoricien": {
+    "ADJ": "pitaɡoʁisjɛ̃",
+    "NOM": "pitaɔʁisjɛ̃"
+  },
+  "pèlerin": {
+    "ADJ": "pɛlʁɛ̃",
+    "NOM": "pɛləʁɛ̃"
+  },
+  "pégriot": {
+    "ADJ": "peɡʁio",
+    "NOM": "peɡʁijo"
+  },
+  "péquenot": {
+    "ADJ": "pekno",
+    "NOM": "pɛkəno"
+  },
+  "péroreur": {
+    "ADJ": "peʁɔʁœʁ",
+    "NOM": "peʁoʁœʁ"
+  },
+  "pétrolière": {
+    "ADJ": "petʁoljɛʁ",
+    "NOM": "petʁɔljɛʁ"
+  },
+  "pêchant": {
+    "ADJ": "peʃɑ̃",
+    "VER": "pɛʃɑ̃"
+  },
+  "qatariote": {
+    "ADJ": "kataʁjot",
+    "NOM": "kataʁjɔt"
+  },
+  "qu": {
+    "CON": "k",
+    "NOM": "ky",
+    "PRO:int": "k",
+    "PRO:rel": "k"
+  },
+  "quadriréacteur": {
+    "ADJ": "kadʁiʁeaktœʁ",
+    "NOM": "kwadʁiʁeaktœʁ"
+  },
+  "quadrumane": {
+    "ADJ": "kwadʁyman",
+    "NOM": "kwadʁuman"
+  },
+  "quant": {
+    "CON": "kwɑ̃t",
+    "NOM": "kɑ̃"
+  },
+  "quechua": {
+    "ADJ": "ketʃuwa",
+    "NOM": "keʃua"
+  },
+  "questionneur": {
+    "ADJ": "kɛstjɔnœʁ",
+    "NOM": "kɛstjonœʁ"
+  },
+  "quintuplé": {
+    "ADJ": "kɛ̃typle",
+    "VER": "kɥɛ̃typle"
+  },
+  "rabaissant": {
+    "ADJ": "ʁabesɑ̃",
+    "VER": "ʁabɛsɑ̃"
+  },
+  "rabelaisienne": {
+    "ADJ": "ʁabəlɛzjɛn",
+    "NOM": "ʁablɛzjɛn"
+  },
+  "raboteuse": {
+    "ADJ": "ʁabotøz",
+    "NOM": "ʁabɔtøz"
+  },
+  "raccrocheur": {
+    "ADJ": "ʁakʁoʃœʁ",
+    "NOM": "ʁakʁɔʃœʁ"
+  },
+  "rafistolé": {
+    "ADJ": "ʁafistɔle",
+    "VER": "ʁafistole"
+  },
+  "raine": {
+    "NOM": "ʁen",
+    "VER": "ʁɛn"
+  },
+  "raisonnable": {
+    "ADJ": "ʁɛzonabl",
+    "NOM": "ʁɛzɔnabl"
+  },
+  "raisonnant": {
+    "ADJ": "ʁɛzɔnɑ̃",
+    "VER": "ʁɛzonɑ̃"
+  },
+  "ramonée": {
+    "NOM": "ʁamɔne",
+    "VER": "ʁamone"
+  },
+  "ranger": {
+    "NOM": "ʁɑ̃ʒɛʁ",
+    "VER": "ʁɑ̃ʒe"
+  },
+  "rapetassé": {
+    "ADJ": "ʁaptase",
+    "VER": "ʁapətase"
+  },
+  "rapetissant": {
+    "ADJ": "ʁaptisɑ̃",
+    "VER": "ʁapətisɑ̃"
+  },
+  "rapproché": {
+    "ADJ": "ʁapʁoʃe",
+    "NOM": "ʁapʁɔʃe",
+    "VER": "ʁapʁoʃe"
+  },
+  "ratiocineur": {
+    "ADJ": "ʁasjɔsinœʁ",
+    "NOM": "ʁasjosinœʁ"
+  },
+  "rations": {
+    "NOM": "ʁasjɔ̃",
+    "VER": "ʁatjɔ̃"
+  },
+  "raya": {
+    "NOM": "ʁaja",
+    "VER": "ʁeja"
+  },
+  "raye": {
+    "NOM": "ʁɛj",
+    "VER": "ʁej"
+  },
+  "rayonnante": {
+    "ADJ": "ʁɛjonɑ̃t",
+    "NOM": "ʁɛjɔnɑ̃t"
+  },
+  "rayonné": {
+    "ADJ": "ʁɛjɔne",
+    "VER": "ʁɛjone"
+  },
+  "recelé": {
+    "NOM": "ʁəsle",
+    "VER": "ʁəsəle"
+  },
+  "recombinant": {
+    "ADJ": "ʁøkɔ̃binɑ̃",
+    "NOM": "ʁəkɔ̃binɑ̃",
+    "VER": "ʁøkɔ̃binɑ̃"
+  },
+  "recombiné": {
+    "ADJ": "ʁəkɔ̃bine",
+    "VER": "ʁøkɔ̃bine"
+  },
+  "recommandant": {
+    "NOM": "ʁəkɔmɑ̃dɑ̃",
+    "VER": "ʁəkomɑ̃dɑ̃"
+  },
+  "recommandée": {
+    "ADJ": "ʁəkomɑ̃de",
+    "NOM": "ʁəkɔmɑ̃de",
+    "VER": "ʁəkomɑ̃de"
+  },
+  "recommencé": {
+    "ADJ": "ʁəkɔmɑ̃se",
+    "VER": "ʁəkomɑ̃se"
+  },
+  "recommençant": {
+    "ADJ": "ʁəkɔmɑ̃sɑ̃",
+    "VER": "ʁəkomɑ̃sɑ̃"
+  },
+  "reconsidéré": {
+    "ADJ": "ʁekɔ̃sideʁe",
+    "VER": "ʁəkɔ̃sideʁe"
+  },
+  "recopie": {
+    "NOM": "ʁəkɔpi",
+    "VER": "ʁəkopi"
+  },
+  "recru": {
+    "ADJ": "ʁøkʁy",
+    "NOM": "ʁəkʁy",
+    "VER": "ʁøkʁy"
+  },
+  "redonnais": {
+    "ADJ": "ʁədɔnɛ",
+    "VER": "ʁədonɛ"
+  },
+  "redortiérin": {
+    "ADJ": "ʁədɔʁtjeʁjɛ̃",
+    "NOM": "ʁədɔʁtjeʁɛ̃"
+  },
+  "regarni": {
+    "NOM": "ʁəɡaʁni",
+    "VER": "ʁøɡaʁni"
+  },
+  "regretté": {
+    "ADJ": "ʁəɡʁɛte",
+    "VER": "ʁəɡʁete"
+  },
+  "rehaussé": {
+    "ADJ": "ʁəose",
+    "VER": "ʁøose"
+  },
+  "relations": {
+    "NOM": "ʁølasjɔ̃",
+    "VER": "ʁølatjɔ̃"
+  },
+  "relativiste": {
+    "ADJ": "ʁølativist",
+    "NOM": "ʁəlativist"
+  },
+  "remerciant": {
+    "ADJ": "ʁəmɛʁsjɑ̃",
+    "VER": "ʁəmɛʁsijɑ̃"
+  },
+  "renaudeur": {
+    "ADJ": "ʁənodœʁ",
+    "NOM": "ʁønodœʁ"
+  },
+  "rencogné": {
+    "ADJ": "ʁɑ̃kɔɲe",
+    "VER": "ʁɑ̃koɲe"
+  },
+  "rengorgé": {
+    "ADJ": "ʁɑ̃ɔʁʒe",
+    "VER": "ʁɑ̃ɡɔʁʒe"
+  },
+  "renonçant": {
+    "ADJ": "ʁenɔ̃sɑ̃",
+    "VER": "ʁənɔ̃sɑ̃"
+  },
+  "reporter": {
+    "ADJ": "ʁəpɔʁte",
+    "NOM": "ʁəpoʁtɛʁ",
+    "VER": "ʁəpoʁte"
+  },
+  "reprochant": {
+    "ADJ": "ʁəpʁɔʃɑ̃",
+    "VER": "ʁəpʁoʃɑ̃"
+  },
+  "resta": {
+    "NOM": "ʁəsta",
+    "VER": "ʁɛsta"
+  },
+  "retrousse": {
+    "NOM": "ʁetʁus",
+    "VER": "ʁətʁus"
+  },
+  "revenante": {
+    "ADJ": "ʁəvənɑ̃t",
+    "NOM": "ʁəvnɑ̃t"
+  },
+  "reverse": {
+    "NOM": "ʁivœʁs",
+    "VER": "ʁəvɛʁs"
+  },
+  "reykjavikois": {
+    "ADJ": "ʁɛkʒavikwa",
+    "NOM": "ʁɛkjavikwa"
+  },
+  "rhétoricien": {
+    "ADJ": "ʁetoʁisjɛ̃",
+    "NOM": "ʁetɔʁisjɛ̃"
+  },
+  "rider": {
+    "NOM": "ʁajdeʁ",
+    "VER": "ʁide"
+  },
+  "rissolé": {
+    "NOM": "ʁisɔle",
+    "VER": "ʁisole"
+  },
+  "rocailleuse": {
+    "ADJ": "ʁokajøz",
+    "NOM": "ʁɔkajøz"
+  },
+  "rochassier": {
+    "ADJ": "ʁɔʃasje",
+    "NOM": "ʁoʃasje"
+  },
+  "rodé": {
+    "ADJ": "ʁɔde",
+    "VER": "ʁode"
+  },
+  "romane": {
+    "ADJ": "ʁoman",
+    "NOM": "ʁɔman"
+  },
+  "romanichel": {
+    "ADJ": "ʁɔmaniʃɛl",
+    "NOM": "ʁomaniʃɛl"
+  },
+  "ronchonnant": {
+    "ADJ": "ʁɔ̃ʃɔnɑ̃",
+    "VER": "ʁɔ̃ʃonɑ̃"
+  },
+  "ronchonneur": {
+    "ADJ": "ʁɔ̃ʃɔnœʁ",
+    "NOM": "ʁɔ̃ʃonœʁ"
+  },
+  "ronni": {
+    "ADJ": "ʁoni",
+    "NOM": "ʁɔni"
+  },
+  "rota": {
+    "NOM": "ʁɔta",
+    "VER": "ʁota"
+  },
+  "rotais": {
+    "ADJ": "ʁɔtɛ",
+    "VER": "ʁotɛ"
+  },
+  "rouant": {
+    "ADJ": "ʁuɑ̃",
+    "VER": "ʁwɑ̃"
+  },
+  "rouquemoute": {
+    "ADJ": "ʁukmut",
+    "NOM": "ʁukəmut"
+  },
+  "rubato": {
+    "ADV": "ʁybato",
+    "NOM": "ʁubato"
+  },
+  "râleux": {
+    "ADJ": "ʁalø",
+    "NOM": "ʁaløz"
+  },
+  "régionaliste": {
+    "ADJ": "ʁeʒjonalist",
+    "NOM": "ʁeʒjɔnalist"
+  },
+  "rénovateur": {
+    "ADJ": "ʁenɔvatœʁ",
+    "NOM": "ʁenovatœʁ"
+  },
+  "rénovatrice": {
+    "ADJ": "ʁenovatʁis",
+    "NOM": "ʁenɔvatʁis"
+  },
+  "répertorié": {
+    "ADJ": "ʁepɛʁtɔʁje",
+    "VER": "ʁepɛʁtoʁje"
+  },
+  "réprobatrice": {
+    "ADJ": "ʁepʁobatʁis",
+    "NOM": "ʁepʁɔbatʁis"
+  },
+  "résident": {
+    "ADJ": "ʁezidɑ̃",
+    "NOM": "ʁezidɑ̃",
+    "VER": "ʁezid"
+  },
+  "résolu": {
+    "ADJ": "ʁezoly",
+    "NOM": "ʁezɔly",
+    "VER": "ʁezoly"
+  },
+  "résolue": {
+    "ADJ": "ʁezoly",
+    "NOM": "ʁezɔly"
+  },
+  "rétive": {
+    "ADJ": "ʁetiv",
+    "NOM": "ʁetif"
+  },
+  "réunionnais": {
+    "ADJ": "ʁeynjɔnɛ",
+    "NOM": "ʁeynjonɛ"
+  },
+  "réveillé": {
+    "ADJ": "ʁevɛje",
+    "VER": "ʁeveje"
+  },
+  "réveillée": {
+    "NOM": "ʁevɛje",
+    "VER": "ʁeveje"
+  },
+  "révolutionné": {
+    "ADJ": "ʁevɔlysjɔne",
+    "VER": "ʁevolysjone"
+  },
+  "sahraoui": {
+    "ADJ": "saʁawi",
+    "NOM": "saaʁawi"
+  },
+  "saintongeais": {
+    "ADJ": "sɛ̃tɔʒɛ",
+    "NOM": "sɛ̃tɔ̃ʒɛ"
+  },
+  "saloniquiote": {
+    "ADJ": "salɔtnikjɔt",
+    "NOM": "salɔnikjɔt"
+  },
+  "saloniquiste": {
+    "ADJ": "salɔtnikist",
+    "NOM": "salɔnikist"
+  },
+  "salonnard": {
+    "ADJ": "salɔnaʁ",
+    "NOM": "salonaʁ"
+  },
+  "samoan": {
+    "ADJ": "samoɑ̃",
+    "NOM": "samɔɑ̃"
+  },
+  "samoyède": {
+    "ADJ": "samɔjɛd",
+    "NOM": "samojɛd"
+  },
+  "sanctionné": {
+    "ADJ": "sɑ̃ksjɔne",
+    "VER": "sɑ̃ksjone"
+  },
+  "sanglier": {
+    "ADJ": "sɑ̃ɡlie",
+    "NOM": "sɑ̃ɡlije"
+  },
+  "sarcophage": {
+    "ADJ": "saʁkɔfaʒ",
+    "NOM": "saʁkofaʒ"
+  },
+  "sauvagin": {
+    "ADJ": "sɔvaʒɛ̃",
+    "NOM": "sovaʒɛ̃"
+  },
+  "savonné": {
+    "ADJ": "savɔne",
+    "VER": "savone"
+  },
+  "scanner": {
+    "NOM": "skanɛʁ",
+    "VER": "skane"
+  },
+  "scellant": {
+    "NOM": "selɑ̃",
+    "VER": "sɛlɑ̃"
+  },
+  "schilikois": {
+    "ADJ": "ʃilikwa",
+    "NOM": "ʃiliikwa"
+  },
+  "scientologue": {
+    "ADJ": "sjɑ̃tɔlɔ",
+    "NOM": "sjɑ̃tolɔɡ"
+  },
+  "sclérotique": {
+    "ADJ": "skleʁɔtik",
+    "NOM": "skleʁotik"
+  },
+  "se": {
+    "NOM": "sɛ̃t",
+    "PRO:per": "sə"
+  },
+  "secondant": {
+    "NOM": "səɔ̃dɑ̃",
+    "VER": "səɡɔ̃dɑ̃"
+  },
+  "seldjoukide": {
+    "ADJ": "sɛldʒukid",
+    "NOM": "seldʒukid"
+  },
+  "sellé": {
+    "ADJ": "sele",
+    "VER": "sɛle"
+  },
+  "sens": {
+    "NOM": "sɑ̃s",
+    "VER": "sɑ̃"
+  },
+  "septentrionale": {
+    "ADJ": "sɛptɑ̃tʁijonal",
+    "NOM": "sɛptɑ̃tʁijɔnal"
+  },
+  "serrant": {
+    "ADJ": "seʁɑ̃",
+    "VER": "sɛʁɑ̃"
+  },
+  "serré": {
+    "ADJ": "sɛʁe",
+    "ADV": "seʁe",
+    "VER": "sɛʁe"
+  },
+  "serrée": {
+    "ADJ": "sɛʁe",
+    "NOM": "seʁe",
+    "VER": "sɛʁe"
+  },
+  "sextile": {
+    "ADJ": "sekstil",
+    "NOM": "sɛkstil"
+  },
+  "sextuple": {
+    "ADJ": "sekstypl",
+    "NOM": "sɛkstypl"
+  },
+  "shaker": {
+    "NOM": "ʃɛjkœʁ",
+    "VER": "ʃɛke"
+  },
+  "shanghaïen": {
+    "ADJ": "ʃɑ̃ɡajɛ̃",
+    "NOM": "ʃanajɛ̃"
+  },
+  "sifflotant": {
+    "ADJ": "siflɔtɑ̃",
+    "VER": "siflotɑ̃"
+  },
+  "signifié": {
+    "ADJ": "sinifje",
+    "NOM": "siɲifje",
+    "VER": "siɲifje"
+  },
+  "sillonné": {
+    "ADJ": "sijɔne",
+    "VER": "sijone"
+  },
+  "slovaque": {
+    "ADJ": "slovak",
+    "NOM": "slɔvak"
+  },
+  "slovène": {
+    "ADJ": "slovɛn",
+    "NOM": "slɔvɛn"
+  },
+  "sociopathe": {
+    "ADJ": "sosjopat",
+    "NOM": "sɔsjɔpat"
+  },
+  "sodomite": {
+    "ADJ": "sɔdɔmit",
+    "NOM": "sodomit"
+  },
+  "solognote": {
+    "ADJ": "soloɲɔt",
+    "NOM": "sɔlɔɲɔt"
+  },
+  "somalien": {
+    "ADJ": "somaljɛ̃",
+    "NOM": "sɔmaljɛ̃"
+  },
+  "sommé": {
+    "ADJ": "sɔme",
+    "VER": "some"
+  },
+  "sommée": {
+    "NOM": "sɔme",
+    "VER": "some"
+  },
+  "somnolent": {
+    "ADJ": "sɔmnɔlɑ̃",
+    "VER": "somnɔl"
+  },
+  "sonna": {
+    "NOM": "sɔna",
+    "VER": "sona"
+  },
+  "sonnez": {
+    "NOM": "sɔne",
+    "VER": "sone"
+  },
+  "soul": {
+    "ADJ": "su",
+    "NOM": "sul"
+  },
+  "sphéroïde": {
+    "ADJ": "sfeʁɔid",
+    "NOM": "sfeʁoid"
+  },
+  "sprinter": {
+    "NOM": "spʁintœʁ",
+    "VER": "spʁinte"
+  },
+  "styloïde": {
+    "ADJ": "stilɔid",
+    "NOM": "stiloid"
+  },
+  "stéroïde": {
+    "ADJ": "steʁoid",
+    "NOM": "steʁɔid"
+  },
+  "subjuguant": {
+    "ADJ": "sybʒyɑ̃",
+    "VER": "sybʒyɡɑ̃"
+  },
+  "subjugué": {
+    "ADJ": "sybʒye",
+    "VER": "sybʒyɡe"
+  },
+  "subordonnant": {
+    "NOM": "sybɔʁdɔnɑ̃",
+    "VER": "sybɔʁdonɑ̃"
+  },
+  "subrogé": {
+    "ADJ": "sybʁɔʒe",
+    "VER": "sybʁoʒe"
+  },
+  "substituant": {
+    "NOM": "sybstitɥɑ̃",
+    "VER": "sypstitɥɑ̃"
+  },
+  "suessonien": {
+    "ADJ": "suesɔnjɛ̃",
+    "NOM": "syesɔnjɛ̃"
+  },
+  "suffoqué": {
+    "ADJ": "syfɔke",
+    "VER": "syfoke"
+  },
+  "sulmonien": {
+    "ADJ": "sylmɔnjɛ̃",
+    "NOM": "sylmɔnɛ̃"
+  },
+  "supporter": {
+    "NOM": "sypoʁtœʁ",
+    "VER": "sypoʁte"
+  },
+  "sus": {
+    "ADV": "sys",
+    "VER": "sy"
+  },
+  "sémiotique": {
+    "ADJ": "semjɔtik",
+    "NOM": "semjotik"
+  },
+  "sénatoriale": {
+    "ADJ": "senatoʁjal",
+    "NOM": "senatɔʁjal"
+  },
+  "séropo": {
+    "ADJ": "seʁɔpo",
+    "NOM": "seʁopo"
+  },
+  "talent": {
+    "NOM": "talɑ̃",
+    "VER": "tal"
+  },
+  "tamponnais": {
+    "ADJ": "tɑ̃pɔnɛ",
+    "VER": "tɑ̃ponɛ"
+  },
+  "tarabelais": {
+    "ADJ": "taʁabəlɛ",
+    "NOM": "taʁabəlɛz"
+  },
+  "te": {
+    "NOM": "te",
+    "PRO:per": "tə"
+  },
+  "templière": {
+    "ADJ": "tɑ̃pliɛʁ",
+    "NOM": "tɑ̃plijɛʁ"
+  },
+  "territoriale": {
+    "ADJ": "tɛʁitoʁjal",
+    "NOM": "tɛʁitɔʁjal"
+  },
+  "thermidorienne": {
+    "ADJ": "tɛʁmidoʁjɛn",
+    "NOM": "tɛʁmidɔʁjɛn"
+  },
+  "thermos": {
+    "ADJ": "tɛʁmos",
+    "NOM": "tɛʁmɔs"
+  },
+  "tico": {
+    "ADJ": "tiko",
+    "NOM": "tikɔ"
+  },
+  "tirebouchonné": {
+    "ADJ": "tiʁbuʃɔne",
+    "VER": "tiʁəbuʃone"
+  },
+  "tocarde": {
+    "ADJ": "tokaʁd",
+    "NOM": "tɔkaʁd"
+  },
+  "togolaise": {
+    "ADJ": "toɡolɛz",
+    "NOM": "tɔɔlɛz"
+  },
+  "tokharien": {
+    "ADJ": "tɔkaʁjɛ̃",
+    "NOM": "tokaʁjɛ̃"
+  },
+  "tolstoïen": {
+    "ADJ": "tɔlstojɛ̃",
+    "NOM": "tɔlstɔjɛ̃"
+  },
+  "toléré": {
+    "ADJ": "tɔleʁe",
+    "VER": "toleʁe"
+  },
+  "tolérée": {
+    "NOM": "tɔleʁe",
+    "VER": "toleʁe"
+  },
+  "tonicardiaque": {
+    "ADJ": "tɔnikaʁdjak",
+    "NOM": "tonikaʁdjak"
+  },
+  "toquant": {
+    "ADJ": "tɔkɑ̃",
+    "VER": "tokɑ̃"
+  },
+  "toquée": {
+    "ADJ": "toke",
+    "NOM": "tɔke",
+    "VER": "toke"
+  },
+  "toro": {
+    "ADJ": "tɔʁɔ",
+    "NOM": "tɔʁo"
+  },
+  "tortionnaire": {
+    "ADJ": "tɔʁsjɔnɛʁ",
+    "NOM": "tɔʁsjonɛʁ"
+  },
+  "totale": {
+    "ADJ": "total",
+    "NOM": "tɔtal"
+  },
+  "totalisateur": {
+    "ADJ": "tɔtalizatœʁ",
+    "NOM": "totalizatœʁ"
+  },
+  "transgresseur": {
+    "ADJ": "tʁɑ̃sʁesœʁ",
+    "NOM": "tʁɑ̃sɡʁesœʁ"
+  },
+  "transit": {
+    "ADJ": "tʁɑ̃zit",
+    "NOM": "tʁɑ̃zit",
+    "VER": "tʁɑ̃zi"
+  },
+  "transsexuel": {
+    "ADJ": "tʁɑ̃sseksɥɛl",
+    "NOM": "tʁɑ̃sɛksɥɛl"
+  },
+  "transsexuelle": {
+    "ADJ": "tʁɑ̃seksyɛl",
+    "NOM": "tʁɑ̃ssɛksyɛl"
+  },
+  "trapézoïde": {
+    "ADJ": "tʁapezɔid",
+    "NOM": "tʁapezoid"
+  },
+  "traînasse": {
+    "NOM": "tʁenas",
+    "VER": "tʁɛnas"
+  },
+  "tressaillant": {
+    "ADJ": "tʁɛsajɑ̃",
+    "VER": "tʁesajɑ̃"
+  },
+  "tressé": {
+    "ADJ": "tʁɛse",
+    "VER": "tʁese"
+  },
+  "triasique": {
+    "ADJ": "tʁijasik",
+    "NOM": "tʁiazik"
+  },
+  "tricentenaire": {
+    "ADJ": "tʁisɑ̃tnɛʁ",
+    "NOM": "tʁisɑ̃tənɛʁ"
+  },
+  "tricoté": {
+    "ADJ": "tʁikɔte",
+    "VER": "tʁikote"
+  },
+  "tricotée": {
+    "NOM": "tʁikɔte",
+    "VER": "tʁikote"
+  },
+  "tripolitain": {
+    "ADJ": "tʁipɔlitɛ",
+    "NOM": "tʁipɔlitɛ̃"
+  },
+  "tripotant": {
+    "ADJ": "tʁipɔtɑ̃",
+    "VER": "tʁipotɑ̃"
+  },
+  "tripotent": {
+    "ADJ": "tʁipotɑ̃",
+    "VER": "tʁipɔt"
+  },
+  "tripoteur": {
+    "ADJ": "tʁipɔtœʁ",
+    "NOM": "tʁipotœʁ"
+  },
+  "troglodyte": {
+    "ADJ": "tʁɔɡlodit",
+    "NOM": "tʁoɡlodit"
+  },
+  "tronçonné": {
+    "ADJ": "tʁɔ̃sɔne",
+    "VER": "tʁɔ̃sone"
+  },
+  "truste": {
+    "NOM": "tʁyst",
+    "VER": "tʁœst"
+  },
+  "typhoïde": {
+    "ADJ": "tifɔid",
+    "NOM": "tifoid"
+  },
+  "tyrolienne": {
+    "ADJ": "tiʁoljɛn",
+    "NOM": "tiʁɔljɛn"
+  },
+  "tâtonné": {
+    "ADJ": "tatɔne",
+    "VER": "tatone"
+  },
+  "urgent": {
+    "ADJ": "yʁʒɑ̃",
+    "VER": "yʁʒ"
+  },
+  "utopiste": {
+    "ADJ": "ytɔpist",
+    "NOM": "ytopist"
+  },
+  "valvinois": {
+    "ADJ": "valvinwa",
+    "NOM": "valvinnwa"
+  },
+  "vaporisateur": {
+    "ADJ": "vapɔʁizatœʁ",
+    "NOM": "vapoʁizatœʁ"
+  },
+  "variorum": {
+    "ADJ": "vaʁjɔʁɔm",
+    "NOM": "vaʁjoʁɔm"
+  },
+  "vaudoise": {
+    "ADJ": "vodwaz",
+    "NOM": "vɔdwaz"
+  },
+  "ve": {
+    "ADJ": "sɛ̃kjɛm",
+    "NOM": "vœv"
+  },
+  "veillant": {
+    "ADJ": "vejɑ̃",
+    "VER": "vɛjɑ̃"
+  },
+  "vellavien": {
+    "ADJ": "velavjɛ̃",
+    "NOM": "vɛlavjɛ̃"
+  },
+  "vibrionnant": {
+    "ADJ": "vibʁijɔnɑ̃",
+    "VER": "vibʁijonɑ̃"
+  },
+  "victorien": {
+    "ADJ": "viktoʁjɛ̃",
+    "NOM": "viktɔʁjɛ̃"
+  },
+  "victorienne": {
+    "ADJ": "viktoʁjɛn",
+    "NOM": "viktɔʁjɛn"
+  },
+  "victorieuse": {
+    "ADJ": "viktoʁjøz",
+    "NOM": "viktɔʁjøz"
+  },
+  "vieillie": {
+    "ADJ": "vjeji",
+    "NOM": "vjɛji",
+    "VER": "vjeji"
+  },
+  "vintage": {
+    "ADJ": "vintɛdʒ",
+    "NOM": "vɛ̃taʒ"
+  },
+  "viola": {
+    "NOM": "vjɔla",
+    "VER": "vjola"
+  },
+  "violant": {
+    "ADJ": "vjɔlɑ̃",
+    "VER": "vjolɑ̃"
+  },
+  "violent": {
+    "ADJ": "vjolɑ̃",
+    "NOM": "vjɔl",
+    "VER": "vjɔl"
+  },
+  "violone": {
+    "NOM": "vjɔlɔn",
+    "VER": "vjolɔn"
+  },
+  "virevolté": {
+    "ADJ": "viʁvɔlte",
+    "VER": "viʁəvɔlte"
+  },
+  "vis": {
+    "NOM": "vis",
+    "VER": "vi"
+  },
+  "visionné": {
+    "ADJ": "vizjɔne",
+    "VER": "vizjone"
+  },
+  "vitriolé": {
+    "ADJ": "vitʁijɔle",
+    "VER": "vitʁijole"
+  },
+  "vo": {
+    "NOM": "vɛʁso",
+    "PRE": "vɛʁbo"
+  },
+  "volailler": {
+    "ADJ": "vɔlaje",
+    "NOM": "volaje"
+  },
+  "volette": {
+    "NOM": "vɔlɛt",
+    "VER": "volɛt"
+  },
+  "vénézuélienne": {
+    "ADJ": "venezyɛljɛn",
+    "NOM": "venezɥeljɛn"
+  },
+  "véronique": {
+    "ADJ": "veʁɔnik",
+    "NOM": "veʁonik"
+  },
+  "wallon": {
+    "ADJ": "walɔ̃",
+    "NOM": "valɔ̃"
+  },
+  "welter": {
+    "ADJ": "vɛltɛʁ",
+    "NOM": "vɛltœʁ"
+  },
+  "westphalien": {
+    "ADJ": "vɛstpaljɛ̃",
+    "NOM": "vɛstfaljɛ̃"
+  },
+  "wuhanais": {
+    "ADJ": "wuanɛ",
+    "NOM": "uanɛ"
+  },
+  "xiongnu": {
+    "ADJ": "ʃjɔ̃nu",
+    "NOM": "ɡzjɔ̃njy"
+  },
+  "yankee": {
+    "ADJ": "janki",
+    "NOM": "jɑ̃ki"
+  },
+  "yvelinois": {
+    "ADJ": "ivlinwa",
+    "NOM": "ivəlinwa"
+  },
+  "zoophile": {
+    "ADJ": "zoofil",
+    "NOM": "zɔɔfil"
+  },
+  "zozais": {
+    "ADJ": "zozɛ",
+    "NOM": "zɔzɛ"
+  },
+  "zozo": {
+    "ADJ": "zɔzo",
+    "NOM": "zozo"
+  },
+  "zozotant": {
+    "ADJ": "zɔzɔtɑ̃",
+    "VER": "zozotɑ̃"
+  },
+  "zézayant": {
+    "ADJ": "zezɛjɑ̃",
+    "VER": "zezejɑ̃"
+  },
+  "éclamptique": {
+    "ADJ": "eklɑ̃ptik",
+    "NOM": "ɛklɑ̃ptik"
+  },
+  "écussonné": {
+    "ADJ": "ekysɔne",
+    "VER": "ekysone"
+  },
+  "écuyer": {
+    "ADJ": "ekyje",
+    "NOM": "ekɥije"
+  },
+  "éditions": {
+    "NOM": "edisjɔ̃",
+    "VER": "editjɔ̃"
+  },
+  "édulcoré": {
+    "ADJ": "edylkɔʁe",
+    "VER": "edylkoʁe"
+  },
+  "égorgé": {
+    "NOM": "eɔʁʒe",
+    "VER": "eɡɔʁʒe"
+  },
+  "égorgée": {
+    "NOM": "eɔʁʒe",
+    "VER": "eɡɔʁʒe"
+  },
+  "égratigné": {
+    "ADJ": "eʁatiɲe",
+    "VER": "eɡʁatiɲe"
+  },
+  "émergent": {
+    "ADJ": "emɛʁʒɑ̃",
+    "VER": "emɛʁʒ"
+  },
+  "émerveillant": {
+    "ADJ": "emɛʁvejɑ̃",
+    "VER": "emɛʁvɛjɑ̃"
+  },
+  "émiettée": {
+    "NOM": "emjete",
+    "VER": "emjɛte"
+  },
+  "émotive": {
+    "ADJ": "emotiv",
+    "NOM": "emɔtiv"
+  },
+  "épelé": {
+    "ADJ": "eple",
+    "VER": "epəle"
+  },
+  "éperonné": {
+    "ADJ": "epəʁɔne",
+    "VER": "epəʁone"
+  },
+  "épiscopale": {
+    "ADJ": "episkopal",
+    "NOM": "episkɔpal"
+  },
+  "épistolier": {
+    "ADJ": "epistɔlje",
+    "NOM": "epistolje"
+  },
+  "éplorée": {
+    "ADJ": "eploʁe",
+    "NOM": "eplɔʁe"
+  },
+  "équatorien": {
+    "ADJ": "ekwatɔʁjɛ̃",
+    "NOM": "ekwatoʁjɛ̃"
+  },
+  "équivalent": {
+    "ADJ": "ekivalɑ̃",
+    "NOM": "ekivalɑ̃",
+    "VER": "ekival"
+  },
+  "érotiquement": {
+    "ADJ": "eʁotikəmɑ̃",
+    "ADV": "eʁɔtikmɑ̃"
+  },
+  "éthiopienne": {
+    "ADJ": "etjopjɛn",
+    "NOM": "etjɔpjɛn"
+  },
+  "étincelé": {
+    "ADJ": "etɛ̃sle",
+    "VER": "etɛ̃səle"
+  },
+  "étrenné": {
+    "ADJ": "etʁene",
+    "VER": "etʁɛne"
+  },
+  "évaporé": {
+    "ADJ": "evapoʁe",
+    "NOM": "evapɔʁe",
+    "VER": "evapoʁe"
+  },
+  "évident": {
+    "ADJ": "evidɑ̃",
+    "VER": "evid"
+  },
+  "évocatrice": {
+    "ADJ": "evokatʁis",
+    "NOM": "evɔkatʁis"
+  },
+  "évryen": {
+    "ADJ": "evʁijɛn",
+    "NOM": "evʁijɛ̃"
+  }
+}
