@@ -98,11 +98,7 @@ Les backends locaux (ONNX, NumPy, Pure) produisent des résultats identiques.
 
 Le modele V3 accepte en entree optionnelle un vecteur de 24 dimensions par mot, construit a partir d'un lexique de candidats POS. Cela ameliore la prediction POS et la morphologie, ce qui ameliore aussi la reconstruction orthographique via le word feedback.
 
-Le lexique est detecte automatiquement dans cet ordre :
-1. Parametre `lexicon_path` passe a `creer_engine()`
-2. Fichier `lexique_pos_candidates.json` dans le dossier modeles
-3. Module `lectura-lexique` (si installe : `pip install lectura-lexique`)
-4. Sans lexique : le modele fonctionne normalement (features = zeros)
+Le lexique est detecte automatiquement si present dans le dossier modeles (`lexique_pos_candidates.json`), ou via le parametre `lexicon_path` de `creer_engine()`. Sans lexique, le modele fonctionne normalement (features = zeros).
 
 ```python
 # Avec lexique (automatique si disponible)
