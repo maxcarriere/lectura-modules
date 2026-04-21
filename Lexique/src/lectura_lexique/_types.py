@@ -37,6 +37,7 @@ class EntreeForme(TypedDict, total=False):
     freq_frantext: float
     freq_lm10: float
     freq_frwac: float
+    freq_composite: float
     source: str
 
 
@@ -54,6 +55,7 @@ class EntreeLemme(TypedDict, total=False):
     freq_frantext: float
     freq_lm10: float
     freq_frwac: float
+    freq_composite: float
     age: float
     source: str
 

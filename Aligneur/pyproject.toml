@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-aligneur"
-version = "3.0.0"
+version = "3.1.0"
 description = "Aligneur graphème-phonème et syllabeur phonologique du français — alignement, groupes de lecture, élisions, liaisons, enchaînements, attaque/noyau/coda"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,4 +34,4 @@ Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_aligneur = []
+lectura_aligneur = ["data/*.json"]

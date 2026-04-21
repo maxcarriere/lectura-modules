@@ -27,9 +27,10 @@ Exemple avec backend local::
     print(result["ortho"])  # ['le', 'chat', 'est', 'bon']
 """
 
+import os
 from pathlib import Path
 
-__version__ = "3.0.1"
+__version__ = "3.1.0"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
@@ -39,26 +40,47 @@ def get_model_path(filename: str) -> Path:
     return _MODELES_DIR / filename
 
 
-def _modeles_locaux() -> bool:
-    """Verifie si les modeles locaux sont disponibles."""
-    return (_MODELES_DIR / "unifie_p2g_v3_int8.onnx").exists() or (
-        _MODELES_DIR / "unifie_p2g_v3_vocab.json"
-    ).exists()
+def _resoudre_modeles_dir(models_dir: str | Path | None = None) -> Path | None:
+    """Cascade de resolution du dossier modeles.
+
+    Ordre de priorite :
+    1. Parametre explicite ``models_dir``
+    2. Variable d'environnement ``LECTURA_MODELS_DIR`` / p2g
+    3. Dossier utilisateur ``~/.lectura/models/p2g/``
+    4. Site-packages (dossier ``modeles/`` du package installe)
+    """
+    candidats: list[Path] = []
+    if models_dir is not None:
+        candidats.append(Path(models_dir))
+    env = os.environ.get("LECTURA_MODELS_DIR")
+    if env:
+        candidats.append(Path(env) / "p2g")
+    candidats.append(Path.home() / ".lectura" / "models" / "p2g")
+    candidats.append(_MODELES_DIR)
+
+    for d in candidats:
+        if (d / "unifie_p2g_v3_int8.onnx").exists():
+            return d
+    return None
 
 
-def _resoudre_lexique(lexicon_path: str | Path | None) -> str | Path | dict | None:
+def _resoudre_lexique(
+    lexicon_path: str | Path | None,
+    models_dir: Path | None,
+) -> str | Path | dict | None:
     """Cascade de resolution du lexique pour les lex_features.
 
     1. Chemin explicite (si passe)
-    2. Fichier JSON dans modeles/
+    2. Fichier JSON dans le dossier modeles resolu
     3. lectura_lexique installe -> generer le dict
     4. None (pas de lexique -> lex_features = zeros)
     """
     if lexicon_path is not None:
         return lexicon_path
-    json_path = _MODELES_DIR / "lexique_pos_candidates.json"
-    if json_path.exists():
-        return json_path
+    if models_dir is not None:
+        json_path = models_dir / "lexique_pos_candidates.json"
+        if json_path.exists():
+            return json_path
     try:
         from lectura_lexique import Lexique
         lex = Lexique()
@@ -78,6 +100,7 @@ def _resoudre_lexique(lexicon_path: str | Path | None) -> str | Path | dict | No
 
 def creer_engine(
     mode: str = "auto",
+    models_dir: str | Path | None = None,
     api_url: str | None = None,
     api_key: str | None = None,
     lexicon_path: str | Path | None = None,
@@ -91,6 +114,9 @@ def creer_engine(
         "local" : force le mode local (ONNX > NumPy > Pure)
         "api" : force le mode API
         "onnx", "numpy", "pure" : force un backend local specifique
+    models_dir : str | Path | None
+        Chemin vers le dossier contenant les modeles. Si None, cascade
+        automatique : LECTURA_MODELS_DIR → ~/.lectura/models/p2g/ → site-packages.
     api_url : str | None
         URL du serveur Lectura (pour mode API)
     api_key : str | None
@@ -103,14 +129,16 @@ def creer_engine(
         from lectura_p2g.inference_api import ApiInferenceEngine
         return ApiInferenceEngine(api_url=api_url, api_key=api_key)
 
-    if mode == "auto" and not _modeles_locaux():
+    resolved_dir = _resoudre_modeles_dir(models_dir)
+
+    if mode == "auto" and resolved_dir is None:
         from lectura_p2g.inference_api import ApiInferenceEngine
         return ApiInferenceEngine(api_url=api_url, api_key=api_key)
 
     # Mode local — essayer les backends dans l'ordre de preference
-    model_onnx = get_model_path("unifie_p2g_v3_int8.onnx")
-    model_vocab = get_model_path("unifie_p2g_v3_vocab.json")
-    resolved_lexicon = _resoudre_lexique(lexicon_path)
+    model_onnx = resolved_dir / "unifie_p2g_v3_int8.onnx" if resolved_dir else _MODELES_DIR / "unifie_p2g_v3_int8.onnx"
+    model_vocab = resolved_dir / "unifie_p2g_v3_vocab.json" if resolved_dir else _MODELES_DIR / "unifie_p2g_v3_vocab.json"
+    resolved_lexicon = _resoudre_lexique(lexicon_path, resolved_dir)
 
     if mode in ("auto", "local", "onnx"):
         try:
@@ -133,7 +161,7 @@ def creer_engine(
             from lectura_p2g.inference_numpy import NumpyInferenceEngine
             weights_dir = Path(__file__).parent / "modeles_numpy"
             if not weights_dir.exists():
-                weights_dir = _MODELES_DIR
+                weights_dir = resolved_dir if resolved_dir else _MODELES_DIR
             return NumpyInferenceEngine(
                 str(weights_dir), str(model_vocab),
                 lexicon_path=str(resolved_lexicon) if isinstance(resolved_lexicon, Path) else None,
@@ -148,7 +176,7 @@ def creer_engine(
             from lectura_p2g.inference_pure import PureInferenceEngine
             weights_dir = Path(__file__).parent / "modeles_numpy"
             if not weights_dir.exists():
-                weights_dir = _MODELES_DIR
+                weights_dir = resolved_dir if resolved_dir else _MODELES_DIR
             return PureInferenceEngine(
                 str(weights_dir), str(model_vocab),
                 lexicon_path=str(resolved_lexicon) if isinstance(resolved_lexicon, Path) else None,

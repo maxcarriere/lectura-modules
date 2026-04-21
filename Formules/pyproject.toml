@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-formules"
-version = "3.0.0"
+version = "3.0.1"
 description = "Lecture algorithmique des formules (nombres, sigles, dates, téléphones, heures, monnaies, etc.) pour le français"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 lectura_formules = [
     "data/tables/*.csv",
+    "data/donnees_formules.json",
 ]
 # Les WAV (~12 Mo) ne sont PAS embarqués dans le package.
 # Utiliser tables.set_sounds_dir() pour configurer le chemin sons externe.

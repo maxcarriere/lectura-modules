@@ -277,7 +277,7 @@ class Lexique:
         cur = conn.execute(
             "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
             "f.nb_syllabes, f.syllabes, f.freq_opensubs AS freq_opensubs, "
-            "f.freq_frantext, f.freq_lm10, f.freq_frwac, f.source, "
+            "f.freq_frantext, f.freq_lm10, f.freq_frwac, f.freq_composite, f.source, "
             "l.id AS lemme_id, l.lemme, l.cgram, l.genre, l.contrainte_nombre, "
             "l.etymologie, l.freq_opensubs AS lemme_freq, l.age "
             "FROM formes f "
@@ -297,7 +297,7 @@ class Lexique:
                 entry["mode"] = traits.get("mode", "")
                 entry["temps"] = traits.get("temps", "")
                 entry["personne"] = traits.get("personne", "")
-            entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+            entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
             results.append(entry)
         return results
 
@@ -375,7 +375,7 @@ class Lexique:
                 )
                 query = (
                     "SELECT f.ortho, l.lemme, l.cgram, f.multext, "
-                    "f.freq_opensubs AS freq, f.phone "
+                    "f.freq_composite, f.freq_opensubs AS freq, f.phone "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     f"WHERE f.phone IN ({placeholders}) "
@@ -385,7 +385,7 @@ class Lexique:
                 if multext_pattern and multext_pattern != "%":
                     query += "AND f.multext LIKE ? "
                     params.append(multext_pattern)
-                query += "ORDER BY f.freq_opensubs DESC"
+                query += "ORDER BY f.freq_composite DESC"
                 cur = conn.execute(query, params)
                 for row in cur.fetchall():
                     ortho = row["ortho"]
@@ -585,11 +585,12 @@ class Lexique:
                 if self._schema_version >= 4:
                     cur = conn.execute(
                         "SELECT f.ortho, f.phone, f.phone_reversed, f.multext, "
-                        "f.nb_syllabes, f.freq_opensubs, l.lemme, l.cgram, l.genre "
+                        "f.nb_syllabes, f.freq_opensubs, f.freq_composite, "
+                        "l.lemme, l.cgram, l.genre "
                         "FROM formes f "
                         "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                         "WHERE f.phone_reversed LIKE ? "
-                        "ORDER BY f.freq_opensubs DESC",
+                        "ORDER BY f.freq_composite DESC",
                         (f"{suffixe_rev}%",),
                     )
                     results = []
@@ -600,7 +601,7 @@ class Lexique:
                             continue
                         seen.add(ortho)
                         entry: dict[str, Any] = dict(row)
-                        entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                        entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                         results.append(entry)
                         if len(results) >= limite:
                             break
@@ -636,17 +637,17 @@ class Lexique:
             if self._schema_version >= 4:
                 cur = conn.execute(
                     "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
-                    "f.freq_opensubs, l.lemme, l.cgram "
+                    "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     "WHERE f.phone LIKE ? "
-                    "ORDER BY f.freq_opensubs DESC LIMIT ?",
+                    "ORDER BY f.freq_composite DESC LIMIT ?",
                     (f"%{son}%", limite),
                 )
                 results = []
                 for row in cur.fetchall():
                     entry: dict[str, Any] = dict(row)
-                    entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                    entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                     results.append(entry)
                 return results
             else:
@@ -680,7 +681,7 @@ class Lexique:
             if self._schema_version >= 4:
                 query = (
                     "SELECT f.ortho, f.multext, f.phone, f.nb_syllabes, "
-                    "f.freq_opensubs, l.lemme, l.cgram, l.genre "
+                    "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram, l.genre "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     "WHERE f.nb_syllabes = ?"
@@ -689,7 +690,7 @@ class Lexique:
                 if cgram is not None:
                     query += " AND l.cgram LIKE ?"
                     params.append(f"{cgram}%")
-                query += " ORDER BY f.freq_opensubs DESC LIMIT ?"
+                query += " ORDER BY f.freq_composite DESC LIMIT ?"
                 params.append(limite)
                 try:
                     cur = conn.execute(query, params)
@@ -701,7 +702,7 @@ class Lexique:
                             traits = _decoder_multext(multext)
                             entry["genre"] = entry.get("genre") or traits.get("genre", "")
                             entry["nombre"] = traits.get("nombre", "")
-                        entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                        entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                         results.append(entry)
                     return results
                 except sqlite3.OperationalError:
@@ -855,18 +856,18 @@ class Lexique:
                 col_qualified = f"f.{col}"
                 cur = conn.execute(
                     "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
-                    "f.freq_opensubs, l.lemme, l.cgram "
+                    "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     f"WHERE {col_qualified} REGEXP ? "
-                    "ORDER BY f.freq_opensubs DESC LIMIT ?",
+                    "ORDER BY f.freq_composite DESC LIMIT ?",
                     (pattern, limite),
                 )
                 results: list[dict[str, Any]] = []
                 seen: set[str] = set()
                 for row in cur.fetchall():
                     entry: dict[str, Any] = dict(row)
-                    entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                    entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                     ortho = str(entry.get("ortho", "")).lower()
                     if ortho not in seen:
                         seen.add(ortho)
@@ -1308,7 +1309,7 @@ class Lexique:
                 query = (
                     "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
                     "f.nb_syllabes, f.syllabes, f.freq_opensubs, f.freq_frantext, "
-                    "f.freq_lm10, f.freq_frwac, f.source, "
+                    "f.freq_lm10, f.freq_frwac, f.freq_composite, f.source, "
                     "l.lemme, l.cgram, l.genre "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
@@ -1518,18 +1519,18 @@ class Lexique:
             if self._schema_version >= 4:
                 cur2 = conn.execute(
                     "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
-                    "f.freq_opensubs, l.lemme, l.cgram "
+                    "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     f"WHERE f.ortho IN ({placeholders}) "
-                    "ORDER BY f.freq_opensubs DESC LIMIT ?",
+                    "ORDER BY f.freq_composite DESC LIMIT ?",
                     candidats + [limite],
                 )
                 results: list[dict[str, Any]] = []
                 seen: set[str] = set()
                 for row in cur2.fetchall():
                     entry: dict[str, Any] = dict(row)
-                    entry["freq"] = entry.get("freq_opensubs", 0.0) or 0.0
+                    entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                     ortho = str(entry.get("ortho", "")).lower()
                     if ortho not in seen:
                         seen.add(ortho)
