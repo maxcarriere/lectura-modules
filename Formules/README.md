@@ -80,6 +80,6 @@ if wav:
 
 ## Licence
 
-Double licence :
-- **AGPL-3.0** — usage libre (voir [LICENCE.txt](LICENCE.txt))
-- **Licence commerciale** — usage proprietaire, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com)
+Ce module est distribue sous licence **AGPL-3.0** (non commerciale) — voir [LICENCE.txt](LICENCE.txt).
+
+Pour un usage commercial, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com).
