@@ -145,10 +145,10 @@ L'Aligneur-Syllabeur est le **pivot central** de Lectura :
 - **Architecture E1/E2** : construction des groupes (E1) puis syllabation (E2), utilisables separement
 - **Phonemiseur pluggable** : eSpeak-NG, Lectura G2P, ou tout objet compatible
 - **Python 3.10+** avec type hints complets (PEP-561)
-- **Double licence** : AGPL-3.0 (libre) / Licence commerciale
+- **Licence** : AGPL-3.0 (non commerciale) — licence commerciale sur demande
 
 ## Licence
 
-Double licence :
-- **AGPL-3.0** — usage libre (voir [LICENCE.txt](LICENCE.txt))
-- **Licence commerciale** — usage proprietaire, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com)
+Ce module est distribue sous licence **AGPL-3.0** (non commerciale) — voir [LICENCE.txt](LICENCE.txt).
+
+Pour un usage commercial, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com).
