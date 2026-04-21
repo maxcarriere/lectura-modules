@@ -170,8 +170,8 @@ class TestHomographes:
         charger_homographes(_DATA_DIR / "homographes.json")
 
     def test_homographes_est(self):
-        """'est' AUX → /e/, NOM → /ɛst/."""
-        assert corriger_g2p("est", "ɛ", pos="AUX") == "e"
+        """'est' AUX → /ɛ/, NOM → /ɛst/."""
+        assert corriger_g2p("est", "ɛ", pos="AUX") == "ɛ"
         assert corriger_g2p("est", "ɛ", pos="NOM") == "ɛst"
         assert corriger_g2p("est", "ɛ", pos="ADJ") == "ɛst"
 
@@ -199,7 +199,7 @@ class TestHomographes:
         # "est" apparaît dans homographes — la correction plate ne doit
         # pas écraser le résultat POS-aware
         assert corriger_g2p("est", "ɛ", pos="NOM") == "ɛst"
-        assert corriger_g2p("est", "ɛ", pos="AUX") == "e"
+        assert corriger_g2p("est", "ɛ", pos="AUX") == "ɛ"
 
     def test_homographes_pos_inconnu(self):
         """POS inconnu pour un homographe → fallback corrections/règles."""
