@@ -25,6 +25,7 @@ from lectura_nlp.posttraitement import (
 
 # Chemins
 MODELS_DIR = _ROOT / "modeles"
+DATA_DIR = _ROOT / "src" / "lectura_nlp" / "data"
 
 # 1. Créer le moteur d'inférence
 engine = NumpyInferenceEngine(
@@ -33,10 +34,10 @@ engine = NumpyInferenceEngine(
 )
 
 # 2. Charger les corrections G2P (optionnel, améliore la précision)
-charger_corrections(MODELS_DIR / "g2p_corrections_unifie.json")
+charger_corrections(DATA_DIR / "g2p_corrections_unifie.json")
 
 # 2b. Charger la table d'homographes (POS-aware, prioritaire sur corrections)
-charger_homographes(MODELS_DIR / "homographes.json")
+charger_homographes(DATA_DIR / "homographes.json")
 
 # 3. Analyser plusieurs phrases
 phrases = [

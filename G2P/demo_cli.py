@@ -104,13 +104,14 @@ def main() -> None:
     engine = create_engine(args.backend, args.modeles)
 
     # Charger les corrections G2P
-    corrections_path = args.modeles / "g2p_corrections_unifie.json"
+    data_dir = _ROOT / "src" / "lectura_nlp" / "data"
+    corrections_path = data_dir / "g2p_corrections_unifie.json"
     if corrections_path.exists():
         charger_corrections(corrections_path)
         print(f"Corrections G2P chargées ({corrections_path.name})")
 
     # Charger la table d'homographes (POS-aware, prioritaire sur corrections)
-    homographes_path = args.modeles / "homographes.json"
+    homographes_path = data_dir / "homographes.json"
     if homographes_path.exists():
         charger_homographes(homographes_path)
         print(f"Homographes chargés ({homographes_path.name})")

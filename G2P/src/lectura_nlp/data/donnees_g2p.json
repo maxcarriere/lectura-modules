@@ -1,0 +1,41 @@
+{
+  "ponctuation_lecture": {
+    ".": ["point", "pwɛ̃"],
+    ",": ["virgule", "viʁɡyl"],
+    ";": ["point-virgule", "pwɛ̃ viʁɡyl"],
+    ":": ["deux-points", "dø pwɛ̃"],
+    "!": ["point d'exclamation", "pwɛ̃ dɛkslamasjɔ̃"],
+    "?": ["point d'interrogation", "pwɛ̃ dɛ̃tɛʁɔɡasjɔ̃"],
+    "...": ["points de suspension", "pwɛ̃ də syspɑ̃sjɔ̃"],
+    "…": ["points de suspension", "pwɛ̃ də syspɑ̃sjɔ̃"],
+    "«": ["ouvrez les guillemets", "uvʁe le ɡijmɛ"],
+    "»": ["fermez les guillemets", "fɛʁme le ɡijmɛ"],
+    "\"": ["guillemet", "ɡijmɛ"],
+    "(": ["ouvrez la parenthèse", "uvʁe la paʁɑ̃tɛz"],
+    ")": ["fermez la parenthèse", "fɛʁme la paʁɑ̃tɛz"],
+    "-": ["tiret", "tiʁɛ"],
+    "\u2014": ["tiret", "tiʁɛ"],
+    "\u2013": ["tiret", "tiʁɛ"],
+    "\u2019": ["apostrophe", "apɔstʁɔf"]
+  },
+  "denasalisation": {
+    "ɔ̃": "ɔ",
+    "ɛ̃": "ɛ",
+    "ɑ̃": "a"
+  },
+  "liaison_consonnes": {
+    "Lz": "z",
+    "Lt": "t",
+    "Ln": "n",
+    "Lr": "ʁ",
+    "Lp": "p"
+  },
+  "voyelles": ["a", "ɑ", "e", "ɛ", "i", "o", "ɔ", "u", "y", "ø", "œ", "ə"],
+  "consonnes": ["p", "b", "t", "d", "k", "ɡ", "f", "v", "s", "z", "ʃ", "ʒ", "m", "n", "ɲ", "ŋ", "l", "ʁ"],
+  "semi_voyelles": ["j", "w", "ɥ"],
+  "nasales": ["m", "n", "ɲ", "ŋ"],
+  "liquides": ["l", "ʁ"],
+  "occlusives": ["p", "b", "t", "d", "k", "ɡ"],
+  "fricatives": ["f", "v", "s", "z", "ʃ", "ʒ"],
+  "kept_intact": ["aujourd'hui", "presqu'île", "quelqu'un", "quelqu'une"]
+}

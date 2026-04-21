@@ -136,7 +136,7 @@ class TestPosttraitement:
         assert result[0] == "bɔn"
 
     def test_corriger_g2p_with_table(self):
-        corrections_path = Path(__file__).resolve().parent.parent / "modeles" / "g2p_corrections_unifie.json"
+        corrections_path = Path(__file__).resolve().parent.parent / "src" / "lectura_nlp" / "data" / "g2p_corrections_unifie.json"
         charger_corrections(corrections_path)
         assert corriger_g2p("monsieur", "mɔ̃sjø") == "məsjø"
         assert corriger_g2p("chat", "ʃa") == "ʃa"  # no correction
@@ -159,15 +159,15 @@ class TestPosttraitement:
 
 # ── Homographes (POS-aware) ──────────────────────────────────────
 
-_MODELES = Path(__file__).resolve().parent.parent / "modeles"
+_DATA_DIR = Path(__file__).resolve().parent.parent / "src" / "lectura_nlp" / "data"
 
 
 class TestHomographes:
     @pytest.fixture(autouse=True)
     def _load(self):
         """Charge corrections + homographes avant chaque test."""
-        charger_corrections(_MODELES / "g2p_corrections_unifie.json")
-        charger_homographes(_MODELES / "homographes.json")
+        charger_corrections(_DATA_DIR / "g2p_corrections_unifie.json")
+        charger_homographes(_DATA_DIR / "homographes.json")
 
     def test_homographes_est(self):
         """'est' AUX → /e/, NOM → /ɛst/."""

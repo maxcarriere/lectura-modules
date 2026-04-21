@@ -53,6 +53,26 @@ engine = creer_engine(mode="api", api_url="https://api.lec-tu-ra.com")
 
 Variables d'environnement : `LECTURA_API_URL`, `LECTURA_API_KEY`.
 
+## Modeles locaux (licence commerciale)
+
+Pour utiliser l'inference locale sans API, achetez les modeles sur
+https://www.lec-tu-ra.com/solutions/services/
+
+Installez les modeles dans `~/.lectura/models/g2p/` :
+
+```bash
+mkdir -p ~/.lectura/models/g2p
+cp unifie_v2_int8.onnx unifie_v2_vocab.json ~/.lectura/models/g2p/
+```
+
+Ou via variable d'environnement :
+
+```bash
+export LECTURA_MODELS_DIR=/path/to/models
+```
+
+`creer_engine()` detecte automatiquement les modeles locaux.
+
 ## Poids NumPy / Pure Python (optionnel)
 
 Les backends **NumPy** et **Pure Python** necessitent les poids JSON depuis GitHub :
@@ -101,9 +121,10 @@ Voir [EVALUATION.md](EVALUATION.md) pour les résultats détaillés.
 
 Tokenise une phrase française (gestion apostrophes, ponctuation, contractions).
 
-### `creer_engine(mode, api_url, api_key, lexicon_path)`
+### `creer_engine(mode, models_dir, api_url, api_key, lexicon_path)`
 
 Factory pour creer un engine d'inference. Modes : `"auto"`, `"local"`, `"api"`, `"onnx"`, `"numpy"`, `"pure"`.
+`models_dir` permet de specifier le dossier des modeles (sinon cascade automatique).
 
 ### `engine.analyser(tokens, *, use_lex=True) -> dict`
 

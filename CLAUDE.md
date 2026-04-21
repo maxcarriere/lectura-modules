@@ -43,15 +43,21 @@ cd G2P && python -m pytest tests/
 ### Etape 2 — Export (workspace → output)
 
 ```bash
-python exporter.py           # copie fichiers git + modeles numpy
-python exporter.py --dry-run # apercu sans copie
+python exporter.py                        # export public + prive
+python exporter.py --mode public          # public uniquement
+python exporter.py --mode private         # prive uniquement
+python exporter.py --dry-run              # apercu sans copie
 ```
 
-L'export copie les fichiers git-tracked + les modeles numpy (trop lourds pour le
-git du workspace mais necessaires pour GitHub/PyPI). Le dossier `output/Modules/`
-a son propre repo git (remote : `lectura-modules` sur GitHub).
+Deux exports :
 
-Fichiers exclus de l'export : `exporter.py`
+| Mode | Destination | Contenu |
+|------|-------------|---------|
+| public | `output/Modules/` | Code AGPL, sans modeles ni serveur → GitHub + PyPI |
+| private | `output/Modules-private/` | Tout : code + modeles + serveur → VPS / client |
+
+`output/Modules/` a son propre repo git (remote : `lectura-modules` sur GitHub).
+`output/Modules-private/` n'a pas de repo git (copie autonome).
 
 ### Etape 3 — Push GitHub
 
@@ -103,8 +109,10 @@ Quatre backends disponibles :
 | NumPy | `numpy` | ~50 ms/phrase | `*_weights.json` (modeles_numpy/) |
 | Pure Python | aucune | ~200 ms/phrase | `*_weights.json` (modeles_numpy/) |
 
-Factory `creer_engine(mode)` : auto-detecte local vs API.
-Les modeles ne sont PAS dans le wheel PyPI (Niveau 1). L'utilisateur PyPI passe par l'API.
+Factory `creer_engine(mode, models_dir)` : cascade de detection des modeles
+(parametre > env var > ~/.lectura/models/ > site-packages > API).
+Les modeles ONNX ne sont PAS dans le wheel PyPI — produit payant a part.
+L'utilisateur installe les modeles dans `~/.lectura/models/` ou utilise l'API.
 
 ### Zero dependance
 

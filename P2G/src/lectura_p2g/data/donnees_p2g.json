@@ -1,0 +1,20 @@
+{
+  "homophones_pos": {
+    "est|CON": "et",
+    "et|AUX": "est",
+    "et|VER": "est",
+    "a|PRE": "à",
+    "à|AUX": "a",
+    "à|VER": "a"
+  },
+  "determinants_pluriel": ["les", "des", "ces", "ses", "mes", "tes", "nos", "vos", "aux", "plusieurs", "quelques"],
+  "determinants_singulier": ["le", "la", "un", "une", "du", "ce", "cette", "cet", "sa", "ma", "ta", "mon", "ton", "son"],
+  "invariables_pluriel": ["quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "vingt", "trente", "quarante", "cinquante", "soixante", "cent", "mille", "chose"],
+  "voyelles": ["a", "ɑ", "e", "ɛ", "i", "o", "ɔ", "u", "y", "ø", "œ", "ə"],
+  "consonnes": ["p", "b", "t", "d", "k", "ɡ", "f", "v", "s", "z", "ʃ", "ʒ", "m", "n", "ɲ", "ŋ", "l", "ʁ"],
+  "semi_voyelles": ["j", "w", "ɥ"],
+  "nasales": ["m", "n", "ɲ", "ŋ"],
+  "liquides": ["l", "ʁ"],
+  "occlusives": ["p", "b", "t", "d", "k", "ɡ"],
+  "fricatives": ["f", "v", "s", "z", "ʃ", "ʒ"]
+}
