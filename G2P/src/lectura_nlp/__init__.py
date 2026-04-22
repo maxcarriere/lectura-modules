@@ -1,6 +1,6 @@
 """Lectura NLP — Modele unifie G2P+POS+Morpho+Liaison pour le francais.
 
-Architecture : BiLSTM char-level + multi-tete (1.75M params, ONNX INT8 = 1.8 Mo)
+Architecture : BiLSTM char-level + multi-tete (2.0M params, ONNX INT8 = 2.0 Mo)
 
 Copyright (C) 2025 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
@@ -28,7 +28,7 @@ Exemple avec backend local::
 import os
 from pathlib import Path
 
-__version__ = "3.1.0"
+__version__ = "3.2.0"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 

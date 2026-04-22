@@ -224,6 +224,13 @@ class NumpyInferenceEngine:
         self.pos_weight = self._get("pos_head.weight")
         self.pos_bias = self._get("pos_head.bias")
 
+        # Liaison-specific BiLSTM (without lex features)
+        self.liaison_hidden_dim = self.config.get("liaison_hidden_dim", 0)
+        if self.liaison_hidden_dim > 0 and f"liaison_lstm.weight_ih_l0" in self.weights:
+            self.liaison_bilstm = self._build_lstm("liaison_lstm", 1)
+        else:
+            self.liaison_bilstm = None
+
         # Liaison head
         self.liaison_weight = self._get("liaison_head.weight")
         self.liaison_bias = self._get("liaison_head.bias")
@@ -296,25 +303,36 @@ class NumpyInferenceEngine:
             word_repr[w, :char_hidden] = fwd[word_ends[w]]
             word_repr[w, char_hidden:] = bwd[word_starts[w]]
 
-        # Lex features
+        # Lex features (for POS/Morpho path only)
+        word_repr_for_lex = word_repr
         if use_lex and self.has_lex_proj:
             lex_feats = np.array(
                 [_build_lex_features(t, self.lexicon) for t in tokens],
                 dtype=np.float32,
             )
             lex_proj = self._linear(lex_feats, self.lex_proj_weight, self.lex_proj_bias)
-            word_repr = np.concatenate([word_repr, lex_proj], axis=-1)
+            word_repr_for_lex = np.concatenate([word_repr, lex_proj], axis=-1)
+        elif use_lex and self.lex_feature_dim > 0:
+            lex_feats = np.array(
+                [_build_lex_features(t, self.lexicon) for t in tokens],
+                dtype=np.float32,
+            )
+            word_repr_for_lex = np.concatenate([word_repr, lex_feats], axis=-1)
 
-        # Word BiLSTM
-        word_out = self.word_bilstm.forward(word_repr)
+        # Word BiLSTM (POS + Morpho)
+        word_out = self.word_bilstm.forward(word_repr_for_lex)
 
         # POS
         pos_logits = self._linear(word_out, self.pos_weight, self.pos_bias)
         pos_preds = pos_logits.argmax(axis=-1)
         pos_results = [self.idx2pos.get(int(pos_preds[w]), "NOM") for w in range(n_words)]
 
-        # Liaison
-        liaison_logits = self._linear(word_out, self.liaison_weight, self.liaison_bias)
+        # Liaison (separate path without lex features)
+        if self.liaison_bilstm is not None:
+            liaison_out = self.liaison_bilstm.forward(word_repr)
+            liaison_logits = self._linear(liaison_out, self.liaison_weight, self.liaison_bias)
+        else:
+            liaison_logits = self._linear(word_out, self.liaison_weight, self.liaison_bias)
         liaison_preds = liaison_logits.argmax(axis=-1)
         liaison_results = [self.idx2liaison.get(int(liaison_preds[w]), "none") for w in range(n_words)]
 

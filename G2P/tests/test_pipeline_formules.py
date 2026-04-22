@@ -123,13 +123,16 @@ class TestAnalyserPhraseComplete:
         assert result.mots[0].phone == ""  # pas de G2P neural
         assert result.mots[1].phone != ""  # lecture algo
 
-    def test_ponctuation_ignoree(self):
+    def test_ponctuation_incluse(self):
         tokens = [
             MockToken("mot", "Bonjour", (0, 7)),
             MockToken("ponctuation", ".", (7, 8)),
         ]
         result = analyser_phrase_complete(tokens, engine=MockEngine())
-        assert len(result.mots) == 1  # ponctuation ignorée
+        assert len(result.mots) == 2
+        assert not result.mots[0].est_ponctuation
+        assert result.mots[1].est_ponctuation
+        assert result.mots[1].pos == "PONCT"
 
     def test_proprietes_resultat(self):
         tokens = [
