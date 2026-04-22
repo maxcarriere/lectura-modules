@@ -1790,8 +1790,11 @@ class Lexique:
     ) -> list[Concept]:
         """Recherche des concepts par mot-cle dans la definition ou le lemme (v4).
 
+        Supporte les recherches multi-mots : chaque mot doit apparaitre
+        dans la definition OU le lemme (intersection).
+
         Args:
-            pattern: Texte a chercher (LIKE %pattern%)
+            pattern: Texte a chercher (un ou plusieurs mots)
             limite: Nombre max de resultats
 
         Returns:
@@ -1800,14 +1803,27 @@ class Lexique:
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
-        like_pat = f"%{pattern}%"
+        words = pattern.strip().split()
+        if not words:
+            return []
+
+        # Construire les conditions : chaque mot doit matcher dans definition OU lemme
+        conditions = []
+        params: list[str] = []
+        for word in words:
+            like_pat = f"%{word}%"
+            conditions.append("(c.definition LIKE ? OR l.lemme LIKE ?)")
+            params.extend([like_pat, like_pat])
+
+        where = " AND ".join(conditions)
+        params.append(str(limite))
         cur = conn.execute(
             "SELECT DISTINCT c.*, l.lemme AS _lemme, l.cgram AS _cgram "
             "FROM concepts c "
             "LEFT JOIN lemmes l ON c.lemme_id = l.id "
-            "WHERE c.definition LIKE ? OR l.lemme LIKE ? "
+            f"WHERE {where} "
             "ORDER BY l.lemme, c.sens_num LIMIT ?",
-            (like_pat, like_pat, limite),
+            params,
         )
         return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
 
