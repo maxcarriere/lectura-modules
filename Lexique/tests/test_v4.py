@@ -137,6 +137,10 @@ def db_v4_path():
             (7, "sur", "PRE", None, None, None, None, 2951.37, 5300.0, 5525.0, 6610.0, None),
             (8, "sncf", "SIGLE", "f", None, None, "Société nationale des chemins de fer français", None, None, None, None, None),
             (9, "sida", "SIGLE", "m", None, None, None, None, None, None, None, None),
+            # NP multi-mots pour tester composants
+            (10, "jacques chirac", "NOM PROPRE", None, "personne", None, None, 2.0, None, None, None, None),
+            (11, "jacques", "NOM PROPRE", None, "prénom", None, None, 1.0, None, None, None, None),
+            (12, "chirac", "NOM PROPRE", None, "patronyme", None, None, 0.5, None, None, None, None),
         ],
     )
 
@@ -159,6 +163,9 @@ def db_v4_path():
             (12, "sur", 7, "Sp", "syʁ", "ʁys", 1, "syʁ", 2951.37, 5300.0, 5525.0, 6610.0, "GLAFF"),
             (13, "SNCF", 8, "Ys", "ɛs.ɛn.se.ɛf", "ɛf.se.ɛn.ɛs", 4, "ɛs.ɛn.se.ɛf", None, None, None, None, "kaikki"),
             (14, "SIDA", 9, "Ya", "si.da", "ad.is", 2, "si.da", None, None, None, None, "kaikki"),
+            (15, "jacques chirac", 10, "Np", None, None, None, None, 2.0, None, None, None, "NP"),
+            (16, "jacques", 11, "Np", None, None, None, None, 1.0, None, None, None, "NP"),
+            (17, "chirac", 12, "Np", None, None, None, None, 0.5, None, None, None, "NP"),
         ],
     )
 
@@ -189,6 +196,7 @@ def db_v4_path():
             (5, 4, 1, "Capitale de la France.", None, "géographie", "wiktionnaire"),
             (6, 4, 2, "Prenom masculin d'origine grecque.", None, None, "wiktionnaire"),
             (7, 5, 1, "De faible taille.", None, None, "wiktionnaire"),
+            (8, 10, 1, "Président de la République française (1995-2007).", None, "politique", "wiktionnaire"),
         ],
     )
 
@@ -231,6 +239,16 @@ def db_v4_path():
             (1, 1, 0), (2, 2, 0), (3, 3, 0), (4, 4, 0),  # self
             (4, 1, 1),  # être vivant → animal
             (2, 3, 1),  # lieu → capitale
+        ],
+    )
+
+    # Composants NP multi-mots
+    # "jacques chirac" (concept 8) -> composants: jacques (lemme 11), chirac (lemme 12)
+    conn.executemany(
+        "INSERT INTO concept_composants (concept_id, lemme_id, role, position) VALUES (?, ?, ?, ?)",
+        [
+            (8, 11, "composant", 0),  # jacques
+            (8, 12, "composant", 1),  # chirac
         ],
     )
 
@@ -670,6 +688,58 @@ def test_rechercher_concepts_inexistant(lexique_v4):
     """rechercher_concepts() retourne [] pour un terme inexistant."""
     results = lexique_v4.rechercher_concepts("xyztotoinexistant")
     assert results == []
+
+
+# --- Composants NP multi-mots ---
+
+def test_composants_multi_mot(db_v4_path):
+    """'jacques chirac' a des composants 'jacques' et 'chirac'."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute(
+        "SELECT cc.position, l.lemme "
+        "FROM concept_composants cc "
+        "JOIN lemmes l ON cc.lemme_id = l.id "
+        "WHERE cc.concept_id = 8 "
+        "ORDER BY cc.position"
+    )
+    composants = [(row[0], row[1]) for row in cur]
+    conn.close()
+    assert len(composants) == 2
+    assert composants[0] == (0, "jacques")
+    assert composants[1] == (1, "chirac")
+
+
+def test_rechercher_concepts_composant(lexique_v4):
+    """recherche 'Jacques' retourne les concepts NP contenant 'jacques' comme composant."""
+    results = lexique_v4.rechercher_concepts("Jacques")
+    # Doit trouver le concept 8 (jacques chirac) via composants
+    found = [r for r in results if "chirac" in (r.get("_lemme") or "").lower()]
+    assert len(found) >= 1
+    assert "président" in found[0]["definition"].lower()
+
+
+def test_rechercher_concepts_composant_multi_mots(lexique_v4):
+    """recherche 'Jacques Chirac' retourne le NP via composants."""
+    results = lexique_v4.rechercher_concepts("Jacques Chirac")
+    found = [r for r in results if "chirac" in (r.get("_lemme") or "").lower()]
+    assert len(found) >= 1
+
+
+# --- Categories avec propagation ancetres ---
+
+def test_categories_de_avec_ancetres(lexique_v4):
+    """categories_de() inclut les ancetres via la closure table."""
+    # Concept chat (sens 1) est dans "animal", dont l'ancetre est "être vivant"
+    cats = lexique_v4.categories_de(1, inclure_ancetres=True)
+    assert "animal" in cats
+    assert "être vivant" in cats
+
+
+def test_categories_de_sans_ancetres(lexique_v4):
+    """categories_de(inclure_ancetres=False) retourne seulement les categories directes."""
+    cats = lexique_v4.categories_de(1, inclure_ancetres=False)
+    assert "animal" in cats
+    assert "être vivant" not in cats
 
 
 # --- Fixture CSV pour test v3 compat ---

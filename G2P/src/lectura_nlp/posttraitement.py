@@ -104,8 +104,8 @@ def _fix_ex_consonne(word: str, ipa: str) -> str:
     phonemes = iter_phonemes(ipa)
     if len(phonemes) < 3:
         return ipa
-    # pred doit commencer par ɛk + consonne (pas déjà ɛks)
-    if phonemes[0] != "ɛ" or phonemes[1] != "k":
+    # pred doit commencer par ɛk/ek + consonne (pas déjà ɛks)
+    if phonemes[0] not in ("ɛ", "e") or phonemes[1] != "k":
         return ipa
     if phonemes[2] == "s":
         return ipa  # déjà correct
@@ -130,8 +130,8 @@ def _fix_ex_voyelle(word: str, ipa: str) -> str:
     phonemes = iter_phonemes(ipa)
     if len(phonemes) < 2:
         return ipa
-    # Pattern 1 : pred commence par ɛk → remplacer par ɛɡz
-    if phonemes[0] == "ɛ" and phonemes[1] == "k":
+    # Pattern 1 : pred commence par ɛk/ek → remplacer par ɛɡz
+    if phonemes[0] in ("ɛ", "e") and phonemes[1] == "k":
         return "ɛɡz" + "".join(phonemes[2:])
     # Pattern 2 : pred commence par ez → remplacer par ɛɡz
     if phonemes[0] == "e" and phonemes[1] == "z":
