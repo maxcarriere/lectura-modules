@@ -1671,17 +1671,33 @@ class Lexique:
         )
         return [row[0] for row in cur.fetchall() if row[0]]
 
-    def categories_de(self, concept_id: int) -> list[str]:
-        """Retourne les categories d'un concept (v4 uniquement)."""
+    def categories_de(
+        self, concept_id: int, inclure_ancetres: bool = True,
+    ) -> list[str]:
+        """Retourne les categories d'un concept (v4 uniquement).
+
+        Si *inclure_ancetres* est True, remonte la hierarchie via la
+        closure table pour inclure automatiquement les categories parentes.
+        """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
-        cur = conn.execute(
-            "SELECT cat.label FROM categories cat "
-            "JOIN concept_categories cc ON cc.categorie_id = cat.id "
-            "WHERE cc.concept_id = ?",
-            (concept_id,),
-        )
+        if inclure_ancetres:
+            cur = conn.execute(
+                "SELECT DISTINCT anc.label FROM categories anc "
+                "JOIN categorie_hierarchie h ON anc.id = h.ancestor_id "
+                "JOIN concept_categories cc ON cc.categorie_id = h.descendant_id "
+                "WHERE cc.concept_id = ? "
+                "ORDER BY h.depth, anc.label",
+                (concept_id,),
+            )
+        else:
+            cur = conn.execute(
+                "SELECT cat.label FROM categories cat "
+                "JOIN concept_categories cc ON cc.categorie_id = cat.id "
+                "WHERE cc.concept_id = ?",
+                (concept_id,),
+            )
         return [row[0] for row in cur.fetchall() if row[0]]
 
     def info_categorie(self, label: str) -> Categorie | None:
@@ -1793,6 +1809,10 @@ class Lexique:
         Supporte les recherches multi-mots : chaque mot doit apparaitre
         dans la definition OU le lemme (intersection).
 
+        Etend la recherche aux composants NP multi-mots : si "Jacques"
+        est cherche, les concepts dont un composant matche "jacques"
+        seront aussi retournes.
+
         Args:
             pattern: Texte a chercher (un ou plusieurs mots)
             limite: Nombre max de resultats
@@ -1825,7 +1845,54 @@ class Lexique:
             "ORDER BY l.lemme, c.sens_num LIMIT ?",
             params,
         )
-        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+        results = [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+        # Si peu de resultats, chercher aussi via composants NP
+        if len(results) < limite:
+            seen_ids = {r["id"] for r in results}
+            remaining = limite - len(results)
+
+            # Chaque mot doit matcher un composant du meme concept
+            # On utilise une sous-requete GROUP BY + HAVING COUNT
+            having_parts = []
+            comp_params: list[str] = []
+            or_parts = []
+            for i, word in enumerate(words):
+                like_pat = f"%{word}%"
+                or_parts.append("cl.lemme LIKE ?")
+                comp_params.append(like_pat)
+                having_parts.append(
+                    f"COUNT(DISTINCT CASE WHEN cl.lemme LIKE ? THEN 1 END) > 0"
+                )
+                comp_params.append(like_pat)
+
+            or_clause = " OR ".join(or_parts)
+            having_clause = " AND ".join(having_parts)
+            comp_params.append(str(remaining))
+
+            try:
+                cur2 = conn.execute(
+                    "SELECT DISTINCT c.*, l.lemme AS _lemme, l.cgram AS _cgram "
+                    "FROM concepts c "
+                    "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+                    "WHERE c.id IN ("
+                    "  SELECT cc.concept_id FROM concept_composants cc "
+                    "  JOIN lemmes cl ON cc.lemme_id = cl.id "
+                    f"  WHERE {or_clause} "
+                    f"  GROUP BY cc.concept_id HAVING {having_clause}"
+                    ") "
+                    "ORDER BY l.lemme, c.sens_num LIMIT ?",
+                    comp_params,
+                )
+                for row in cur2.fetchall():
+                    d = dict(row)
+                    if d["id"] not in seen_ids:
+                        results.append(d)  # type: ignore[arg-type]
+                        seen_ids.add(d["id"])
+            except Exception:
+                pass  # concept_composants may not exist in older DBs
+
+        return results
 
     def decoder_multext(self, tag: str) -> dict[str, str]:
         """Decode un tag multext en traits lisibles. Delegue a _multext.py."""

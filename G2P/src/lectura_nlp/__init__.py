@@ -28,7 +28,7 @@ Exemple avec backend local::
 import os
 from pathlib import Path
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
@@ -96,6 +96,43 @@ def _resoudre_lexique(
     return None
 
 
+class _EngineAvecCorrections:
+    """Wrapper qui applique le post-traitement (corrections, homographes,
+    regles) automatiquement apres l'inference."""
+
+    def __init__(self, engine: object) -> None:
+        self._engine = engine
+        self._loaded = False
+
+    def _charger_tables(self) -> None:
+        if self._loaded:
+            return
+        from lectura_nlp.posttraitement import charger_corrections, charger_homographes
+        data_dir = Path(__file__).parent / "data"
+        corr = data_dir / "g2p_corrections_unifie.json"
+        homo = data_dir / "homographes.json"
+        if corr.exists():
+            charger_corrections(corr)
+        if homo.exists():
+            charger_homographes(homo)
+        self._loaded = True
+
+    def analyser(self, tokens: list[str]) -> dict:
+        self._charger_tables()
+        result = self._engine.analyser(tokens)
+        from lectura_nlp.posttraitement import corriger_g2p
+        g2p_list = result.get("g2p", [])
+        pos_list = result.get("pos", [])
+        result["g2p"] = [
+            corriger_g2p(tok, ipa, pos)
+            for tok, ipa, pos in zip(tokens, g2p_list, pos_list)
+        ]
+        return result
+
+    def __getattr__(self, name: str):
+        return getattr(self._engine, name)
+
+
 def creer_engine(
     mode: str = "auto",
     models_dir: str | Path | None = None,
@@ -104,6 +141,9 @@ def creer_engine(
     lexicon_path: str | Path | None = None,
 ):
     """Factory pour creer un engine d'inference G2P.
+
+    Le post-traitement (corrections, homographes, regles) est applique
+    automatiquement sur les resultats de ``analyser()``.
 
     Parameters
     ----------
@@ -138,29 +178,32 @@ def creer_engine(
     model_vocab = resolved_dir / "unifie_v2_vocab.json" if resolved_dir else _MODELES_DIR / "unifie_v2_vocab.json"
     resolved_lexicon = _resoudre_lexique(lexicon_path, resolved_dir)
 
+    engine = None
+
     if mode in ("auto", "local", "onnx"):
         try:
             from lectura_nlp.inference_onnx_v2 import OnnxInferenceEngineV2
             if isinstance(resolved_lexicon, dict):
-                return OnnxInferenceEngineV2(
+                engine = OnnxInferenceEngineV2(
                     str(model_onnx), str(model_vocab),
                     lexicon=resolved_lexicon,
                 )
-            return OnnxInferenceEngineV2(
-                str(model_onnx), str(model_vocab),
-                lexicon_path=str(resolved_lexicon) if resolved_lexicon else None,
-            )
+            else:
+                engine = OnnxInferenceEngineV2(
+                    str(model_onnx), str(model_vocab),
+                    lexicon_path=str(resolved_lexicon) if resolved_lexicon else None,
+                )
         except (ImportError, FileNotFoundError, Exception):
             if mode == "onnx":
                 raise
 
-    if mode in ("auto", "local", "numpy"):
+    if engine is None and mode in ("auto", "local", "numpy"):
         try:
             from lectura_nlp.inference_numpy import NumpyInferenceEngine
             weights_dir = Path(__file__).parent / "modeles_numpy"
             if not weights_dir.exists():
                 weights_dir = resolved_dir if resolved_dir else _MODELES_DIR
-            return NumpyInferenceEngine(
+            engine = NumpyInferenceEngine(
                 str(weights_dir), str(model_vocab),
                 lexicon_path=str(resolved_lexicon) if isinstance(resolved_lexicon, Path) else None,
                 lexicon=resolved_lexicon if isinstance(resolved_lexicon, dict) else None,
@@ -169,13 +212,13 @@ def creer_engine(
             if mode == "numpy":
                 raise
 
-    if mode in ("auto", "local", "pure"):
+    if engine is None and mode in ("auto", "local", "pure"):
         try:
             from lectura_nlp.inference_pure import PureInferenceEngine
             weights_dir = Path(__file__).parent / "modeles_numpy"
             if not weights_dir.exists():
                 weights_dir = resolved_dir if resolved_dir else _MODELES_DIR
-            return PureInferenceEngine(
+            engine = PureInferenceEngine(
                 str(weights_dir), str(model_vocab),
                 lexicon_path=str(resolved_lexicon) if isinstance(resolved_lexicon, Path) else None,
                 lexicon=resolved_lexicon if isinstance(resolved_lexicon, dict) else None,
@@ -184,10 +227,13 @@ def creer_engine(
             if mode == "pure":
                 raise
 
-    raise RuntimeError(
-        f"Aucun backend d'inference disponible (mode={mode!r}). "
-        "Verifiez que les modeles sont installes ou utilisez mode='api'."
-    )
+    if engine is None:
+        raise RuntimeError(
+            f"Aucun backend d'inference disponible (mode={mode!r}). "
+            "Verifiez que les modeles sont installes ou utilisez mode='api'."
+        )
+
+    return _EngineAvecCorrections(engine)
 
 
 # API publique
