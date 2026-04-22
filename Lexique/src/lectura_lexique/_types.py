@@ -75,6 +75,17 @@ class Concept(TypedDict, total=False):
     source: str
 
 
+class Categorie(TypedDict, total=False):
+    """Entrée de la table categories (schema v4)."""
+
+    id: int
+    label: str
+    type: str        # "domaine", "classe", "synthetique"
+    qid: str         # Wikidata QID
+    description: str
+    depth: int       # profondeur dans la hierarchie (queries uniquement)
+
+
 # -- Types v3 (compatibilite) -------------------------------------------------
 
 

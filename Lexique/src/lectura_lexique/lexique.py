@@ -20,7 +20,7 @@ from lectura_lexique._aliases import resoudre_colonnes
 from lectura_lexique._loaders import iter_csv, iter_tsv
 from lectura_lexique._multext import decoder_multext as _decoder_multext
 from lectura_lexique._multext import filtre_multext as _filtre_multext
-from lectura_lexique._types import Concept, EntreeForme, EntreeLemme, EntreeLexicale
+from lectura_lexique._types import Categorie, Concept, EntreeForme, EntreeLemme, EntreeLexicale
 from lectura_lexique._utils import normaliser_ortho
 
 from lectura_lexique import _morphologie
@@ -778,10 +778,12 @@ class Lexique:
                             seen_ant.add(w.lower())
                             ant_words.append(w)
                     d["antonymes"] = ant_words
+                    d["categories"] = self.categories_de(cid)
                 else:
                     d["exemples"] = []
                     d["synonymes"] = []
                     d["antonymes"] = []
+                    d["categories"] = []
                 d["tags"] = []
                 results.append(d)
             return results
@@ -1681,6 +1683,133 @@ class Lexique:
             (concept_id,),
         )
         return [row[0] for row in cur.fetchall() if row[0]]
+
+    def info_categorie(self, label: str) -> Categorie | None:
+        """Retourne une categorie par son label (v4 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return None
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT * FROM categories WHERE label = ? COLLATE NOCASE",
+            (label,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None  # type: ignore[return-value]
+
+    def lister_categories(self, type: str | None = None) -> list[Categorie]:
+        """Liste toutes les categories, optionnellement filtrees par type (v4 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        if type is not None:
+            cur = conn.execute(
+                "SELECT * FROM categories WHERE type = ? ORDER BY label",
+                (type,),
+            )
+        else:
+            cur = conn.execute("SELECT * FROM categories ORDER BY label")
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def ancetres_categorie(
+        self, label: str, profondeur_max: int | None = None
+    ) -> list[Categorie]:
+        """Remonte la hierarchie depuis une categorie (v4 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        sql = (
+            "SELECT c.*, h.depth FROM categories c "
+            "JOIN categorie_hierarchie h ON c.id = h.ancestor_id "
+            "JOIN categories d ON d.id = h.descendant_id "
+            "WHERE d.label = ? COLLATE NOCASE AND h.depth > 0"
+        )
+        params: list[str | int] = [label]
+        if profondeur_max is not None:
+            sql += " AND h.depth <= ?"
+            params.append(profondeur_max)
+        sql += " ORDER BY h.depth, c.label"
+        cur = conn.execute(sql, params)
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def descendants_categorie(
+        self, label: str, profondeur_max: int | None = None
+    ) -> list[Categorie]:
+        """Descend la hierarchie depuis une categorie (v4 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        sql = (
+            "SELECT c.*, h.depth FROM categories c "
+            "JOIN categorie_hierarchie h ON c.id = h.descendant_id "
+            "JOIN categories a ON a.id = h.ancestor_id "
+            "WHERE a.label = ? COLLATE NOCASE AND h.depth > 0"
+        )
+        params: list[str | int] = [label]
+        if profondeur_max is not None:
+            sql += " AND h.depth <= ?"
+            params.append(profondeur_max)
+        sql += " ORDER BY h.depth, c.label"
+        cur = conn.execute(sql, params)
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def concepts_par_categorie(
+        self, label: str, inclure_descendants: bool = False
+    ) -> list[Concept]:
+        """Retourne les concepts lies a une categorie (v4 uniquement).
+
+        Si *inclure_descendants* est True, inclut aussi les concepts des
+        sous-categories (requete transitive via la closure table).
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        if inclure_descendants:
+            sql = (
+                "SELECT DISTINCT c.*, l.lemme AS _lemme FROM concepts c "
+                "JOIN concept_categories cc ON c.id = cc.concept_id "
+                "JOIN categorie_hierarchie h ON cc.categorie_id = h.descendant_id "
+                "JOIN categories cat ON h.ancestor_id = cat.id "
+                "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+                "WHERE cat.label = ? COLLATE NOCASE "
+                "ORDER BY l.lemme, c.sens_num"
+            )
+        else:
+            sql = (
+                "SELECT DISTINCT c.*, l.lemme AS _lemme FROM concepts c "
+                "JOIN concept_categories cc ON c.id = cc.concept_id "
+                "JOIN categories cat ON cc.categorie_id = cat.id "
+                "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+                "WHERE cat.label = ? COLLATE NOCASE "
+                "ORDER BY l.lemme, c.sens_num"
+            )
+        cur = conn.execute(sql, (label,))
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def rechercher_concepts(
+        self, pattern: str, limite: int = 50,
+    ) -> list[Concept]:
+        """Recherche des concepts par mot-cle dans la definition ou le lemme (v4).
+
+        Args:
+            pattern: Texte a chercher (LIKE %pattern%)
+            limite: Nombre max de resultats
+
+        Returns:
+            Liste de Concept (avec champ _lemme ajoute)
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        like_pat = f"%{pattern}%"
+        cur = conn.execute(
+            "SELECT DISTINCT c.*, l.lemme AS _lemme, l.cgram AS _cgram "
+            "FROM concepts c "
+            "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+            "WHERE c.definition LIKE ? OR l.lemme LIKE ? "
+            "ORDER BY l.lemme, c.sens_num LIMIT ?",
+            (like_pat, like_pat, limite),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
 
     def decoder_multext(self, tag: str) -> dict[str, str]:
         """Decode un tag multext en traits lisibles. Delegue a _multext.py."""

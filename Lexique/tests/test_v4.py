@@ -69,7 +69,9 @@ def db_v4_path():
         );
         CREATE TABLE categories (
             id INTEGER PRIMARY KEY,
-            label TEXT NOT NULL,
+            label TEXT NOT NULL UNIQUE,
+            type TEXT,
+            qid TEXT,
             description TEXT
         );
         CREATE TABLE categorie_hierarchie (
@@ -207,14 +209,29 @@ def db_v4_path():
         ],
     )
 
-    # Categories
+    # Categories avec type et qid
     conn.executemany(
-        "INSERT INTO categories (id, label) VALUES (?, ?)",
-        [(1, "animal"), (2, "lieu"), (3, "capitale")],
+        "INSERT INTO categories (id, label, type, qid) VALUES (?, ?, ?, ?)",
+        [
+            (1, "animal", "classe", "Q729"),
+            (2, "lieu", "classe", "Q17334923"),
+            (3, "capitale", "classe", "Q5119"),
+            (4, "être vivant", "synthetique", "Q19088"),
+        ],
     )
     conn.executemany(
         "INSERT INTO concept_categories (concept_id, categorie_id) VALUES (?, ?)",
         [(1, 1), (5, 2), (5, 3)],
+    )
+
+    # Hierarchie (closure table)
+    conn.executemany(
+        "INSERT INTO categorie_hierarchie (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)",
+        [
+            (1, 1, 0), (2, 2, 0), (3, 3, 0), (4, 4, 0),  # self
+            (4, 1, 1),  # être vivant → animal
+            (2, 3, 1),  # lieu → capitale
+        ],
     )
 
     conn.commit()
@@ -426,6 +443,123 @@ def test_definitions_domaine_from_theme(lexique_v4):
     assert defs[1]["domaine"] == ""  # pas de theme -> chaine vide
 
 
+# --- Categories : type, qid, hierarchie ---
+
+def test_categorie_type(db_v4_path):
+    """Les categories ont un type (classe, domaine, synthetique)."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute("SELECT label, type FROM categories WHERE type IS NOT NULL")
+    rows = {row[0]: row[1] for row in cur}
+    conn.close()
+    assert "animal" in rows
+    assert rows["animal"] == "classe"
+    assert rows["être vivant"] == "synthetique"
+
+
+def test_categorie_hierarchie_self(db_v4_path):
+    """Chaque categorie est ancetre d'elle-meme a depth=0."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute(
+        "SELECT COUNT(*) FROM categorie_hierarchie WHERE ancestor_id = descendant_id AND depth = 0"
+    )
+    nb_self = cur.fetchone()[0]
+    cur2 = conn.execute("SELECT COUNT(*) FROM categories")
+    nb_cats = cur2.fetchone()[0]
+    conn.close()
+    assert nb_self == nb_cats
+
+
+def test_categorie_ancestors(db_v4_path):
+    """'animal' a 'être vivant' comme ancetre."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute("""
+        SELECT c.label, h.depth FROM categorie_hierarchie h
+        JOIN categories c ON c.id = h.ancestor_id
+        JOIN categories d ON d.id = h.descendant_id
+        WHERE d.label = 'animal' AND h.depth > 0
+    """)
+    ancestors = {row[0]: row[1] for row in cur}
+    conn.close()
+    assert "être vivant" in ancestors
+    assert ancestors["être vivant"] == 1
+
+
+def test_categorie_descendants(db_v4_path):
+    """'être vivant' a 'animal' comme descendant."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute("""
+        SELECT c.label, h.depth FROM categorie_hierarchie h
+        JOIN categories c ON c.id = h.descendant_id
+        JOIN categories a ON a.id = h.ancestor_id
+        WHERE a.label = 'être vivant' AND h.depth > 0
+    """)
+    descendants = {row[0]: row[1] for row in cur}
+    conn.close()
+    assert "animal" in descendants
+    assert descendants["animal"] == 1
+
+
+# --- API categories (methodes Lexique) ---
+
+def test_info_categorie(lexique_v4):
+    """info_categorie() retourne les champs d'une categorie."""
+    cat = lexique_v4.info_categorie("animal")
+    assert cat is not None
+    assert cat["label"] == "animal"
+    assert cat["type"] == "classe"
+    assert cat["qid"] == "Q729"
+
+
+def test_info_categorie_inexistante(lexique_v4):
+    """info_categorie() retourne None pour un label inconnu."""
+    assert lexique_v4.info_categorie("inexistant") is None
+
+
+def test_lister_categories(lexique_v4):
+    """lister_categories() retourne toutes les categories, filtrage par type."""
+    toutes = lexique_v4.lister_categories()
+    assert len(toutes) == 4
+    # Filtrage par type
+    classes = lexique_v4.lister_categories(type="classe")
+    assert all(c["type"] == "classe" for c in classes)
+    assert len(classes) == 3  # animal, lieu, capitale
+    synth = lexique_v4.lister_categories(type="synthetique")
+    assert len(synth) == 1
+    assert synth[0]["label"] == "être vivant"
+
+
+def test_ancetres_categorie(lexique_v4):
+    """ancetres_categorie() remonte la hierarchie."""
+    ancetres = lexique_v4.ancetres_categorie("animal")
+    labels = {a["label"]: a["depth"] for a in ancetres}
+    assert "être vivant" in labels
+    assert labels["être vivant"] == 1
+
+
+def test_descendants_categorie(lexique_v4):
+    """descendants_categorie() descend la hierarchie."""
+    desc = lexique_v4.descendants_categorie("être vivant")
+    labels = {d["label"]: d["depth"] for d in desc}
+    assert "animal" in labels
+    assert labels["animal"] == 1
+
+
+def test_concepts_par_categorie(lexique_v4):
+    """concepts_par_categorie() retourne les concepts lies."""
+    concepts = lexique_v4.concepts_par_categorie("animal")
+    assert len(concepts) >= 1
+    # Le concept chat (sens 1) est lie a la categorie animal
+    assert any("felin" in c["definition"].lower() for c in concepts)
+    # Sans descendants : "être vivant" n'a pas de concepts directs
+    concepts_ev = lexique_v4.concepts_par_categorie("être vivant")
+    assert len(concepts_ev) == 0
+    # Avec descendants : "être vivant" inclut les concepts d'"animal"
+    concepts_ev_desc = lexique_v4.concepts_par_categorie(
+        "être vivant", inclure_descendants=True
+    )
+    assert len(concepts_ev_desc) >= 1
+
+
 # --- freq_composite ---
 
 def test_info_v4_freq_composite(lexique_v4):
@@ -503,6 +637,39 @@ def test_rechercher_sigle(lexique_v4):
     results = lexique_v4.rechercher("^SN")
     orthos = [r["ortho"] for r in results]
     assert "SNCF" in orthos
+
+
+# --- definitions() avec categories ---
+
+def test_definitions_categories(lexique_v4):
+    """definitions() inclut les categories de chaque sens."""
+    defs = lexique_v4.definitions("chat", "NOM")
+    assert len(defs) >= 2
+    # Sens 1 (felin domestique) est lie a la categorie "animal"
+    assert "animal" in defs[0]["categories"]
+    # Sens 2 (jeu) n'a pas de categorie
+    assert defs[1]["categories"] == []
+
+
+# --- rechercher_concepts() ---
+
+def test_rechercher_concepts(lexique_v4):
+    """rechercher_concepts() par mot-cle dans la definition."""
+    results = lexique_v4.rechercher_concepts("felin")
+    assert len(results) >= 1
+    assert any("felin" in c["definition"].lower() for c in results)
+
+
+def test_rechercher_concepts_par_lemme(lexique_v4):
+    """rechercher_concepts() par mot-cle dans le lemme."""
+    results = lexique_v4.rechercher_concepts("chat")
+    assert len(results) >= 2  # chat a 2 concepts
+
+
+def test_rechercher_concepts_inexistant(lexique_v4):
+    """rechercher_concepts() retourne [] pour un terme inexistant."""
+    results = lexique_v4.rechercher_concepts("xyztotoinexistant")
+    assert results == []
 
 
 # --- Fixture CSV pour test v3 compat ---
