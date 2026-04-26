@@ -255,6 +255,16 @@ def verifier_homophones(
                                     or _pp3_low in PREPOSITIONS
                                     or _pp3_low in ("du", "des", "aux")):
                                 _is_nom_subj = False
+                        # NOM PROPRE chain: "par elmore leonard et réalisé"
+                        # Two consecutive NOM PROPRE with PRE before them
+                        # → multi-word proper noun inside PP
+                        elif _pp2_pos == "NOM PROPRE" and i > 2:
+                            _pp3_pos = pos_tags[i - 3] if i - 3 < len(pos_tags) else ""
+                            _pp3_low = result[i - 3].lower()
+                            if (_pp3_pos == "PRE"
+                                    or _pp3_low in PREPOSITIONS
+                                    or _pp3_low in ("du", "des", "aux")):
+                                _is_nom_subj = False
                         # OOV-only guards below: extra caution for unknown words
                         elif _is_oov_subj_b2:
                             # Single-letter fragment at i-2 (orphan elision: l, d)
@@ -300,6 +310,15 @@ def verifier_homophones(
                                 _is_nom_subj = False
                         else:
                             _is_nom_subj = False
+                    # Guard: ADJ ending in PP suffix + et + PP = coordination
+                    # "la langue écrite et parlée" → two coordinated PPs
+                    # Both prev and next look like past participles
+                    if (
+                        _is_nom_subj
+                        and prev_pos in ("ADJ", "ADJ:pos")
+                        and prev_low.endswith(_PP_SUFFIXES)
+                    ):
+                        _is_nom_subj = False
                     if _is_pronoun_subj or _is_nom_subj:
                         ancien = result[i]
                         result[i] = "est"
@@ -602,6 +621,20 @@ def verifier_homophones(
                         "le", "la", "l'", "l\u2019", "l",
                     ):
                         _next_is_coord = False
+                # Guard: DET_def_sg + NOM(sg) + est + VER = copula
+                # "la mort est conforment" → copula (la = singular subject)
+                # Conjugated verb after copula is likely a misspelling
+                if (
+                    next_pos == "VER"
+                    and prev_pos == "NOM"
+                    and not prev_low.endswith(("s", "x", "z"))
+                    and i > 1
+                ):
+                    _pp_det_nv = result[i - 2].lower()
+                    if _pp_det_nv in (
+                        "le", "la", "l'", "l\u2019", "l",
+                    ):
+                        _next_is_coord = False
                 # Guard: ADJ + est + l/d elision = copula
                 # "sérique est d'une", "marquantes est l'introduction"
                 if (
@@ -813,13 +846,28 @@ def verifier_homophones(
                 _next_pos_vv = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _prev_low_vv = result[i - 1].lower()
                 _next_low_vv = result[i + 1].lower()
-                _pp_e_suffixes = (
+                _pp_vv_suffixes = (
                     "\u00e9", "\u00e9s", "\u00e9e", "\u00e9es",
+                    "i", "is",
+                    "u", "us",
                 )
                 _either_pp = (
-                    _prev_low_vv.endswith(_pp_e_suffixes)
-                    or _next_low_vv.endswith(_pp_e_suffixes)
+                    _prev_low_vv.endswith(_pp_vv_suffixes)
+                    or _next_low_vv.endswith(_pp_vv_suffixes)
                 )
+                # Exclude imparfait/conditionnel (-ait/-aient) which
+                # accidentally match -it suffix
+                if _either_pp:
+                    if (
+                        _prev_low_vv.endswith(("ait", "aient", "ais"))
+                        and not _next_low_vv.endswith(_pp_vv_suffixes)
+                    ):
+                        _either_pp = False
+                    elif (
+                        _next_low_vv.endswith(("ait", "aient", "ais"))
+                        and not _prev_low_vv.endswith(_pp_vv_suffixes)
+                    ):
+                        _either_pp = False
                 _modes = morpho.get("mode", [])
                 _next_mode = _modes[i + 1] if i + 1 < len(_modes) else "_"
                 if (

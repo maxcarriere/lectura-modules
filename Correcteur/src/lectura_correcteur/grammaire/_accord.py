@@ -958,6 +958,13 @@ def verifier_accords(
                     "ert", "erte", "ertes", "erts",
                 )):
                     _skip_est_coord = True
+                # Guard: est + singular ADJ = copula
+                # "les indicateurs est complexe" → copula, not *sont
+                elif (
+                    _npc in ("ADJ", "ADJ:pos")
+                    and not _nlc.endswith(("s", "x", "z"))
+                ):
+                    _skip_est_coord = True
 
             # Guard: causatif "fait/faire + infinitif" — ne pas pluraliser
             _skip_causatif_r4 = False

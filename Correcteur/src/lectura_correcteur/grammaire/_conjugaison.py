@@ -326,6 +326,15 @@ def verifier_conjugaisons(
                     "ert", "erte", "ertes", "erts",
                 )):
                     _skip_coord = True
+                # Guard: est + singular ADJ = copula (nominal subject only)
+                # "les indicateurs est complexe" → copula, not *sont
+                # But "ils est grand" → keep correction (pronoun = sure 3pl)
+                elif (
+                    _next_pos_c in ("ADJ", "ADJ:pos")
+                    and not _next_low_c.endswith(("s", "x", "z"))
+                    and _curr_prev_low not in SUJETS_3PL
+                ):
+                    _skip_coord = True
 
             # Guard: causatif "fait/faire + infinitif" — ne pas pluraliser
             _skip_causatif = False
