@@ -23,6 +23,58 @@ def transferer_casse(original: str, nouveau: str) -> str:
     return nouveau
 
 
+# Normalisation morpho : Lexique v4 utilise des valeurs longues,
+# le correcteur attend des codes courts.
+_MORPHO_NORM: dict[str, str] = {
+    # genre
+    "masculin": "m", "feminin": "f", "féminin": "f",
+    # nombre
+    "singulier": "s", "pluriel": "p",
+    # mode
+    "indicatif": "ind", "subjonctif": "sub", "imperatif": "imp",
+    "impératif": "imp", "conditionnel": "con", "infinitif": "inf",
+    "participe": "par",
+    # temps
+    "present": "pre", "présent": "pre", "imparfait": "imp",
+    "passe": "pas", "passé": "pas", "futur": "fut",
+    "passe simple": "pas", "passé simple": "pas",
+    "passe compose": "pac", "passé composé": "pac",
+}
+
+
+def normaliser_morpho(val: str) -> str:
+    """Normalise une valeur morpho (longue → code court)."""
+    return _MORPHO_NORM.get(val, val)
+
+
+def normaliser_info(entry: dict) -> dict:
+    """Normalise une entree lexique.info() pour compat v4."""
+    result = dict(entry)
+    for key in ("genre", "nombre", "temps", "mode"):
+        v = result.get(key)
+        if v and isinstance(v, str):
+            result[key] = normaliser_morpho(v)
+    return result
+
+
+class LexiqueNormalise:
+    """Wrapper qui normalise les valeurs morpho retournees par lexique.info().
+
+    Compatible avec Lexique v3 (codes courts) et v4 (valeurs longues).
+    Delegue tout au lexique sous-jacent.
+    """
+
+    def __init__(self, lexique):
+        self._lexique = lexique
+
+    def __getattr__(self, name):
+        return getattr(self._lexique, name)
+
+    def info(self, mot):
+        raw = self._lexique.info(mot)
+        return [normaliser_info(e) for e in raw]
+
+
 def reconstruire_phrase(tokens: list[str]) -> str:
     """Reconstruit une phrase a partir des tokens en gerant les espaces."""
     if not tokens:

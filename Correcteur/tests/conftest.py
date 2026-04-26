@@ -142,12 +142,14 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
                  "freq": 500.0, "personne": "2", "nombre": "s"}],
         "je": [{"ortho": "je", "cgram": "PRO:per", "phone": "\u0292\u0259",
                  "freq": 700.0, "personne": "1", "nombre": "s"}],
+        "dan": [{"ortho": "dan", "cgram": "NOM", "phone": "dɑ̃",
+                 "freq": 0.1}],
         "dans": [{"ortho": "dans", "cgram": "PRE", "phone": "d\u0251\u0303",
                    "freq": 150.0}],
         "belle": [{"ortho": "belle", "cgram": "ADJ", "phone": "b\u025bl",
                     "freq": 50.0, "genre": "f", "nombre": "s"}],
         "arrive": [{"ortho": "arrive", "cgram": "VER", "phone": "a\u0281iv",
-                     "freq": 20.0, "personne": "3", "nombre": "s"}],
+                     "freq": 478.0, "personne": "3", "nombre": "s"}],
         "bonjour": [{"ortho": "bonjour", "cgram": "NOM", "phone": "b\u0254\u0303\u0292u\u0281",
                       "freq": 60.0}],
         "comment": [{"ortho": "comment", "cgram": "ADV", "phone": "k\u0254m\u0251\u0303",
@@ -446,7 +448,7 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
                       "freq": 15.0, "genre": "f", "nombre": "s"}],
         # Noms pour tests genre
         "homme": [{"ortho": "homme", "cgram": "NOM", "phone": "\u0254m",
-                   "freq": 70.0, "genre": "m", "nombre": "s"}],
+                   "freq": 200.0, "genre": "m", "nombre": "s"}],
         "vent": [{"ortho": "vent", "cgram": "NOM", "phone": "v\u0251\u0303",
                   "freq": 25.0, "genre": "m", "nombre": "s"}],
         "note": [{"ortho": "note", "cgram": "NOM", "phone": "n\u0254t",
@@ -723,6 +725,16 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
                    "freq": 2.0, "genre": "m", "nombre": "s"}],
         "dîner": [{"ortho": "dîner", "cgram": "NOM", "phone": "dine",
                     "freq": 40.0, "genre": "m", "nombre": "s"}],
+        # Sigles
+        "onu": [{"ortho": "onu", "cgram": "SIGLE", "phone": "ɔny",
+                 "freq": 5.0}],
+        "otan": [{"ortho": "otan", "cgram": "SIGLE", "phone": "ɔtɑ̃",
+                  "freq": 3.0}],
+        # Noms propres
+        "mozart": [{"ortho": "mozart", "cgram": "NOM PROPRE", "phone": "mɔzaʁ",
+                    "freq": 10.0, "genre": "m", "nombre": "s"}],
+        "berlin": [{"ortho": "berlin", "cgram": "NOM PROPRE", "phone": "bɛʁlɛ̃",
+                    "freq": 8.0, "genre": "m", "nombre": "s"}],
     }
 
 

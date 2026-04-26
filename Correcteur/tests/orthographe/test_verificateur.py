@@ -223,3 +223,60 @@ def test_accent_inlexique_chat_pas_modifie(mock_lexique):
     v = VerificateurOrthographe(mock_lexique)
     results = v.verifier_phrase(["chat"])
     assert results[0].corrige == "chat"
+
+
+# --- Sigles : pas d'auto-correction OOV ---
+
+def test_sigle_allcaps_pas_auto_corrige(mock_lexique):
+    """Un mot ALL-CAPS (sigle) OOV ne doit pas etre auto-corrige."""
+    v = VerificateurOrthographe(mock_lexique, distance=1)
+    results = v.verifier_phrase(["UNESCO"])
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+    # Pas de correction automatique : le mot reste tel quel
+    assert results[0].corrige == "UNESCO"
+
+
+# --- Correction casse : SIGLE → majuscules, NOM PROPRE → 1ere lettre ---
+
+def test_sigle_minuscule_corrige_en_majuscule(mock_lexique):
+    """'onu' (SIGLE dans le lexique) -> corrige en 'ONU'."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["onu"])
+    assert results[0].corrige == "ONU"
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+
+
+def test_sigle_deja_majuscule_pas_modifie(mock_lexique):
+    """'ONU' deja en majuscules -> pas de correction."""
+    # ONU n'est pas dans le lexique (existe cherche en minuscule "onu")
+    # mais "onu" oui; verifions que si le mot est deja en caps, pas de re-correction
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["ONU"])
+    # Le mot existe dans le lexique (case-insensitive) et est deja en majuscules
+    assert results[0].corrige == "ONU"
+
+
+def test_nom_propre_minuscule_corrige_en_majuscule(mock_lexique):
+    """'mozart' (NOM PROPRE) -> corrige en 'Mozart'."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["mozart"])
+    assert results[0].corrige == "Mozart"
+    assert results[0].type_correction == TypeCorrection.HORS_LEXIQUE
+
+
+def test_nom_propre_deja_capitalise_pas_modifie(mock_lexique):
+    """'Mozart' deja capitalise -> pas de correction."""
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["Mozart"])
+    assert results[0].corrige == "Mozart"
+    assert results[0].type_correction == TypeCorrection.AUCUNE
+
+
+# --- Axe 3 : accent foreign context bidirectionnel ---
+
+def test_accent_foreign_ctx_suivant(mock_lexique):
+    """Mot suivi d'un OOV capitalise -> pas d'accent ajoutee."""
+    # "tres" suivi de "Race" (OOV, capitalise) → contexte etranger, pas de correction
+    v = VerificateurOrthographe(mock_lexique)
+    results = v.verifier_phrase(["tres", "Race"])
+    assert results[0].corrige == "tres"  # pas corrige en "très"

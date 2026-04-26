@@ -18,5 +18,8 @@ class CorrecteurConfig:
     seuil_remplacement: float = 0.15
     activer_azerty: bool = False
     activer_sms: bool = False
+    activer_negation: bool = False
+    activer_viterbi: bool = False
+    seuil_confiance_pos: float = 0.7
     max_suggestions: int = 5
     distance_suggestions: int = 2

@@ -71,6 +71,28 @@ def test_pas_correction_copule(mock_lexique):
     assert not any(c.corrige == "et" for c in corrections)
 
 
+def test_est_une_pas_corrige_en_et(mock_lexique):
+    """'resultat est une discipline' = copule, pas coordination → 'est' reste."""
+    mots = ["resultat", "est", "une", "discipline"]
+    pos = ["NOM", "AUX", "ART:ind", "NOM"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[1] == "est"
+    assert not any(c.corrige == "et" for c in corrections)
+
+
+def test_est_un_pas_corrige_en_et(mock_lexique):
+    """'resultat est un succes' = copule, pas coordination → 'est' reste."""
+    mots = ["resultat", "est", "un", "succes"]
+    pos = ["NOM", "AUX", "ART:ind", "NOM"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[1] == "est"
+    assert not any(c.corrige == "et" for c in corrections)
+
+
 # --- a / à ---
 
 def test_a_preposition_devant_verbe(mock_lexique):
@@ -202,3 +224,62 @@ def test_ou_conjonction_pas_interro(mock_lexique):
     )
     assert result[1] == "ou"
     assert not any(c.corrige == "où" for c in corrections)
+
+
+# --- Axe 1 : et → est copule apres sujet nominal ---
+
+def test_et_est_nom_sujet_adj(mock_lexique):
+    """'cette espece et endemique' -> 'est' (DET sing + NOM + et + ADJ = copule)."""
+    mots = ["cette", "espece", "et", "endemique"]
+    pos = ["DET", "NOM", "CON", "ADJ"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[2] == "est"
+    assert any(c.corrige == "est" for c in corrections)
+
+
+def test_et_coordination_pluriel_inchangee(mock_lexique):
+    """'les especes et menacees' -> 'et' reste (DET pluriel, pas singulier)."""
+    mots = ["les", "especes", "et", "menacees"]
+    pos = ["DET", "NOM", "CON", "ADJ"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[2] == "et"
+    assert not any(c.corrige == "est" for c in corrections)
+
+
+# --- Axe 2 : est → et coordination elargie ---
+
+def test_est_et_nom_propre_prev(mock_lexique):
+    """NOM PROPRE + est + ART -> kept as 'est' (copula pattern, avoid FP)."""
+    mots = ["authority", "est", "le", "conseil"]
+    pos = ["NOM PROPRE", "AUX", "ART:def", "NOM"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    # NOM PROPRE before est = very likely copula, don't convert
+    assert result[1] == "est"
+
+
+def test_est_et_ver_ant(mock_lexique):
+    """'aeriennes est ayant transporte' -> 'et' (ADJ + est + VER en -ant)."""
+    mots = ["aeriennes", "est", "ayant", "transporte"]
+    pos = ["ADJ", "AUX", "VER", "VER"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[1] == "et"
+    assert any(c.corrige == "et" for c in corrections)
+
+
+def test_est_et_fragment_elision(mock_lexique):
+    """NOM PROPRE + est + fragment 'l' -> 'et' (coordination, fragment is not article)."""
+    mots = ["authority", "est", "l", "conseil"]
+    pos = ["NOM PROPRE", "AUX", "ART:def", "NOM"]
+    result, corrections = verifier_homophones(
+        mots, pos, {}, mock_lexique,
+    )
+    assert result[1] == "et"
+    assert any(c.corrige == "et" for c in corrections)

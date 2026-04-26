@@ -26,7 +26,7 @@ def appliquer_syntaxe(
     corr_ponct = verifier_ponctuation(result)
     corrections.extend(corr_ponct)
 
-    # Elision : contracter particules devant voyelle/h
-    result = appliquer_elision(result)
+    # Elision desactivee (trop agressive sur corpus bien forme)
+    # result = appliquer_elision(result)
 
     return result, corrections

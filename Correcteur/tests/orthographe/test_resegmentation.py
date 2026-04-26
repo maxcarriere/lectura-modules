@@ -77,17 +77,17 @@ def test_fusion_connue_deux_mots_connus(mock_lexique):
 
 
 def test_fusion_compose_trait_union(mock_lexique):
-    """'peut' + 'être' -> 'peut-être' (compose avec trait d'union)."""
+    """'peut' + 'être' reste separe (peut être = verbe pouvoir + etre)."""
     tokens = ["peut", "être"]
     result = resegmenter(tokens, mock_lexique)
-    assert result == ["peut-être"]
+    assert result == ["peut", "être"]
 
 
 def test_fusion_compose_sans_accent(mock_lexique):
-    """'peut' + 'etre' (sans accent) -> 'peut-être' (forme canonique)."""
+    """'peut' + 'etre' reste separe ('pouvoir etre', pas l'adverbe)."""
     tokens = ["peut", "etre"]
     result = resegmenter(tokens, mock_lexique)
-    assert result == ["peut-être"]
+    assert result == ["peut", "etre"]
 
 
 def test_fusion_pas_de_faux_positif(mock_lexique):

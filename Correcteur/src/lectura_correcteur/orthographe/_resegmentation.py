@@ -8,6 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
+# Mots etrangers courants dont le split donnerait un faux positif
+# (ex: "the" -> "t'hé", "she" -> "s'hé")
+_MOTS_ETRANGERS_COURT = frozenset({
+    "the", "she", "that", "this", "they",
+    "card", "chard",
+})
+
 _CLITIQUES = [
     "qu'", "quelqu'", "lorsqu'", "puisqu'", "jusqu'",
     "presqu'", "aujourd'",
@@ -65,6 +72,10 @@ def _tenter_split_clitique(token: str, lexique: Any) -> list[str] | None:
     """Tente de separer un clitique du debut du token."""
     token_low = token.lower()
 
+    # Guard: ne pas splitter les mots etrangers connus
+    if token_low in _MOTS_ETRANGERS_COURT:
+        return None
+
     for prefix_sans, prefix_avec in _CLITIQUES_SANS_APOS:
         if not token_low.startswith(prefix_sans):
             continue
@@ -81,6 +92,13 @@ def _tenter_split_clitique(token: str, lexique: Any) -> list[str] | None:
             first_char = reste[0].lower()
             if first_char not in _VOYELLES and first_char != "h":
                 continue
+            # Pour les prefixes d'1 char, exiger que le reste soit assez
+            # frequent (evite les FP sur noms propres/mots etrangers OOV :
+            # "mart" -> "m'art", "selim" -> "s'elim")
+            if hasattr(lexique, "frequence"):
+                _freq_reste = lexique.frequence(reste)
+                if _freq_reste < 100.0:
+                    continue
 
         if lexique.existe(reste):
             clitique = token[:len(prefix_sans)] + "'"
@@ -98,7 +116,6 @@ _FUSIONS_CONNUES = frozenset({
 
 # Mapping: forme sans accent -> forme canonique dans le lexique
 _COMPOSES_TRAIT: dict[str, str] = {
-    "peut-être": "peut-être", "peut-etre": "peut-être",
     "c'est-à-dire": "c'est-à-dire", "c'est-a-dire": "c'est-à-dire",
     "au-dessus": "au-dessus", "au-dessous": "au-dessous",
     "au-delà": "au-delà", "au-dela": "au-delà",
@@ -110,12 +127,42 @@ _COMPOSES_TRAIT: dict[str, str] = {
 }
 
 
+# Paires de tokens a remplacer par un seul mot
+# (token1, token2) -> remplacement, avec guard optionnel sur le token suivant
+_SPECIAL_MERGES: list[tuple[tuple[str, str], str, frozenset[str] | None]] = [
+    # "d'" + "en" -> "dans" quand suivi d'un article/det
+    (("d'", "en"), "dans", frozenset({
+        "la", "le", "les", "l'", "l\u2019", "un", "une", "des",
+        "là", "l",  # variantes sans accent / sans apostrophe
+        "son", "sa", "ses", "mon", "ma", "mes", "ton", "ta", "tes",
+        "leur", "leurs", "notre", "votre", "nos", "vos",
+        "de", "ce", "cette", "ces",
+    })),
+]
+
+
 def _tenter_fusion(tokens: list[str], lexique: Any) -> list[str]:
     """Fusionne les paires de tokens adjacents si le resultat est un mot connu."""
     result: list[str] = []
     i = 0
     while i < len(tokens):
         if i + 1 < len(tokens):
+            # Fusions speciales (d'en -> dans quand suivi d'un article)
+            _merged = False
+            _pair = (tokens[i].lower(), tokens[i + 1].lower())
+            for (_t1, _t2), _repl, _guard_next in _SPECIAL_MERGES:
+                if _pair == (_t1, _t2):
+                    if _guard_next is None or (
+                        i + 2 < len(tokens)
+                        and tokens[i + 2].lower() in _guard_next
+                    ):
+                        result.append(_repl)
+                        i += 2
+                        _merged = True
+                        break
+            if _merged:
+                continue
+
             fusionne = tokens[i] + tokens[i + 1]
             fusionne_low = fusionne.lower()
             # Fusion par liste connue (curatee, pas de garde token inconnu)
@@ -123,7 +170,7 @@ def _tenter_fusion(tokens: list[str], lexique: Any) -> list[str]:
                 result.append(fusionne_low)
                 i += 2
                 continue
-            # Composes avec trait d'union ("peut" + "être" -> "peut-être")
+            # Composes avec trait d'union ("la" + "bas" -> "là-bas")
             fusionne_trait = tokens[i] + "-" + tokens[i + 1]
             fusionne_trait_low = fusionne_trait.lower()
             if fusionne_trait_low in _COMPOSES_TRAIT:
@@ -158,6 +205,10 @@ def _tenter_split_elargi(token: str, lexique: Any) -> list[str] | None:
     """
     token_low = token.lower()
 
+    # Guard: ne pas splitter les mots etrangers connus
+    if token_low in _MOTS_ETRANGERS_COURT:
+        return None
+
     for prefix_sans, prefix_avec in _CLITIQUES_SANS_APOS:
         if not token_low.startswith(prefix_sans):
             continue
@@ -173,6 +224,11 @@ def _tenter_split_elargi(token: str, lexique: Any) -> list[str] | None:
             first_char = reste[0].lower()
             if first_char not in _VOYELLES and first_char != "h":
                 continue
+            # Meme garde frequence que _tenter_split_clitique
+            if hasattr(lexique, "frequence"):
+                _freq_reste = lexique.frequence(reste)
+                if _freq_reste < 100.0:
+                    continue
 
         if lexique.existe(reste):
             clitique = token[:len(prefix_sans)] + "'"

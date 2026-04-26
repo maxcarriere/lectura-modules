@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
+SCHEMA_VERSION = 4
+
 
 class SensDefinition(TypedDict, total=False):
     """Un sens (definition) d'un mot, issu de la table ``definitions``."""
@@ -15,6 +17,95 @@ class SensDefinition(TypedDict, total=False):
     antonymes: list[str]
     domaine: str
     tags: list[str]
+
+
+# -- Types v4 ------------------------------------------------------------------
+
+
+class EntreeForme(TypedDict, total=False):
+    """Entree de la table formes (schema v4)."""
+
+    id: int
+    ortho: str
+    lemme_id: int
+    multext: str
+    phone: str
+    phone_reversed: str
+    nb_syllabes: int
+    syllabes: str
+    freq_opensubs: float
+    freq_frantext: float
+    freq_lm10: float
+    freq_frwac: float
+    freq_composite: float
+    source: str
+
+
+class EntreeLemme(TypedDict, total=False):
+    """Entree de la table lemmes (schema v4)."""
+
+    id: int
+    lemme: str
+    cgram: str
+    genre: str
+    contrainte_nombre: str
+    sous_type: str
+    etymologie: str
+    freq_opensubs: float
+    freq_frantext: float
+    freq_lm10: float
+    freq_frwac: float
+    freq_composite: float
+    age: float
+    source: str
+
+
+class Concept(TypedDict, total=False):
+    """Entree de la table concepts (schema v4)."""
+
+    id: int
+    lemme_id: int
+    sens_num: int
+    definition: str
+    registre: str
+    theme: str
+    illustrable: float
+    synset_id: str
+    qid: str
+    source: str
+
+
+class Categorie(TypedDict, total=False):
+    """Entrée de la table categories (schema v4)."""
+
+    id: int
+    label: str
+    type: str        # "domaine", "classe", "synthetique"
+    qid: str         # Wikidata QID
+    description: str
+    depth: int       # profondeur dans la hierarchie (queries uniquement)
+
+
+# -- Types v3 (compatibilite) -------------------------------------------------
+
+
+class EntreeNomPropre(TypedDict, total=False):
+    """Entree de la table noms_propres (schema v3)."""
+
+    lemme: str
+    cgram: str
+    sous_type: str
+    genre: str
+    nombre: str
+    phone: str
+    phone_reversed: str
+    nb_syllabes: int
+    syllabes: str
+    freq_opensubs: float
+    definition: str
+    etymologie: str
+    age: float
+    illustrable: float
 
 
 class EntreeLexicale(TypedDict, total=False):
@@ -47,6 +138,12 @@ class EntreeLexicale(TypedDict, total=False):
     freq_frantext: float
     freq_frwac_forme_pmw: float
     freqfilms2: float
+
+    # Donnees educatives (issues de Manulex / Mini)
+    age: float
+    illustrable: float
+    categorie: str
+    criteres: str
 
     # Champs supplementaires (selon la source)
     infover: str

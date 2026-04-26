@@ -1,10 +1,10 @@
 """Orchestrateur : chaine les sous-modules orthographe, grammaire, syntaxe.
 
 Pipeline :
-1. Tokeniser (tokeniseur du MorphoTagger CRF)
+1. Tokeniser
 2. Syntaxe (majuscules, espaces)
 3. Resegmentation (apostrophes SMS)
-4. Analyse morpho (MorphoTagger CRF -> POS, nombre, genre, personne)
+4. Analyse morpho (lookup lexique par defaut, modele injectable)
 5. Orthographe (verification lexique : mot existe ou pas)
 6. Grammaire (accords, conjugaison, homophones contextuels)
 7. Reconstruction
@@ -17,8 +17,11 @@ from typing import Any
 from lectura_correcteur._candidats import generer_candidats
 from lectura_correcteur._coherence import appliquer_coherence
 from lectura_correcteur._config import CorrecteurConfig
-from lectura_correcteur._morpho import MorphoTagger
-from lectura_correcteur._scoring import extraire_contexte, scorer_candidats
+from lectura_correcteur._tagger_lexique import LexiqueTagger
+from lectura_correcteur._scoring import (
+    extraire_contexte,
+    scorer_candidats,
+)
 from lectura_correcteur._symspell import SymSpellIndex, _obtenir_formes
 from lectura_correcteur._types import (
     Correction,
@@ -26,7 +29,7 @@ from lectura_correcteur._types import (
     ResultatCorrection,
     TypeCorrection,
 )
-from lectura_correcteur._utils import PUNCT_RE, reconstruire_phrase
+from lectura_correcteur._utils import PUNCT_RE, LexiqueNormalise, reconstruire_phrase
 from lectura_correcteur.grammaire import appliquer_grammaire
 from lectura_correcteur.orthographe import VerificateurOrthographe
 from lectura_correcteur.orthographe._resegmentation import resegmenter
@@ -37,9 +40,8 @@ from lectura_correcteur.syntaxe import appliquer_syntaxe
 class Correcteur:
     """Pipeline complet de correction orthographique et grammaticale.
 
-    Utilise un MorphoTagger CRF embarque pour l'analyse POS/morpho,
-    sauf si un tagger/tokeniseur externe est injecte.
-    Pas de G2P, pas de P2G, pas de lexique embarque.
+    Par defaut, utilise un tagger par lookup lexique (zero modele).
+    Un tagger et/ou G2P externe peuvent etre injectes via les Protocols.
     Le developpeur branche son propre lexique via LexiqueProtocol.
     """
 
@@ -57,24 +59,45 @@ class Correcteur:
         Args:
             lexique: Objet satisfaisant LexiqueProtocol
             config: Configuration du correcteur (optionnelle)
-            tagger: Objet satisfaisant TaggerProtocol (optionnel, fallback MorphoTagger)
+            tagger: Objet satisfaisant TaggerProtocol (optionnel, fallback LexiqueTagger)
             tokeniseur: Objet satisfaisant TokeniseurProtocol (optionnel)
-            g2p: Objet optionnel avec methode prononcer(mot) -> str | None
+            g2p: Objet satisfaisant G2PProtocol (optionnel)
         """
-        self._lexique = lexique
+        self._lexique = LexiqueNormalise(lexique)
         self._config = config or CorrecteurConfig()
-        self._tagger = tagger if tagger is not None else MorphoTagger()
+        self._tagger = tagger if tagger is not None else LexiqueTagger(self._lexique)
         self._tokeniseur = tokeniseur
         self._g2p = g2p
-        formes = _obtenir_formes(lexique)
+        # Garder un LexiqueTagger pour les regles de grammaire
+        # (regles calibrees sur ses POS, ex: est→ADJ)
+        self._lex_tagger = (
+            LexiqueTagger(self._lexique) if tagger is not None else None
+        )
+        formes = _obtenir_formes(self._lexique)
         self._symspell = SymSpellIndex(formes) if formes is not None else None
         self._verificateur = VerificateurOrthographe(
-            lexique, max_suggestions=self._config.max_suggestions,
+            self._lexique, max_suggestions=self._config.max_suggestions,
             distance=self._config.distance_suggestions,
-            g2p=g2p,
             scoring_actif=self._config.activer_scoring,
             symspell=self._symspell,
         )
+        # Charger matrice de transition Viterbi si disponible
+        self._transition_matrix = None
+        if hasattr(self._tagger, "tag_words_rich"):
+            self._init_viterbi()
+
+    def _init_viterbi(self) -> None:
+        """Charge la matrice de transition si le fichier existe."""
+        from pathlib import Path
+        matrix_path = (
+            Path(__file__).parent / "data" / "transition_matrix_bigram.json"
+        )
+        if matrix_path.exists():
+            from lectura_correcteur._viterbi import charger_matrice_transition
+            self._transition_matrix = charger_matrice_transition(matrix_path)
+            # Activer Viterbi par defaut si matrice presente
+            if not self._config.activer_viterbi:
+                self._config.activer_viterbi = True
 
     @property
     def lexique(self):
@@ -139,8 +162,12 @@ class Correcteur:
                 phrase_corrigee=reconstruire_phrase(tokens),
             )
 
-        # 4b. Analyse morpho (CRF)
-        morpho_results = self._tagger.tag_words(word_tokens)
+        # 4b. Analyse morpho (CRF ou G2P unifie)
+        _rich_tagger = hasattr(self._tagger, "tag_words_rich")
+        if _rich_tagger:
+            morpho_results = self._tagger.tag_words_rich(word_tokens)
+        else:
+            morpho_results = self._tagger.tag_words(word_tokens)
 
         # 5. Orthographe (verification lexique)
         if self._config.activer_orthographe:
@@ -158,7 +185,7 @@ class Correcteur:
                 for j, t in enumerate(word_tokens)
             ]
 
-        # Enrichir analyses avec les POS/morpho du CRF
+        # Enrichir analyses avec les POS/morpho du tagger
         for j, analysis in enumerate(analyses):
             if j < len(morpho_results):
                 mr = morpho_results[j]
@@ -171,6 +198,29 @@ class Correcteur:
                         morpho_dict[key] = val
                 if not analysis.morpho:
                     analysis.morpho = morpho_dict
+                # Stocker confiance POS si disponible (rich tagger)
+                if "pos_scores" in mr:
+                    analysis.pos_scores = mr["pos_scores"]
+                if "confiance_pos" in mr:
+                    analysis.confiance_pos = mr["confiance_pos"]
+
+        # 4c. Viterbi POS disambiguation (si matrice presente + rich tagger)
+        if (
+            self._config.activer_viterbi
+            and self._transition_matrix is not None
+            and _rich_tagger
+        ):
+            from lectura_correcteur._viterbi import viterbi_decode
+            pos_scores_seq = [a.pos_scores for a in analyses]
+            # N'appliquer Viterbi que si au moins une position a des alternatives
+            if any(len(ps) > 1 for ps in pos_scores_seq):
+                viterbi_result = viterbi_decode(
+                    pos_scores_seq, self._transition_matrix,
+                )
+                for j, (v_pos, v_conf) in enumerate(viterbi_result):
+                    if v_pos and j < len(analyses):
+                        analyses[j].pos = v_pos
+                        analyses[j].confiance_pos = v_conf
 
         # Fallback POS via lexique : corriger si le CRF s'est trompe
         # et que le lexique ne connait qu'un seul cgram pour ce mot
@@ -182,120 +232,13 @@ class Correcteur:
                     if analysis.pos not in cgrams and len(cgrams) == 1:
                         analysis.pos = next(iter(cgrams))
 
-        # 5b. Scoring unifie (si active)
-        if self._config.activer_scoring:
-            for j, analysis in enumerate(analyses):
-                # Si l'orthographe a corrige le mot, verifier si la forme
-                # corrigee est dans le lexique (pas l'originale)
-                dans_lex = analysis.dans_lexique
-                if analysis.corrige != analysis.original and not dans_lex:
-                    dans_lex = self._lexique.existe(analysis.corrige)
-                # Injecter les suggestions du verificateur pour les OOV
-                sugg = analysis.suggestions if not dans_lex else None
-                candidats = generer_candidats(
-                    analysis.corrige, dans_lex,
-                    analysis.pos, analysis.morpho,
-                    self._lexique, self._g2p, self._config,
-                    suggestions=sugg,
-                )
-                contexte = extraire_contexte(analyses, j, self._lexique)
-                scored = scorer_candidats(
-                    candidats, analysis.original,
-                    analysis.pos, analysis.morpho,
-                    contexte, self._lexique,
-                    dans_lexique=dans_lex,
-                    config=self._config,
-                )
-                if scored:
-                    top = scored[0]
-                    identite = next(
-                        (c for c in scored if c.source == "identite"), None,
-                    )
-                    # OOV : seuil=0 (on sait que le mot est faux)
-                    seuil = 0.0 if not dans_lex else self._config.seuil_remplacement
-                    if identite is None or (top.score - identite.score) > seuil:
-                        analysis.corrige = top.forme
-                        if top.source == "morpho":
-                            analysis.type_correction = TypeCorrection.GRAMMAIRE
-                        elif top.source != "identite":
-                            analysis.type_correction = TypeCorrection.HORS_LEXIQUE
-
-        # 5c. Coherence POS (experimental, OFF par defaut)
-        if self._config.activer_coherence:
-            corr_coherence = appliquer_coherence(analyses, self._lexique)
-            all_corrections.extend(corr_coherence)
+        # 5b-6. Pipeline de correction (regles)
+        after_rules, corrs = self._pipeline_regles(
+            analyses, word_tokens, morpho_results, all_corrections,
+        )
+        all_corrections = corrs
 
         decided_words = [a.corrige for a in analyses]
-
-        # 6. Grammaire
-        if self._config.activer_grammaire:
-            pos_list = [a.pos for a in analyses]
-            morpho_dict_lists: dict[str, list[str]] = {}
-            if analyses:
-                for feat in ("genre", "nombre", "temps", "mode", "personne"):
-                    morpho_dict_lists[feat] = [
-                        a.morpho.get(feat, "_") for a in analyses
-                    ]
-
-            after_rules, corr_gram = appliquer_grammaire(
-                decided_words, pos_list, morpho_dict_lists, self._lexique,
-                originaux=word_tokens,
-            )
-            all_corrections.extend(corr_gram)
-
-            for j in range(len(analyses)):
-                if j < len(after_rules) and after_rules[j].lower() != analyses[j].corrige.lower():
-                    analyses[j].corrige = after_rules[j]
-                    if analyses[j].type_correction == TypeCorrection.AUCUNE:
-                        analyses[j].type_correction = TypeCorrection.GRAMMAIRE
-
-            # 6b. Post-grammar scoring pass (PP apres AUX)
-            # La grammaire peut corriger des homophones (a/à, on/ont) qui revelent
-            # un contexte AUX que le scoring initial ne pouvait pas detecter.
-            if self._config.activer_scoring:
-                # Mettre a jour les POS apres corrections grammaticales
-                for j, analysis in enumerate(analyses):
-                    if j < len(after_rules):
-                        forme_courante = after_rules[j].lower()
-                        infos = self._lexique.info(forme_courante)
-                        if infos:
-                            cgrams = {e["cgram"] for e in infos if e.get("cgram")}
-                            # Si la grammaire a change le mot, mettre a jour le POS
-                            if forme_courante != analysis.original.lower() and len(cgrams) == 1:
-                                analysis.pos = next(iter(cgrams))
-                # Re-run scoring sur les mots non deja corriges
-                for j, analysis in enumerate(analyses):
-                    if analysis.type_correction != TypeCorrection.AUCUNE:
-                        continue  # deja corrige, ne pas re-scorer
-                    contexte = extraire_contexte(analyses, j, self._lexique)
-                    if not contexte.get("aux_gauche"):
-                        continue  # seul interet du post-pass
-                    candidats = generer_candidats(
-                        analysis.corrige, analysis.dans_lexique,
-                        analysis.pos, analysis.morpho,
-                        self._lexique, self._g2p, self._config,
-                    )
-                    scored = scorer_candidats(
-                        candidats, analysis.original,
-                        analysis.pos, analysis.morpho,
-                        contexte, self._lexique,
-                        config=self._config,
-                    )
-                    if scored:
-                        top = scored[0]
-                        identite = next(
-                            (c for c in scored if c.source == "identite"), None,
-                        )
-                        seuil = self._config.seuil_remplacement
-                        if identite is None or (top.score - identite.score) > seuil:
-                            analysis.corrige = top.forme
-                            after_rules[j] = top.forme
-                            if top.source == "morpho":
-                                analysis.type_correction = TypeCorrection.GRAMMAIRE
-                            elif top.source != "identite":
-                                analysis.type_correction = TypeCorrection.HORS_LEXIQUE
-        else:
-            after_rules = decided_words
 
         # 7. Reconstruction
         if len(after_rules) != len(decided_words):
@@ -318,6 +261,168 @@ class Correcteur:
             mots=analyses,
             corrections=all_corrections,
         )
+
+    # ------------------------------------------------------------------
+    # Pipeline : scoring heuristique + regles grammaticales
+    # ------------------------------------------------------------------
+
+    def _pipeline_regles(
+        self,
+        analyses: list[MotAnalyse],
+        word_tokens: list[str],
+        morpho_results: list[dict],
+        corrections: list[Correction],
+    ) -> tuple[list[str], list[Correction]]:
+        """Pipeline : scoring heuristique 8 facteurs + regles grammaticales.
+
+        Retourne (after_rules, corrections) pour la reconstruction.
+        """
+        all_corrections = list(corrections)
+
+        # 5b. Scoring unifie (si active)
+        if self._config.activer_scoring:
+            for j, analysis in enumerate(analyses):
+                dans_lex = analysis.dans_lexique
+                if analysis.corrige != analysis.original and not dans_lex:
+                    dans_lex = self._lexique.existe(analysis.corrige)
+                sugg = analysis.suggestions if not dans_lex else None
+                candidats = generer_candidats(
+                    analysis.corrige, dans_lex,
+                    analysis.pos, analysis.morpho,
+                    self._lexique,
+                    g2p=self._g2p,
+                    config=self._config,
+                    suggestions=sugg,
+                )
+                contexte = extraire_contexte(analyses, j, self._lexique)
+                scored = scorer_candidats(
+                    candidats, analysis.original,
+                    analysis.pos, analysis.morpho,
+                    contexte, self._lexique,
+                    dans_lexique=dans_lex,
+                    config=self._config,
+                )
+                if scored:
+                    top = scored[0]
+                    identite = next(
+                        (c for c in scored if c.source == "identite"), None,
+                    )
+                    seuil = 0.0 if not dans_lex else self._config.seuil_remplacement
+                    if identite is None or (top.score - identite.score) > seuil:
+                        analysis.corrige = top.forme
+                        analysis.confiance = top.score
+                        if top.source == "morpho":
+                            analysis.type_correction = TypeCorrection.GRAMMAIRE
+                        elif top.source != "identite":
+                            analysis.type_correction = TypeCorrection.HORS_LEXIQUE
+                        if top.pos:
+                            analysis.pos = top.pos
+
+                    # Populate suggestions_scored with top-5 candidates
+                    analysis.suggestions_scored = [
+                        (c.forme, c.score) for c in scored[:5]
+                    ]
+
+        # 5c. Coherence POS (experimental, OFF par defaut)
+        if self._config.activer_coherence:
+            corr_coherence = appliquer_coherence(analyses, self._lexique)
+            all_corrections.extend(corr_coherence)
+
+        decided_words = [a.corrige for a in analyses]
+
+        # 6. Grammaire
+        if self._config.activer_grammaire:
+            # Re-tag using corrected forms (not originals) so grammar rules
+            # see the POS/morpho of the corrected word (e.g. "dan"->NOM
+            # becomes "dans"->PRE after ortho correction).
+            _retagger = self._lex_tagger if self._lex_tagger is not None else self._tagger
+            _lex_tags = _retagger.tag_words(decided_words)
+            _lex_morpho_results = _lex_tags
+            pos_list = [t.get("pos", "") for t in _lex_tags]
+            for j, tag in enumerate(_lex_tags):
+                if j < len(analyses) and tag.get("pos"):
+                    analyses[j].pos = tag["pos"]
+
+            morpho_dict_lists: dict[str, list[str]] = {}
+            _morpho_src = _lex_morpho_results if _lex_morpho_results is not None else None
+            if analyses:
+                for feat in ("genre", "nombre", "temps", "mode", "personne"):
+                    if _morpho_src is not None:
+                        morpho_dict_lists[feat] = [
+                            _morpho_src[j].get(feat, "_") if j < len(_morpho_src) else "_"
+                            for j in range(len(analyses))
+                        ]
+                    else:
+                        morpho_dict_lists[feat] = [
+                            a.morpho.get(feat, "_") for a in analyses
+                        ]
+
+            # Extraire confiance POS si disponible (rich tagger / Viterbi)
+            _pos_conf = None
+            if any(a.confiance_pos < 1.0 for a in analyses):
+                _pos_conf = [a.confiance_pos for a in analyses]
+
+            after_rules, corr_gram = appliquer_grammaire(
+                decided_words, pos_list, morpho_dict_lists, self._lexique,
+                originaux=word_tokens,
+                activer_negation=self._config.activer_negation,
+                pos_confiance=_pos_conf,
+            )
+            all_corrections.extend(corr_gram)
+
+            for j in range(len(analyses)):
+                if j < len(after_rules) and after_rules[j].lower() != analyses[j].corrige.lower():
+                    analyses[j].corrige = after_rules[j]
+                    if analyses[j].type_correction == TypeCorrection.AUCUNE:
+                        analyses[j].type_correction = TypeCorrection.GRAMMAIRE
+
+            # 6b. Post-grammar scoring pass (PP apres AUX)
+            if self._config.activer_scoring:
+                for j, analysis in enumerate(analyses):
+                    if j < len(after_rules):
+                        forme_courante = after_rules[j].lower()
+                        infos = self._lexique.info(forme_courante)
+                        if infos:
+                            cgrams = {e["cgram"] for e in infos if e.get("cgram")}
+                            if forme_courante != analysis.original.lower() and len(cgrams) == 1:
+                                analysis.pos = next(iter(cgrams))
+                for j, analysis in enumerate(analyses):
+                    if analysis.type_correction != TypeCorrection.AUCUNE:
+                        continue
+                    contexte = extraire_contexte(analyses, j, self._lexique)
+                    if not contexte.get("aux_gauche"):
+                        continue
+                    candidats = generer_candidats(
+                        analysis.corrige, analysis.dans_lexique,
+                        analysis.pos, analysis.morpho,
+                        self._lexique,
+                        g2p=self._g2p,
+                        config=self._config,
+                    )
+                    scored = scorer_candidats(
+                        candidats, analysis.original,
+                        analysis.pos, analysis.morpho,
+                        contexte, self._lexique,
+                        config=self._config,
+                    )
+                    if scored:
+                        top = scored[0]
+                        identite = next(
+                            (c for c in scored if c.source == "identite"), None,
+                        )
+                        seuil = self._config.seuil_remplacement
+                        if identite is None or (top.score - identite.score) > seuil:
+                            analysis.corrige = top.forme
+                            analysis.confiance = top.score
+                            after_rules[j] = top.forme
+                            if top.source == "morpho":
+                                analysis.type_correction = TypeCorrection.GRAMMAIRE
+                            elif top.source != "identite":
+                                analysis.type_correction = TypeCorrection.HORS_LEXIQUE
+        else:
+            after_rules = decided_words
+
+        return after_rules, all_corrections
 
 
 def _reconstruire_avec_insertions(

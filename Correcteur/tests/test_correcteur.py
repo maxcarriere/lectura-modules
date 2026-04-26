@@ -67,12 +67,11 @@ def test_config_sans_grammaire(mock_lexique):
 
 
 def test_mot_analyse_sans_ipa(mock_lexique):
-    """MotAnalyse ne doit pas avoir de champ ipa/confiance/alternatives."""
+    """MotAnalyse ne doit pas avoir de champ ipa/alternatives."""
     c = Correcteur(mock_lexique)
     result = c.corriger("Le chat dort")
     for m in result.mots:
         assert not hasattr(m, "ipa")
-        assert not hasattr(m, "confiance")
         assert not hasattr(m, "alternatives")
 
 

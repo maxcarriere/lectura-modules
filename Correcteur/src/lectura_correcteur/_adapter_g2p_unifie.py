@@ -22,6 +22,44 @@ _TOKEN_RE = re.compile(
 )
 
 
+import math
+
+# Mapping UD feature keys → FR feature keys (correcteur convention)
+_UD_KEY_TO_FR: dict[str, str] = {
+    "Number": "nombre",
+    "Gender": "genre",
+    "Tense": "temps",
+    "Mood": "mode",
+    "Person": "personne",
+}
+
+# Mapping UD feature values → FR feature values (lexique convention)
+_UD_VAL_TO_FR: dict[str, str] = {
+    # Gender
+    "Masc": "m", "Fem": "f",
+    # Number
+    "Sing": "s", "Plur": "p",
+    # Tense
+    "Pres": "pre", "Past": "pas", "Imp": "imp", "Fut": "fut",
+    # Mood
+    "Ind": "ind", "Sub": "sub", "Cnd": "con",
+    # Person (same)
+    "1": "1", "2": "2", "3": "3",
+}
+
+
+def _softmax(scores: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """Normalise en probabilites via softmax."""
+    if not scores:
+        return []
+    max_v = max(s for _, s in scores)
+    exp_vals = [(label, math.exp(s - max_v)) for label, s in scores]
+    total = sum(v for _, v in exp_vals)
+    if total <= 0:
+        return scores
+    return [(label, v / total) for label, v in exp_vals]
+
+
 class G2PUnifieAdapter:
     """Adaptateur satisfaisant TaggerProtocol + G2PProtocol.
 
@@ -40,6 +78,17 @@ class G2PUnifieAdapter:
             self._cache[key] = self._engine.analyser_v2(list(words))
         return self._cache[key]
 
+    def _extraire_morpho_fr(self, result: dict, i: int) -> dict[str, str]:
+        """Extrait les features morpho pour la position i, mappees en FR."""
+        d: dict[str, str] = {}
+        morpho = result.get("morpho", {})
+        for ud_key, fr_key in _UD_KEY_TO_FR.items():
+            vals = morpho.get(ud_key, [])
+            if i < len(vals) and vals[i] != "_":
+                mapped = _UD_VAL_TO_FR.get(vals[i], vals[i])
+                d[fr_key] = mapped
+        return d
+
     # -- TaggerProtocol --
 
     def tokenize(self, text: str) -> list[tuple[str, bool]]:
@@ -55,7 +104,7 @@ class G2PUnifieAdapter:
         """Analyse POS/Morpho via le modele unifie V2.
 
         Retourne list[dict] avec pos, genre, nombre, temps, mode, personne
-        (meme format que MorphoTagger).
+        (meme format que LexiqueTagger).
         """
         if not words:
             return []
@@ -68,11 +117,54 @@ class G2PUnifieAdapter:
             d: dict[str, str] = {}
             if i < len(result.get("pos", [])):
                 d["pos"] = result["pos"][i]
-            morpho = result.get("morpho", {})
-            for feat in ("genre", "nombre", "temps", "mode", "personne"):
-                vals = morpho.get(feat, [])
-                if i < len(vals) and vals[i] != "_":
-                    d[feat] = vals[i]
+            d.update(self._extraire_morpho_fr(result, i))
+            tags.append(d)
+
+        return tags
+
+    def tag_words_rich(self, words: list[str]) -> list[dict]:
+        """Analyse POS/Morpho enrichie avec scores de confiance.
+
+        Retourne list[dict] avec en plus :
+        - pos_scores: list[tuple[str, float]] (top-K POS avec probabilites)
+        - confiance_pos: float (confiance du top-1)
+        - g2p: str (IPA)
+        """
+        if not words:
+            return []
+
+        result = self._analyser_cached(words)
+        n = len(words)
+        tags: list[dict] = []
+
+        raw_pos_scores = result.get("pos_scores", [])
+        raw_confiance = result.get("confiance_pos", [])
+        raw_g2p = result.get("g2p", [])
+
+        for i in range(n):
+            d: dict[str, Any] = {}
+            if i < len(result.get("pos", [])):
+                d["pos"] = result["pos"][i]
+            d.update(self._extraire_morpho_fr(result, i))
+
+            # POS scores (deja normalises par softmax dans le V2 engine)
+            if i < len(raw_pos_scores):
+                ps = raw_pos_scores[i]
+                # Deja list[tuple[str, float]] normalise
+                d["pos_scores"] = ps if ps else []
+            else:
+                d["pos_scores"] = []
+
+            # Confiance POS
+            if i < len(raw_confiance):
+                d["confiance_pos"] = raw_confiance[i]
+            else:
+                d["confiance_pos"] = 1.0
+
+            # G2P (IPA)
+            if i < len(raw_g2p):
+                d["g2p"] = raw_g2p[i]
+
             tags.append(d)
 
         return tags
@@ -95,8 +187,8 @@ def creer_adapter_g2p_unifie(
     modele sont absents (degradation gracieuse).
 
     Args:
-        model_dir: Repertoire racine de lectura-modules-private.
-            Par defaut : Modules/lectura-modules-private/ relatif au workspace.
+        model_dir: Repertoire contenant les fichiers G2P V2.
+            Par defaut : Correcteur/data/g2p_v2/ (copie locale).
     """
     try:
         import onnxruntime  # noqa: F401
@@ -105,18 +197,15 @@ def creer_adapter_g2p_unifie(
         return None
 
     if model_dir is None:
-        # Remonter depuis ce fichier vers le workspace
-        # Ce fichier : Modules/Correcteur/src/lectura_correcteur/_adapter_g2p_unifie.py
-        # Workspace : 4 niveaux au-dessus
-        workspace = Path(__file__).resolve().parents[4]
-        model_dir = workspace / "Modules" / "lectura-modules-private"
+        # Copie locale : data/g2p_v2/ a cote de ce module
+        model_dir = Path(__file__).resolve().parent / "data" / "g2p_v2"
 
     model_dir = Path(model_dir)
 
-    onnx_path = model_dir / "G2P" / "modeles" / "unifie_v2_int8.onnx"
-    vocab_path = model_dir / "G2P" / "modeles" / "unifie_v2_vocab.json"
-    lexicon_path = model_dir / "donnees" / "lexique_pos_candidates.json"
-    inference_dir = model_dir / "G2P"
+    onnx_path = model_dir / "modeles" / "unifie_v2_int8.onnx"
+    vocab_path = model_dir / "modeles" / "unifie_v2_vocab.json"
+    lexicon_path = model_dir / "lexique_pos_candidates.json"
+    inference_dir = model_dir
 
     if not onnx_path.exists():
         logger.info("Modele ONNX absent: %s", onnx_path)

@@ -17,6 +17,12 @@ class TaggerProtocol(Protocol):
 
 
 @runtime_checkable
+class G2PProtocol(Protocol):
+    """Protocol duck-typing pour un module G2P (grapheme-to-phoneme)."""
+
+    def g2p(self, word: str) -> str: ...
+
+
 class TokeniseurProtocol(Protocol):
     """Protocol duck-typing pour un tokeniseur externe (lectura-tokeniseur, etc.)."""
 
@@ -59,7 +65,11 @@ class MotAnalyse:
     morpho: dict[str, str] = field(default_factory=dict)
     dans_lexique: bool = False
     type_correction: TypeCorrection = TypeCorrection.AUCUNE
+    confiance: float = 1.0
+    confiance_pos: float = 1.0
+    pos_scores: list[tuple[str, float]] = field(default_factory=list)
     suggestions: list[str] = field(default_factory=list)
+    suggestions_scored: list[tuple[str, float]] = field(default_factory=list)
 
 
 @dataclass

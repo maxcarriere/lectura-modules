@@ -159,32 +159,37 @@ def test_sujet_distant_au(mock_lexique):
 # --- Regle 8 : Coherence DET↔NOM en genre ---
 
 def test_le_petit_fille(mock_lexique):
-    """'le petit fille' -> 'la petite fille' (DET masc→fem, puis Regle 6 corrige ADJ)."""
+    """'le petit fille' -> DET le/la excluded from Rule 8 (too many FP).
+    Pre-nominal ADJ not corrected (Rule 7 is post-nominal only)."""
     mots = ["le", "petit", "fille"]
     pos = ["ART:def", "ADJ", "NOM"]
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
-    assert result[0] == "la"
-    assert result[1] == "petite"
+    # le/la excluded from DET genre correction (Rule 8)
+    assert result[0] == "le"
+    # Pre-nominal ADJ not feminized (Rule 7 is post-nominal only)
+    assert result[1] == "petit"
     assert result[2] == "fille"
 
 
 def test_un_belle_maison(mock_lexique):
-    """'un belle maison' -> 'une belle maison' (DET masc→fem)."""
+    """'un belle maison' -> un/une excluded from Rule 8 (too many FP with ambiguous NOM genre)."""
     mots = ["un", "belle", "maison"]
     pos = ["ART:ind", "ADJ", "NOM"]
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
-    assert result[0] == "une"
+    # un/une excluded from DET genre correction (Rule 8) like le/la
+    assert result[0] == "un"
     assert result[1] == "belle"
     assert result[2] == "maison"
 
 
 def test_le_grosse_chat(mock_lexique):
-    """'le grosse chat' -> 'le gros chat' (ADJ fem→masc car DET+NOM=masc)."""
+    """'le grosse chat' -> le/la excluded from Rule 8, ADJ not de-feminized."""
     mots = ["le", "grosse", "chat"]
     pos = ["ART:def", "ADJ", "NOM"]
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
     assert result[0] == "le"
-    assert result[1] == "gros"
+    # le/la excluded from Rule 8, so ADJ stays as-is
+    assert result[1] == "grosse"
     assert result[2] == "chat"
 
 

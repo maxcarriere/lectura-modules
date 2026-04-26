@@ -15,6 +15,7 @@ from lectura_correcteur.grammaire._donnees import (
     PLUR_DET,
     PREPOSITIONS,
     PRONOM_PERSONNE,
+    SING_DET,
     SUJETS_3PL,
     generer_candidats_1pl,
     generer_candidats_2pl,
@@ -29,18 +30,20 @@ _TRANSPARENTS_AUX = frozenset({
 # Mots transparents entre sujet nominal et verbe (se, reflexifs, adverbes)
 _TRANSPARENTS_SUJET = frozenset({
     "se", "s'", "ne", "n'", "pas", "plus", "jamais", "rien",
-    "y", "en", "me", "m'", "te", "t'", "le", "la", "l'",
+    "y", "en", "me", "m'", "te", "t'", "le", "la", "l'", "les",
     "lui", "nous", "vous", "leur",
 })
 
 
-def _est_sujet_nominal_pluriel(
+def _nombre_sujet_nominal(
     mots: list[str],
     pos_tags: list[str],
     origs: list[str],
     idx_verbe: int,
-) -> bool:
-    """Detecte un sujet nominal pluriel avant le verbe.
+) -> str | None:
+    """Detecte le nombre du sujet nominal avant le verbe.
+
+    Retourne 'sing', 'plur', ou None si pas de sujet nominal detecte.
 
     Scanne en arriere en sautant les mots transparents (se, ne, ...),
     puis les groupes prepositionnels (PRE + DET + NOM/ADJ) pour trouver
@@ -53,46 +56,163 @@ def _est_sujet_nominal_pluriel(
     while j >= 0 and mots[j].lower() in _TRANSPARENTS_SUJET:
         j -= 1
     if j < 0:
-        return False
+        return None
+
+    # Memoriser le premier NOM rencontre (pour le fallback)
+    _first_nom_j = -1
 
     # Scan arriere : sauter NOM/ADJ, detecter DET, sauter PP
     while j >= 0:
         pos_j = pos_tags[j] if j < len(pos_tags) else ""
         mot_j = mots[j].lower()
 
-        if pos_j in ("NOM", "ADJ"):
+        if pos_j in ("NOM", "NOM PROPRE", "ADJ"):
+            if _first_nom_j < 0:
+                _first_nom_j = j
             j -= 1
             continue
 
-        # Contractions prepositionnelles : "du", "au" agissent comme PRE+DET
-        if mot_j in ("du", "au"):
+        # ADV : transparent (les lycées les plus proches est)
+        if pos_j == "ADV":
             j -= 1
             continue
 
-        if pos_j in ("ART:def", "ART:ind", "DET", "DET:dem", "ADJ:pos"):
+        # OOV → traiter comme NOM PROPRE (noms propres souvent
+        # minuscules dans le corpus : "mont kamui dominez")
+        if pos_j in ("?", "") and len(mot_j) > 2:
+            if _first_nom_j < 0:
+                _first_nom_j = j
+            j -= 1
+            continue
+
+        # Contractions prepositionnelles : "du", "au", "aux" = PRE+DET
+        # Tout NOM vu apres (plus pres du verbe) est dans un PP
+        if mot_j in ("du", "au", "aux"):
+            _first_nom_j = -1
+            j -= 1
+            continue
+
+        if pos_j in ("ART:def", "ART:ind", "ART", "DET", "DET:dem", "ADJ:pos"):
             # Verifier si ce DET est dans un complement prepositionnel
             if j > 0:
                 prev_pos = pos_tags[j - 1] if j - 1 < len(pos_tags) else ""
                 prev_mot = mots[j - 1].lower()
-                if prev_pos == "PRE" or prev_mot in PREPOSITIONS:
+                if prev_pos == "PRE" or prev_mot in PREPOSITIONS or prev_mot == "des":
                     # C'est un PP → sauter DET + PRE et continuer
+                    # Tout NOM vu apres (plus pres du verbe) est dans ce PP
+                    # "des" before a numeral/DET = "de+les" (PP marker)
+                    _first_nom_j = -1
                     j -= 2
                     continue
-                # "des" apres un NOM = contraction "de+les" (PP)
+                # ADJ/quantifier between PRE and DET:
+                # "de toutes les figures" → j-1=toutes(ADJ), j-2=de(PRE)
+                if prev_pos in ("ADJ", "ADJ:pos") and j > 1:
+                    _pp2_pos_sn = pos_tags[j - 2] if j - 2 < len(pos_tags) else ""
+                    _pp2_mot_sn = mots[j - 2].lower()
+                    if _pp2_pos_sn == "PRE" or _pp2_mot_sn in PREPOSITIONS or _pp2_mot_sn == "des":
+                        _first_nom_j = -1
+                        j -= 3  # sauter DET + ADJ + PRE
+                        continue
+                # "des" apres un NOM/ADJ/PRO = contraction "de+les" (PP)
                 # Ex: "le directeur des ecoles" → "des" introduit un PP
-                if mot_j == "des" and prev_pos == "NOM":
+                # Ex: "les jeux méditerranéens cijm a" → "des" apres ADJ
+                # Ex: "celui des habitants" → "des" apres PRO:dem = genitif
+                if mot_j == "des" and prev_pos in (
+                    "NOM", "ADJ", "NOM PROPRE",
+                    "PRO:dem", "PRO:rel", "PRO:ind",
+                ):
                     j -= 1  # sauter "des" (la PRE est incorporee)
                     continue
             # Pas de preposition devant → c'est le DET du sujet
-            return mot_j in PLUR_DET
+            if mot_j in PLUR_DET:
+                # Guard: "un/une des NOM" = singulier (un des professeurs avait)
+                if mot_j == "des" and j > 0 and mots[j - 1].lower() in ("un", "une", "l'un", "l'une"):
+                    return "sing"
+                # Guard: superlatif "les plus/moins ADJ" → pas un DET sujet
+                if mot_j == "les" and j + 1 < len(mots):
+                    _next_sup = mots[j + 1].lower()
+                    if _next_sup in ("plus", "moins"):
+                        _first_nom_j = -1
+                        j -= 1
+                        continue
+                return "plur"
+            if mot_j in SING_DET:
+                # Guard: quantifiers taking plural agreement
+                # "la plupart vendent", "une trentaine trouvent"
+                _QUANTIFIERS_PLUR = frozenset({
+                    "plupart", "majorité", "totalité", "moitié",
+                    "trentaine", "vingtaine", "quarantaine",
+                    "cinquantaine", "soixantaine", "centaine",
+                    "dizaine", "douzaine", "millier",
+                })
+                if _first_nom_j >= 0:
+                    _nom_q = mots[_first_nom_j].lower()
+                    if _nom_q in _QUANTIFIERS_PLUR:
+                        return "plur"
+                return "sing"
+            return None
 
         if pos_j == "PRE" or mot_j in PREPOSITIONS:
+            # Tout NOM vu apres (plus pres du verbe) est dans un PP
+            _first_nom_j = -1
             j -= 1
             continue
 
         break
 
-    return False
+    # Coordination : si on a casse sur "et" et qu'un NOM/NOM PROPRE/OOV
+    # a ete trouve apres "et", avec un autre NOM PROPRE/OOV ou DET avant
+    # "et", les sujets coordonnes forment un pluriel.
+    # Ex: "delville et ginchy subissent" → plur
+    # Guard: ne pas detecter les appositifs ("journaliste et romancier a")
+    # ni les frontières de clause ("X est ... et Y est")
+    # Note: POS check removed — "et" in French is always CON. POS may
+    # show AUX when homophones corrected "est" → "et" without POS update.
+    if (
+        j >= 0
+        and _first_nom_j >= 0
+        and mots[j].lower() == "et"
+    ):
+        _nom_pos_coord = pos_tags[_first_nom_j] if _first_nom_j < len(pos_tags) else ""
+        # NOM PROPRE, OOV, or NOM can indicate coordination.
+        # NOM is safe here because the before-et check below still
+        # requires NOM PROPRE/OOV/DET, preventing appositives
+        # ("journaliste et romancier" won't fire: "journaliste" is NOM,
+        # not NOM PROPRE/OOV/DET).
+        if _nom_pos_coord in ("NOM PROPRE", "NOM") or (
+            _nom_pos_coord in ("?", "") and len(mots[_first_nom_j]) > 2
+        ):
+            for _k_coord in range(j - 1, max(-1, j - 4), -1):
+                _pk_coord = pos_tags[_k_coord] if _k_coord < len(pos_tags) else ""
+                if _pk_coord in ("NOM PROPRE",):
+                    return "plur"
+                if _pk_coord in ("?", "") and len(mots[_k_coord]) > 2:
+                    return "plur"
+                if _pk_coord.startswith(("ART", "DET")):
+                    return "plur"
+                break
+
+    # Fallback : pas de DET trouve, mais un NOM existe avant le verbe.
+    # Si le NOM ne se termine pas par -s/-x/-z, il est morphologiquement
+    # singulier. Utile pour les noms propres (carita, singapour) et les
+    # sujets sans article.
+    # Guard: ignorer les tokens trop courts (1-2 chars) souvent mal tagues
+    if _first_nom_j >= 0:
+        _nom_low = mots[_first_nom_j].lower()
+        if not _nom_low.endswith(("s", "x", "z")) and len(_nom_low) > 2:
+            return "sing"
+
+    return None
+
+
+def _est_sujet_nominal_pluriel(
+    mots: list[str],
+    pos_tags: list[str],
+    origs: list[str],
+    idx_verbe: int,
+) -> bool:
+    """Detecte un sujet nominal pluriel avant le verbe."""
+    return _nombre_sujet_nominal(mots, pos_tags, origs, idx_verbe) == "plur"
 
 # Terminaisons attendues par personne (indicatif present, 1er groupe)
 _SUFFIXES_ATTENDUS: dict[str, list[str]] = {
@@ -157,14 +277,90 @@ def verifier_conjugaisons(
                     continue
 
         # Regle 3 : ils/elles + VER -> 3e pluriel
+        # Guard: VER directement apres PRE = probable nom propre (à Vienne)
+        # Guard: VER directement apres DET/ART = probable NOM (ses œuvres)
         if i > 0 and pos in ("VER", "AUX"):
-            prev_is_3pl = (
-                result[i - 1].lower() in SUJETS_3PL
-                or (i - 1 < len(origs) and origs[i - 1].lower() in SUJETS_3PL)
+            _imm_prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+            _imm_prev_low = result[i - 1].lower()
+            _after_prep = _imm_prev_pos == "PRE" or _imm_prev_low in PREPOSITIONS
+            _after_det_r3 = _imm_prev_pos.startswith(("ART", "DET", "ADJ:pos"))
+            _curr_prev_low = result[i - 1].lower()
+            prev_is_3pl = not _after_prep and not _after_det_r3 and (
+                _curr_prev_low in SUJETS_3PL
+                or (
+                    i - 1 < len(origs)
+                    and origs[i - 1].lower() in SUJETS_3PL
+                    # Respecter elles→elle / ils→il (homophones)
+                    and _curr_prev_low not in ("il", "elle", "on")
+                )
                 or _est_sujet_nominal_pluriel(result, pos_tags, origs, i)
             )
 
-            if prev_is_3pl and not curr.lower().endswith(("ent", "nt")):
+            # Guard est→sont : si le contexte suggere une coordination
+            # (NOM/ADJ + est + NOM/ART/DET/PRE), laisser homophones decider
+            _skip_coord = False
+            if prev_is_3pl and curr.lower() == "est" and i + 1 < n:
+                _next_pos_c = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                _next_low_c = result[i + 1].lower()
+                if _next_pos_c in (
+                    "NOM", "NOM PROPRE", "ART", "ART:def", "ART:ind",
+                    "DET", "PRE",
+                ) or _next_low_c.endswith(("'", "\u2019")):
+                    _skip_coord = True
+                # Guard: single-letter fragment (orphan elision "l", "d")
+                elif len(_next_low_c) == 1 and _next_low_c.isalpha():
+                    _skip_coord = True
+                # Guard: ADJ already plural → coordination ("fédéraux et municipaux")
+                elif (
+                    _next_pos_c in ("ADJ", "ADJ:pos")
+                    and _next_low_c.endswith(("s", "x", "z"))
+                ):
+                    _skip_coord = True
+                # Guard: VER/AUX not a PP form → conjugated verb = coordination
+                # ("tensions et récupère", "alsace et détruisent")
+                elif _next_pos_c in ("VER", "AUX") and not _next_low_c.endswith((
+                    "\u00e9", "\u00e9s", "\u00e9e", "\u00e9es",
+                    "i", "is", "ie", "ies",
+                    "u", "us", "ue", "ues",
+                    "it", "ite", "ites",
+                    "ert", "erte", "ertes", "erts",
+                )):
+                    _skip_coord = True
+
+            # Guard: causatif "fait/faire + infinitif" — ne pas pluraliser
+            _skip_causatif = False
+            if prev_is_3pl and curr.lower() in ("fait", "fais") and i + 1 < n:
+                _next_caus_c = result[i + 1].lower()
+                if _next_caus_c.endswith(("er", "ir", "re", "oir")):
+                    if lexique is None or lexique.existe(_next_caus_c):
+                        _skip_causatif = True
+
+            # Guard: NOM/ADJ homograph — si la forme singuliere du mot
+            # est principalement NOM/ADJ, c'est probablement un nom/adj
+            # au pluriel et non un verbe a conjuguer.
+            # Ex: "arts graphiques" → "graphique" = NOM/ADJ, pas VER
+            _skip_nom_adj_r3 = False
+            if (
+                prev_is_3pl
+                and not _skip_coord
+                and not _skip_causatif
+                and lexique is not None
+                and hasattr(lexique, "info")
+            ):
+                _curr_low_r3 = curr.lower()
+                # Verifier la forme singuliere (sans -s)
+                if _curr_low_r3.endswith("s") and len(_curr_low_r3) > 3:
+                    _sing_r3 = _curr_low_r3[:-1]
+                    _sing_infos_r3 = lexique.info(_sing_r3)
+                    if _sing_infos_r3:
+                        _best_sing_r3 = max(
+                            _sing_infos_r3,
+                            key=lambda e: float(e.get("freq") or 0),
+                        )
+                        if (_best_sing_r3.get("cgram") or "") in ("NOM", "ADJ"):
+                            _skip_nom_adj_r3 = True
+
+            if prev_is_3pl and not _skip_coord and not _skip_causatif and not _skip_nom_adj_r3 and not curr.lower().endswith(("ent", "nt")):
                 candidats = generer_candidats_3pl(curr)
                 for candidate in candidats:
                     if lexique is None or lexique.existe(candidate):
@@ -194,9 +390,16 @@ def verifier_conjugaisons(
                     break
                 if _w not in _TRANSPARENTS_AUX:
                     break
-            if _skip_aux:
-                pass  # Laisser la regle des participes gerer ce cas
-            elif (pronom_info := _trouver_pronom_sujet(result, origs, i)) is not None:
+            # Guard: mot apres un DET est probablement un NOM, pas un VER
+            # "il pilote les avions" → "avions" apres "les" = NOM avion
+            _after_det_r5 = False
+            if not _skip_aux and i > 0:
+                _prev_pos_r5 = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                if _prev_pos_r5.startswith(("ART", "DET")):
+                    _after_det_r5 = True
+            if _skip_aux or _after_det_r5:
+                pass  # Laisser la regle des participes gerer / homographe NOM
+            elif (pronom_info := _trouver_pronom_sujet(result, origs, i, pos_tags)) is not None:
                 personne, nombre = pronom_info
                 # Essayer d'abord par lexique (imparfait/futur)
                 temps = _detecter_temps_from_suffixe(curr)
@@ -251,19 +454,299 @@ def verifier_conjugaisons(
                         type_correction=TypeCorrection.GRAMMAIRE,
                         explication="Sujet nominal pluriel + imp/fut -> 3pl",
                     ))
+                    continue
+
+        # Regle 5b-sing : Sujet nominal singulier + imp/fut mauvaise personne
+        # "cet arbre avais" -> "avait", "l'actrice étais" -> "était"
+        # Guard: mot apres un DET/ART est probablement un NOM, pas un VER
+        # ("les avions" = NOM avion, pas VER avoir)
+        if i > 0 and pos in ("VER", "AUX") and result[i] == curr:
+            _prev_low_5bs = result[i - 1].lower()
+            _after_det_5bs = (
+                _prev_low_5bs in PLUR_DET
+                or _prev_low_5bs in SING_DET
+                or (i - 1 < len(pos_tags)
+                    and pos_tags[i - 1].startswith(("ART", "DET")))
+            )
+            temps_5bs = _detecter_temps_from_suffixe(curr)
+            if temps_5bs is not None and not _after_det_5bs and _nombre_sujet_nominal(
+                result, pos_tags, origs, i,
+            ) == "sing":
+                correction_5bs = _deriver_forme_nombre(
+                    curr, "3", "s", temps_5bs, lexique,
+                )
+                if correction_5bs is None:
+                    correction_5bs = _corriger_par_lexique(
+                        curr, "3", "s", temps_5bs, lexique,
+                    )
+                if correction_5bs and correction_5bs.lower() != curr.lower():
+                    ancien = result[i]
+                    result[i] = transferer_casse(curr, correction_5bs)
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=result[i],
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="Sujet nominal singulier + imp/fut -> P3s",
+                    ))
+                    continue
+
+        # Regle 5c : Sujet nominal singulier + VER en -ent/-ez/-ons -> P3s
+        # "le club remportent" -> "remporte", "la ville comprenez" -> "comprend"
+        if i > 0 and pos in ("VER", "AUX"):
+            curr_low_5c = curr.lower()
+            _is_wrong_number = (
+                (curr_low_5c.endswith("ent") and len(curr_low_5c) > 3)
+                or (curr_low_5c.endswith("ez") and len(curr_low_5c) > 3)
+                or (curr_low_5c.endswith("ons") and len(curr_low_5c) > 4)
+                or (curr_low_5c.endswith("eux") and len(curr_low_5c) > 3)
+            )
+            # Guard: mots en -ient (P3s de -enir) ne sont pas P3p
+            # revient, devient, obtient → deja singulier
+            if curr_low_5c.endswith("ient") and not curr_low_5c.endswith("iennent"):
+                _is_wrong_number = False
+            # Guard: mots en -oint ne sont pas P3p (rejoint, point)
+            if curr_low_5c.endswith("oint"):
+                _is_wrong_number = False
+            # Guard: homographes NOM/VER (incident, continent, president)
+            # Si le mot existe comme NOM dans le lexique, c'est probablement
+            # un nom et pas un verbe conjugue au pluriel
+            if _is_wrong_number and lexique is not None and hasattr(lexique, "info"):
+                _infos_5c = lexique.info(curr)
+                if _infos_5c and any(
+                    (e.get("cgram") or "") == "NOM" for e in _infos_5c
+                ):
+                    _is_wrong_number = False
+            # Guard cascade: si un NOM/ADJ entre DET et VER a ete
+            # depluralize par une regle precedente ("soldats"→"soldat"),
+            # la detection "sing" est suspecte → skip
+            # Seuls les changements de nombre comptent (pas les accents)
+            if _is_wrong_number and origs:
+                for _kc in range(i - 1, max(-1, i - 6), -1):
+                    if _kc < len(origs):
+                        _kc_orig = origs[_kc].lower()
+                        _kc_curr = result[_kc].lower()
+                        # Depluralization: orig ends in s/x, result doesn't
+                        _was_deplural = (
+                            _kc_orig != _kc_curr
+                            and _kc_orig.endswith(("s", "x"))
+                            and not _kc_curr.endswith(("s", "x"))
+                        )
+                        if _was_deplural:
+                            _kc_pos = pos_tags[_kc] if _kc < len(pos_tags) else ""
+                            if _kc_pos in ("NOM", "NOM PROPRE", "ADJ", "ADJ:pos"):
+                                _is_wrong_number = False
+                                break
+                    _kc_pos = pos_tags[_kc] if _kc < len(pos_tags) else ""
+                    if _kc_pos.startswith(("ART", "DET")) or _kc_pos in ("PRE", "CON"):
+                        break
+            if _is_wrong_number and _nombre_sujet_nominal(
+                result, pos_tags, origs, i,
+            ) == "sing":
+                correction_5c = _corriger_par_suffixe(
+                    curr, "3", "s", lexique,
+                )
+                # Fallback: use lexique lemme → P3s present lookup
+                # Guard: skip passé simple 3pl (-èrent, -irent, -urent)
+                _is_passe_simple = curr_low_5c.endswith((
+                    "èrent", "irent", "urent",
+                ))
+                if (
+                    correction_5c is None
+                    and not _is_passe_simple
+                    and lexique is not None
+                    and hasattr(lexique, "formes_de")
+                ):
+                    _5c_infos = lexique.info(curr)
+                    _5c_lemmes = set(
+                        e.get("lemme", "")
+                        for e in _5c_infos
+                        if e.get("cgram") in ("VER", "AUX")
+                    )
+                    for _5c_lemme in _5c_lemmes:
+                        if not _5c_lemme:
+                            continue
+                        for _5c_f in lexique.formes_de(_5c_lemme):
+                            if (
+                                str(_5c_f.get("personne")) == "3"
+                                and _5c_f.get("nombre") in ("singulier", "s")
+                                and _5c_f.get("temps") == "present"
+                                and _5c_f.get("mode") == "indicatif"
+                            ):
+                                _5c_cand = _5c_f.get("ortho", "")
+                                if _5c_cand and _5c_cand.lower() != curr_low_5c:
+                                    correction_5c = _5c_cand
+                                    break
+                        if correction_5c:
+                            break
+                # Guard: candidat doit etre VER/AUX (pas un PRO/NOM/ADJ)
+                # "ment" → "me" serait PRO, pas VER
+                if (
+                    correction_5c
+                    and correction_5c.lower() != curr_low_5c
+                    and lexique is not None
+                    and hasattr(lexique, "info")
+                ):
+                    _5c_cand_infos = lexique.info(correction_5c)
+                    if _5c_cand_infos and not any(
+                        e.get("cgram") in ("VER", "AUX")
+                        for e in _5c_cand_infos
+                    ):
+                        correction_5c = None
+                if correction_5c and correction_5c.lower() != curr_low_5c:
+                    ancien = result[i]
+                    result[i] = transferer_casse(curr, correction_5c)
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=result[i],
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="Sujet nominal singulier + verbe plur -> P3s",
+                    ))
+
+        # Regle 5d : Sujet nominal singulier + VER en -es (P2s) -> P3s
+        # "le match se déroules" -> "déroule", "se situes" -> "situe"
+        # Conservative: candidat -s doit etre VER P3s confirme dans lexique
+        if i > 0 and pos in ("VER", "AUX"):
+            curr_low_5d = curr.lower()
+            if (
+                curr_low_5d.endswith("es")
+                and not curr_low_5d.endswith(("tes", "des"))
+                and len(curr_low_5d) > 3
+                and lexique is not None
+            ):
+                cand_5d = curr_low_5d[:-1]  # remove trailing -s
+                # Guard: candidat doit etre VER P3s dans le lexique
+                _cand_is_p3s = False
+                _cand_infos_5d = lexique.info(cand_5d)
+                if _cand_infos_5d and any(
+                    e.get("cgram") in ("VER", "AUX")
+                    and str(e.get("personne")) == "3"
+                    and e.get("nombre") in ("singulier", "s")
+                    for e in _cand_infos_5d
+                ):
+                    _cand_is_p3s = True
+                # Guard: si le candidat (forme sans -s) a NOM ou ADJ
+                # comme cgram dominante → pas un verbe P3s cible
+                # (ex: plastiques→plastique=NOM, étanches→étanche=ADJ)
+                if _cand_is_p3s and _cand_infos_5d:
+                    _best_cand_5d = max(
+                        _cand_infos_5d,
+                        key=lambda e: float(e.get("freq") or 0),
+                    )
+                    if (_best_cand_5d.get("cgram") or "") in ("NOM", "ADJ"):
+                        _cand_is_p3s = False
+                if _cand_is_p3s and _nombre_sujet_nominal(
+                    result, pos_tags, origs, i,
+                ) == "sing":
+                    ancien = result[i]
+                    result[i] = transferer_casse(curr, cand_5d)
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=result[i],
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="Sujet nominal singulier + P2s -> P3s",
+                    ))
+
+        # Regle 5e : "qui" + VER mauvaise personne → P3s
+        # "qui regroupes" → "qui regroupe", "qui exercez" → "qui exerce"
+        # Guard: ne pas toucher -ent/-nt (P3p peut etre correct avec
+        # antecedent pluriel : "les gens qui mangent")
+        if i > 0 and pos in ("VER", "AUX") and result[i] == curr:
+            _prev_is_qui = result[i - 1].lower() == "qui"
+            if not _prev_is_qui and i > 1:
+                if result[i - 1].lower() in _TRANSPARENTS_SUJET:
+                    _prev_is_qui = result[i - 2].lower() == "qui"
+            if _prev_is_qui:
+                curr_low_5e = curr.lower()
+                # Skip P3p (-ent/-nt) : antecedent peut etre pluriel
+                if not (curr_low_5e.endswith(("ent", "nt")) and len(curr_low_5e) > 3):
+                    # Skip etre/avoir irreguliers (sommes→somme serait faux)
+                    if curr_low_5e not in ("sommes", "êtes", "avons", "avez",
+                                           "suis", "serons", "serez"):
+                        correction_5e = _corriger_par_suffixe(
+                            curr, "3", "s", lexique,
+                        )
+                        if correction_5e and correction_5e.lower() != curr_low_5e:
+                            # Guard: candidat doit etre VER dans le lexique
+                            # et NOM/ADJ ne doit pas etre la cgram dominante
+                            # (gênes=Gênes → gêne=NOM serait faux)
+                            _is_ver_p3s_5e = False
+                            if lexique is not None:
+                                _infos_5e = lexique.info(correction_5e)
+                                _is_ver_p3s_5e = bool(_infos_5e) and any(
+                                    e.get("cgram") in ("VER", "AUX")
+                                    for e in _infos_5e
+                                )
+                                if _is_ver_p3s_5e and _infos_5e:
+                                    _best_5e = max(
+                                        _infos_5e,
+                                        key=lambda e: float(
+                                            e.get("freq") or 0,
+                                        ),
+                                    )
+                                    if (_best_5e.get("cgram") or "") in (
+                                        "NOM", "ADJ",
+                                    ):
+                                        _is_ver_p3s_5e = False
+                            if _is_ver_p3s_5e:
+                                ancien = result[i]
+                                result[i] = transferer_casse(
+                                    curr, correction_5e,
+                                )
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien,
+                                    corrige=result[i],
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    explication="'qui' + mauvaise personne -> P3s",
+                                ))
 
     return result, corrections
 
 
 def _trouver_pronom_sujet(
     mots: list[str], origs: list[str], idx_verbe: int,
+    pos_tags: list[str] | None = None,
 ) -> tuple[str, str] | None:
-    """Cherche le pronom sujet le plus proche avant le verbe."""
+    """Cherche le pronom sujet le plus proche avant le verbe.
+
+    Guard: si un verbe conjugue se trouve entre le pronom et le mot
+    courant, le pronom est probablement sujet de ce verbe intermediaire,
+    pas du mot courant. Ex: "il pilote les avions" → "il" est sujet de
+    "pilote", pas de "avions".
+    """
     for j in range(idx_verbe - 1, max(-1, idx_verbe - 4), -1):
         mot = mots[j].lower()
         orig = origs[j].lower() if j < len(origs) else ""
+        # Guard: si on rencontre un VER/AUX entre le pronom et le mot
+        # courant, c'est le sujet de ce verbe, pas du notre
+        if pos_tags is not None and j < len(pos_tags):
+            if pos_tags[j] in ("VER", "AUX") and mot not in _TRANSPARENTS_AUX:
+                return None  # verbe intermediaire
         for candidate in (mot, orig):
             if candidate in PRONOM_PERSONNE:
+                # Guard PRE: pronom apres PRE non-temporelle = complement
+                # Ex: "parmi elles sœur marie" → "elles" est complement
+                # Exclut "en", "à", "de" (trop courants en temporel)
+                _COMPLEMENT_PREPS = frozenset({
+                    "parmi", "avec", "sans", "contre", "entre",
+                    "selon", "envers", "malgré", "hormis",
+                    "chez", "sous", "vers", "devant", "derrière",
+                })
+                if j > 0 and pos_tags is not None:
+                    _pre_pro_mot = mots[j - 1].lower()
+                    if _pre_pro_mot in _COMPLEMENT_PREPS:
+                        continue  # complement, pas sujet
+                # Guard COD: si un NOM/ADJ precede nous/vous,
+                # c'est probablement un COD, pas un sujet
+                # Ex: "les orphelins vous maudissent" → "vous" est COD
+                if candidate in ("nous", "vous") and j > 0:
+                    if pos_tags is not None and j - 1 < len(pos_tags):
+                        _prev_j_pos = pos_tags[j - 1]
+                        if _prev_j_pos in ("NOM", "ADJ"):
+                            continue
                 return PRONOM_PERSONNE[candidate]
     return None
 
@@ -408,6 +891,18 @@ def _deriver_forme_nombre(
                 _person_mismatch = True
             elif low.endswith("aient") and personne != "3":
                 _person_mismatch = True
+        # Singulier: verifier personne (etais P1/2 vs etait P3)
+        if not is_plur and temps == "Imp":
+            if low.endswith("ais") and personne == "3":
+                _person_mismatch = True
+            elif low.endswith("ait") and personne in ("1", "2"):
+                _person_mismatch = True
+        # Singulier futur: rai=P1, ras=P2, ra=P3
+        if not is_plur and temps == "Fut":
+            if low.endswith("ras") and personne != "2":
+                _person_mismatch = True
+            elif low.endswith("rai") and personne != "1":
+                _person_mismatch = True
         if not _person_mismatch:
             # La forme correspond deja au nombre et personne voulus
             if lexique is None or lexique.existe(forme):
@@ -424,7 +919,60 @@ def _deriver_forme_nombre(
                 if lexique is None or lexique.existe(cand):
                     return cand
             if low.endswith("ions"):
-                cand = low[:-4] + "ais"
+                if personne == "3":
+                    cand = low[:-4] + "ait"
+                else:
+                    cand = low[:-4] + "ais"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+                # c→ç before a : dénoncions→dénonçait
+                radical_ions = low[:-4]
+                if radical_ions.endswith("c"):
+                    suffix_ions = "ait" if personne == "3" else "ais"
+                    cand2 = radical_ions[:-1] + "ç" + suffix_ions
+                    if lexique is None or lexique.existe(cand2):
+                        return cand2
+            if low.endswith("iez"):
+                if personne == "3":
+                    cand = low[:-3] + "ait"
+                else:
+                    cand = low[:-3] + "ais"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+                # c→ç before a : dénonciez→dénonçait, prononciez→prononçait
+                radical_iez = low[:-3]
+                if radical_iez.endswith("c"):
+                    suffix_iez = "ait" if personne == "3" else "ais"
+                    cand2 = radical_iez[:-1] + "ç" + suffix_iez
+                    if lexique is None or lexique.existe(cand2):
+                        return cand2
+        elif is_plur and want_plur:
+            # plur -> plur (changement de personne)
+            # iez (P2p) -> aient (P3p), ions (P1p) -> aient (P3p)
+            if low.endswith("iez") and personne == "3":
+                cand = low[:-3] + "aient"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ions") and personne == "3":
+                cand = low[:-4] + "aient"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("aient") and personne == "1":
+                cand = low[:-5] + "ions"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("aient") and personne == "2":
+                cand = low[:-5] + "iez"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+        elif not is_plur and not want_plur:
+            # sing -> sing (changement de personne) : étais (P1/2) -> était (P3)
+            if low.endswith("ais") and personne == "3":
+                cand = low[:-1] + "t"
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ait") and personne in ("1", "2"):
+                cand = low[:-1] + "s"
                 if lexique is None or lexique.existe(cand):
                     return cand
         elif not is_plur and want_plur:
@@ -525,6 +1073,24 @@ def _deriver_forme_nombre(
                     cand = low[:-3] + "ront"
                 if lexique is None or lexique.existe(cand):
                     return cand
+        elif not is_plur and not want_plur:
+            # sing -> sing (changement de personne)
+            # ras (P2s) -> ra (P3s), rai (P1s) -> ra (P3s)
+            if low.endswith("ras") and personne == "3":
+                cand = low[:-1]  # deviendras → deviendra
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("rai") and personne == "3":
+                cand = low[:-1]  # deviendrai → deviendra
+                if lexique is None or lexique.existe(cand):
+                    return cand
+            if low.endswith("ra") and personne in ("1", "2"):
+                if personne == "1":
+                    cand = low + "i"  # deviendra → deviendrai
+                else:
+                    cand = low + "s"  # deviendra → deviendras
+                if lexique is None or lexique.existe(cand):
+                    return cand
 
     return None
 
@@ -559,10 +1125,168 @@ def _corriger_par_suffixe(
                 return candidate
 
     # Il/elle (P3s) : -ent -> singulariser
+    # Guard: -ient est deja P3s (revient, obtient) sauf -iennent (P3p)
     if key in ("3", "3s") and low.endswith("ent") and len(low) > 3:
-        for candidate in generer_candidats_singulier(mot, "3"):
-            if lexique is None or lexique.existe(candidate):
-                return candidate
+        if not (low.endswith("ient") and not low.endswith("iennent")):
+            if not low.endswith("oint"):
+                for candidate in generer_candidats_singulier(mot, "3"):
+                    if lexique is None or lexique.existe(candidate):
+                        return candidate
+
+    # Il/elle (P3s) : -es (P2s) -> retirer -s
+    # "il effectues" -> "il effectue", "il manges" -> "il mange"
+    if key in ("3", "3s") and low.endswith("es") and len(low) > 3:
+        candidate = mot[:-1]
+        if lexique is None or lexique.existe(candidate):
+            return candidate
+
+    # Il/elle (P3s) : -ois/-ois (P1/P2) -> -oit
+    # "il vois" -> "il voit", "il crois" -> "il croit"
+    if key in ("3", "3s") and low.endswith("ois") and len(low) > 3:
+        cand = low[:-1] + "t"  # vois → voit
+        if lexique is None or lexique.existe(cand):
+            return cand
+
+    # Il/elle (P3s) : -is (P1/P2) -> -it
+    # "on refroidis" -> "refroidit", "il finis" -> "finit"
+    if key in ("3", "3s") and low.endswith("is") and not low.endswith("ois") and len(low) > 3:
+        cand = low[:-1] + "t"  # refroidis → refroidit
+        if lexique is None or lexique.existe(cand):
+            return cand
+
+    # Il/elle (P3s) : -eux (P1/P2) -> -eut
+    # "il veux" -> "il veut", "il peux" -> "il peut"
+    if key in ("3", "3s") and low.endswith("eux") and len(low) > 3:
+        cand = low[:-1] + "t"  # veux → veut
+        if lexique is None or lexique.existe(cand):
+            return cand
+
+    # Il/elle (P3s) : -onds (P1/P2) -> -ond
+    # "il réponds" -> "il répond"
+    if key in ("3", "3s") and low.endswith("onds") and len(low) > 4:
+        cand = low[:-1]  # réponds → répond
+        if lexique is None or lexique.existe(cand):
+            return cand
+
+    # Il/elle/on (P3s) ou Je (P1) : -ez (P2p) -> trouver forme P3s/P1s
+    # "il travaillez" -> "il travaille"
+    if key in ("3", "3s", "1") and low.endswith("ez") and len(low) > 3:
+        radical = low[:-2]
+        # Stem-changing verbs d'abord (plus specifiques, evite faux amis)
+        # -enir: devenez → devient (en → ien+t)
+        if radical.endswith("en") and len(radical) > 2:
+            cand = radical[:-2] + "ient"
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        # mourir: mourez → meurt (our → eur+t)
+        if radical.endswith("our") and len(radical) > 3:
+            cand = radical[:-3] + "eurt"
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        # -cevoir: recevez → reçoit (cev → çoi+t)
+        if radical.endswith("cev"):
+            cand = radical[:-3] + "çoit"
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        # 1er groupe : travaillez → travaille
+        # Guard: eviter les formes subjonctif-only
+        for cand in (radical + "e", radical + "t", radical + "d"):
+            if lexique is None or lexique.existe(cand):
+                if lexique is not None:
+                    _cinf = lexique.info(cand)
+                    _ver_entries = [
+                        e for e in _cinf
+                        if e.get("cgram") in ("VER", "AUX")
+                    ]
+                    if _ver_entries and all(
+                        e.get("mode") == "subjonctif"
+                        for e in _ver_entries
+                    ):
+                        continue  # Skip subjonctif-only
+                return cand
+        # 3e groupe : maintenez → maintient (lookup by lemma)
+        for cand in (radical + "ient", radical + "it"):
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        # Accent-changing verbs: e→è (achetez→achète)
+        _last_e_ez = radical.rfind("e")
+        if _last_e_ez >= 0:
+            _rad_acc_ez = radical[:_last_e_ez] + "è" + radical[_last_e_ez + 1:]
+            for cand in (_rad_acc_ez + "e", _rad_acc_ez + "t"):
+                if lexique is not None and lexique.existe(cand):
+                    return cand
+        # Accent-changing verbs: é→è (possédez→possède, répétez→répète)
+        _last_eacute_ez = radical.rfind("\u00e9")
+        if _last_eacute_ez >= 0:
+            _rad_acc_ez2 = radical[:_last_eacute_ez] + "\u00e8" + radical[_last_eacute_ez + 1:]
+            for cand in (_rad_acc_ez2 + "e", _rad_acc_ez2 + "t"):
+                if lexique is not None and lexique.existe(cand):
+                    return cand
+
+    # Il/elle/on (P3s) : -ons (P1p) -> trouver forme P3s
+    # "il contenons" -> "il contient"
+    if key in ("3", "3s") and low.endswith("ons") and len(low) > 4:
+        radical = low[:-3]
+        # Stem-changing verbs d'abord
+        if radical.endswith("en") and len(radical) > 2:
+            cand = radical[:-2] + "ient"
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        if radical.endswith("our") and len(radical) > 3:
+            cand = radical[:-3] + "eurt"
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        if radical.endswith("cev"):
+            cand = radical[:-3] + "çoit"
+            if lexique is not None and lexique.existe(cand):
+                return cand
+        # Radical seul pour -eons (déménageons→déménage)
+        # Guard: le radical doit etre VER (pas NOM PROPRE : achet)
+        if lexique is not None and radical.endswith("e"):
+            _rad_infos = lexique.info(radical)
+            if _rad_infos and any(
+                e.get("cgram") in ("VER", "AUX") for e in _rad_infos
+            ):
+                return radical
+        # Generiques — guard: eviter les formes subjonctif-only
+        # (poursuivons→poursuive est subjonctif, pas indicatif)
+        for cand in (radical + "e", radical + "t", radical + "d",
+                     radical + "ient", radical + "it"):
+            if lexique is None or lexique.existe(cand):
+                if lexique is not None:
+                    _cinf = lexique.info(cand)
+                    _ver_entries = [
+                        e for e in _cinf
+                        if e.get("cgram") in ("VER", "AUX")
+                    ]
+                    if _ver_entries and all(
+                        e.get("mode") == "subjonctif"
+                        for e in _ver_entries
+                    ):
+                        continue  # Skip subjonctif-only
+                return cand
+        # Accent-changing verbs: e→è before silent -e (acheter→achète)
+        # Try replacing the last 'e' in radical with 'è'
+        _last_e = radical.rfind("e")
+        if _last_e >= 0:
+            _rad_accent = radical[:_last_e] + "è" + radical[_last_e + 1:]
+            for cand in (_rad_accent + "e", _rad_accent + "t"):
+                if lexique is not None and lexique.existe(cand):
+                    return cand
+        # Also é→è (possédons→possède, répétons→répète)
+        _last_eacute = radical.rfind("\u00e9")
+        if _last_eacute >= 0:
+            _rad_accent2 = radical[:_last_eacute] + "\u00e8" + radical[_last_eacute + 1:]
+            for cand in (_rad_accent2 + "e", _rad_accent2 + "t"):
+                if lexique is not None and lexique.existe(cand):
+                    return cand
+
+    # Il/elle/on (P3s) : -iens/-iens (P1/P2) -> P3s -ient
+    # "il deviens" -> "il devient"
+    if key in ("3", "3s") and low.endswith("iens") and len(low) > 4:
+        cand = low[:-1] + "t"  # deviens → devient
+        if lexique is None or lexique.existe(cand):
+            return cand
 
     # 3e pluriel : generer candidats (1er, 2e, 3e groupe)
     if key == "3p" and not low.endswith(("ent", "nt")):
@@ -600,5 +1324,16 @@ def _corriger_par_suffixe(
         for candidate in generer_candidats_2pl(mot):
             if lexique is None or lexique.existe(candidate):
                 return candidate
+
+    # Fallback P3s : strip -s generique (bats→bat, mets→met, prends→prend)
+    # Dernier recours apres toutes les regles specifiques
+    if key in ("3", "3s") and low.endswith("s") and len(low) > 3:
+        cand = low[:-1]
+        if lexique is not None:
+            _cand_infos = lexique.info(cand)
+            if _cand_infos and any(
+                e.get("cgram") in ("VER", "AUX") for e in _cand_infos
+            ):
+                return cand
 
     return None

@@ -46,8 +46,10 @@ def test_correction_dataclass():
 
 
 def test_no_g2p_fields():
-    """Les types ne doivent pas avoir de champs G2P/P2G."""
+    """Les types ne doivent pas avoir de champs G2P/P2G non prevus."""
     m = MotAnalyse(original="test", corrige="test")
     assert not hasattr(m, "ipa")
-    assert not hasattr(m, "confiance")
     assert not hasattr(m, "alternatives")
+    # confiance et confiance_pos sont desormais des champs valides
+    assert hasattr(m, "confiance")
+    assert hasattr(m, "confiance_pos")

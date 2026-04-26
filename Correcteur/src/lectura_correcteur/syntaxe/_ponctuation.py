@@ -28,15 +28,9 @@ def verifier_ponctuation(tokens: list[str]) -> list[Correction]:
                     explication="Majuscule en debut de phrase",
                 ))
 
-    # Point final automatique
-    if tokens and tokens[-1] not in (".", "!", "?", "\u2026"):
-        tokens.append(".")
-        corrections.append(Correction(
-            index=len(tokens) - 1,
-            original="",
-            corrige=".",
-            type_correction=TypeCorrection.SYNTAXE,
-            explication="Point final automatique",
-        ))
+    # Point final automatique — desactive (FP sur corpus Wikipedia)
+    # if tokens and tokens[-1] not in (".", "!", "?", "\u2026"):
+    #     tokens.append(".")
+    #     ...
 
     return corrections

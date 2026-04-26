@@ -22,9 +22,10 @@ _DESACCENTUER = str.maketrans(
 _ACCENT_MAP: dict[str, tuple[str, ...]] = {
     "a": ("à", "â"), "e": ("é", "è", "ê"), "i": ("î",), "o": ("ô",),
     "u": ("ù", "û"), "c": ("ç",),
-    # Reverse : accent -> base
-    "à": ("a",), "â": ("a",), "é": ("e",), "è": ("e",), "ê": ("e",),
-    "î": ("i",), "ô": ("o",), "ù": ("u",), "û": ("u",), "ç": ("c",),
+    # Reverse : accent -> base + cross-accent alternatives
+    "à": ("a", "â"), "â": ("a", "à"),
+    "é": ("e", "è", "ê"), "è": ("e", "é", "ê"), "ê": ("e", "é", "è"),
+    "î": ("i",), "ô": ("o",), "ù": ("u", "û"), "û": ("u", "ù"), "ç": ("c",),
 }
 
 
@@ -149,7 +150,35 @@ def _meilleure_variante_accent(mot: str, lexique, freq_actuelle: float) -> str |
     best_form, best_freq = variantes[0]  # triees par freq desc
     if not _est_variante_accent(mot.lower(), best_form.lower()):
         return None
-    if best_freq > max(freq_actuelle * 2, 15):
+    # Guard: if original has nearly zero frequency, it may be a proper name
+    # entry — require higher absolute threshold
+    _min_threshold = 10 if freq_actuelle >= 0.1 else 30
+    # Guard: cross-accent changes (é↔è↔ê) between two common words
+    # are dangerous (élevés/élèves, gène/gêne) — require higher ratio
+    _mot_low = mot.lower()
+    _best_low = best_form.lower()
+    _is_cross_accent = (
+        any(c in "éèê" for c in _mot_low)
+        and any(c in "éèê" for c in _best_low)
+        and _mot_low != _best_low
+    )
+    if _is_cross_accent and freq_actuelle > 2.0:
+        # Both forms are common — require 10x ratio
+        if best_freq < freq_actuelle * 10:
+            return None
+    # Guard: adding an accent to a word that already has accents creates
+    # a different word (côte→côté). Removing accents (là→la) is fine.
+    # Words without accents (etat→état) are spelling corrections.
+    _n_acc_orig = sum(1 for c in _mot_low if c in "àâäéèêëïîôùûüÿç")
+    _n_acc_best = sum(1 for c in _best_low if c in "àâäéèêëïîôùûüÿç")
+    if (
+        freq_actuelle >= 20
+        and _n_acc_orig > 0
+        and _n_acc_best > _n_acc_orig
+        and best_freq < freq_actuelle * 10
+    ):
+        return None
+    if best_freq > max(freq_actuelle * 3, _min_threshold):
         return best_form
     return None
 

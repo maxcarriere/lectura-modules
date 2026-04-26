@@ -35,7 +35,9 @@ def db_v4_path():
             freq_lm10 REAL,
             freq_frwac REAL,
             freq_composite REAL,
-            source TEXT
+            source TEXT,
+            orthocode TEXT DEFAULT '',
+            consonne_latente TEXT DEFAULT ''
         );
         CREATE TABLE lemmes (
             id INTEGER PRIMARY KEY,
@@ -69,7 +71,9 @@ def db_v4_path():
         );
         CREATE TABLE categories (
             id INTEGER PRIMARY KEY,
-            label TEXT NOT NULL,
+            label TEXT NOT NULL UNIQUE,
+            type TEXT,
+            qid TEXT,
             description TEXT
         );
         CREATE TABLE categorie_hierarchie (
@@ -135,6 +139,10 @@ def db_v4_path():
             (7, "sur", "PRE", None, None, None, None, 2951.37, 5300.0, 5525.0, 6610.0, None),
             (8, "sncf", "SIGLE", "f", None, None, "Société nationale des chemins de fer français", None, None, None, None, None),
             (9, "sida", "SIGLE", "m", None, None, None, None, None, None, None, None),
+            # NP multi-mots pour tester composants
+            (10, "jacques chirac", "NOM PROPRE", None, "personne", None, None, 2.0, None, None, None, None),
+            (11, "jacques", "NOM PROPRE", None, "prénom", None, None, 1.0, None, None, None, None),
+            (12, "chirac", "NOM PROPRE", None, "patronyme", None, None, 0.5, None, None, None, None),
         ],
     )
 
@@ -157,6 +165,9 @@ def db_v4_path():
             (12, "sur", 7, "Sp", "syʁ", "ʁys", 1, "syʁ", 2951.37, 5300.0, 5525.0, 6610.0, "GLAFF"),
             (13, "SNCF", 8, "Ys", "ɛs.ɛn.se.ɛf", "ɛf.se.ɛn.ɛs", 4, "ɛs.ɛn.se.ɛf", None, None, None, None, "kaikki"),
             (14, "SIDA", 9, "Ya", "si.da", "ad.is", 2, "si.da", None, None, None, None, "kaikki"),
+            (15, "jacques chirac", 10, "Np", None, None, None, None, 2.0, None, None, None, "NP"),
+            (16, "jacques", 11, "Np", None, None, None, None, 1.0, None, None, None, "NP"),
+            (17, "chirac", 12, "Np", None, None, None, None, 0.5, None, None, None, "NP"),
         ],
     )
 
@@ -187,6 +198,7 @@ def db_v4_path():
             (5, 4, 1, "Capitale de la France.", None, "géographie", "wiktionnaire"),
             (6, 4, 2, "Prenom masculin d'origine grecque.", None, None, "wiktionnaire"),
             (7, 5, 1, "De faible taille.", None, None, "wiktionnaire"),
+            (8, 10, 1, "Président de la République française (1995-2007).", None, "politique", "wiktionnaire"),
         ],
     )
 
@@ -207,14 +219,39 @@ def db_v4_path():
         ],
     )
 
-    # Categories
+    # Categories avec type et qid
     conn.executemany(
-        "INSERT INTO categories (id, label) VALUES (?, ?)",
-        [(1, "animal"), (2, "lieu"), (3, "capitale")],
+        "INSERT INTO categories (id, label, type, qid) VALUES (?, ?, ?, ?)",
+        [
+            (1, "animal", "classe", "Q729"),
+            (2, "lieu", "classe", "Q17334923"),
+            (3, "capitale", "classe", "Q5119"),
+            (4, "être vivant", "synthetique", "Q19088"),
+        ],
     )
     conn.executemany(
         "INSERT INTO concept_categories (concept_id, categorie_id) VALUES (?, ?)",
         [(1, 1), (5, 2), (5, 3)],
+    )
+
+    # Hierarchie (closure table)
+    conn.executemany(
+        "INSERT INTO categorie_hierarchie (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)",
+        [
+            (1, 1, 0), (2, 2, 0), (3, 3, 0), (4, 4, 0),  # self
+            (4, 1, 1),  # être vivant → animal
+            (2, 3, 1),  # lieu → capitale
+        ],
+    )
+
+    # Composants NP multi-mots
+    # "jacques chirac" (concept 8) -> composants: jacques (lemme 11), chirac (lemme 12)
+    conn.executemany(
+        "INSERT INTO concept_composants (concept_id, lemme_id, role, position) VALUES (?, ?, ?, ?)",
+        [
+            (8, 11, "composant", 0),  # jacques
+            (8, 12, "composant", 1),  # chirac
+        ],
     )
 
     conn.commit()
@@ -426,6 +463,123 @@ def test_definitions_domaine_from_theme(lexique_v4):
     assert defs[1]["domaine"] == ""  # pas de theme -> chaine vide
 
 
+# --- Categories : type, qid, hierarchie ---
+
+def test_categorie_type(db_v4_path):
+    """Les categories ont un type (classe, domaine, synthetique)."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute("SELECT label, type FROM categories WHERE type IS NOT NULL")
+    rows = {row[0]: row[1] for row in cur}
+    conn.close()
+    assert "animal" in rows
+    assert rows["animal"] == "classe"
+    assert rows["être vivant"] == "synthetique"
+
+
+def test_categorie_hierarchie_self(db_v4_path):
+    """Chaque categorie est ancetre d'elle-meme a depth=0."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute(
+        "SELECT COUNT(*) FROM categorie_hierarchie WHERE ancestor_id = descendant_id AND depth = 0"
+    )
+    nb_self = cur.fetchone()[0]
+    cur2 = conn.execute("SELECT COUNT(*) FROM categories")
+    nb_cats = cur2.fetchone()[0]
+    conn.close()
+    assert nb_self == nb_cats
+
+
+def test_categorie_ancestors(db_v4_path):
+    """'animal' a 'être vivant' comme ancetre."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute("""
+        SELECT c.label, h.depth FROM categorie_hierarchie h
+        JOIN categories c ON c.id = h.ancestor_id
+        JOIN categories d ON d.id = h.descendant_id
+        WHERE d.label = 'animal' AND h.depth > 0
+    """)
+    ancestors = {row[0]: row[1] for row in cur}
+    conn.close()
+    assert "être vivant" in ancestors
+    assert ancestors["être vivant"] == 1
+
+
+def test_categorie_descendants(db_v4_path):
+    """'être vivant' a 'animal' comme descendant."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute("""
+        SELECT c.label, h.depth FROM categorie_hierarchie h
+        JOIN categories c ON c.id = h.descendant_id
+        JOIN categories a ON a.id = h.ancestor_id
+        WHERE a.label = 'être vivant' AND h.depth > 0
+    """)
+    descendants = {row[0]: row[1] for row in cur}
+    conn.close()
+    assert "animal" in descendants
+    assert descendants["animal"] == 1
+
+
+# --- API categories (methodes Lexique) ---
+
+def test_info_categorie(lexique_v4):
+    """info_categorie() retourne les champs d'une categorie."""
+    cat = lexique_v4.info_categorie("animal")
+    assert cat is not None
+    assert cat["label"] == "animal"
+    assert cat["type"] == "classe"
+    assert cat["qid"] == "Q729"
+
+
+def test_info_categorie_inexistante(lexique_v4):
+    """info_categorie() retourne None pour un label inconnu."""
+    assert lexique_v4.info_categorie("inexistant") is None
+
+
+def test_lister_categories(lexique_v4):
+    """lister_categories() retourne toutes les categories, filtrage par type."""
+    toutes = lexique_v4.lister_categories()
+    assert len(toutes) == 4
+    # Filtrage par type
+    classes = lexique_v4.lister_categories(type="classe")
+    assert all(c["type"] == "classe" for c in classes)
+    assert len(classes) == 3  # animal, lieu, capitale
+    synth = lexique_v4.lister_categories(type="synthetique")
+    assert len(synth) == 1
+    assert synth[0]["label"] == "être vivant"
+
+
+def test_ancetres_categorie(lexique_v4):
+    """ancetres_categorie() remonte la hierarchie."""
+    ancetres = lexique_v4.ancetres_categorie("animal")
+    labels = {a["label"]: a["depth"] for a in ancetres}
+    assert "être vivant" in labels
+    assert labels["être vivant"] == 1
+
+
+def test_descendants_categorie(lexique_v4):
+    """descendants_categorie() descend la hierarchie."""
+    desc = lexique_v4.descendants_categorie("être vivant")
+    labels = {d["label"]: d["depth"] for d in desc}
+    assert "animal" in labels
+    assert labels["animal"] == 1
+
+
+def test_concepts_par_categorie(lexique_v4):
+    """concepts_par_categorie() retourne les concepts lies."""
+    concepts = lexique_v4.concepts_par_categorie("animal")
+    assert len(concepts) >= 1
+    # Le concept chat (sens 1) est lie a la categorie animal
+    assert any("felin" in c["definition"].lower() for c in concepts)
+    # Sans descendants : "être vivant" n'a pas de concepts directs
+    concepts_ev = lexique_v4.concepts_par_categorie("être vivant")
+    assert len(concepts_ev) == 0
+    # Avec descendants : "être vivant" inclut les concepts d'"animal"
+    concepts_ev_desc = lexique_v4.concepts_par_categorie(
+        "être vivant", inclure_descendants=True
+    )
+    assert len(concepts_ev_desc) >= 1
+
+
 # --- freq_composite ---
 
 def test_info_v4_freq_composite(lexique_v4):
@@ -503,6 +657,91 @@ def test_rechercher_sigle(lexique_v4):
     results = lexique_v4.rechercher("^SN")
     orthos = [r["ortho"] for r in results]
     assert "SNCF" in orthos
+
+
+# --- definitions() avec categories ---
+
+def test_definitions_categories(lexique_v4):
+    """definitions() inclut les categories de chaque sens."""
+    defs = lexique_v4.definitions("chat", "NOM")
+    assert len(defs) >= 2
+    # Sens 1 (felin domestique) est lie a la categorie "animal"
+    assert "animal" in defs[0]["categories"]
+    # Sens 2 (jeu) n'a pas de categorie
+    assert defs[1]["categories"] == []
+
+
+# --- rechercher_concepts() ---
+
+def test_rechercher_concepts(lexique_v4):
+    """rechercher_concepts() par mot-cle dans la definition."""
+    results = lexique_v4.rechercher_concepts("felin")
+    assert len(results) >= 1
+    assert any("felin" in c["definition"].lower() for c in results)
+
+
+def test_rechercher_concepts_par_lemme(lexique_v4):
+    """rechercher_concepts() par mot-cle dans le lemme."""
+    results = lexique_v4.rechercher_concepts("chat")
+    assert len(results) >= 2  # chat a 2 concepts
+
+
+def test_rechercher_concepts_inexistant(lexique_v4):
+    """rechercher_concepts() retourne [] pour un terme inexistant."""
+    results = lexique_v4.rechercher_concepts("xyztotoinexistant")
+    assert results == []
+
+
+# --- Composants NP multi-mots ---
+
+def test_composants_multi_mot(db_v4_path):
+    """'jacques chirac' a des composants 'jacques' et 'chirac'."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute(
+        "SELECT cc.position, l.lemme "
+        "FROM concept_composants cc "
+        "JOIN lemmes l ON cc.lemme_id = l.id "
+        "WHERE cc.concept_id = 8 "
+        "ORDER BY cc.position"
+    )
+    composants = [(row[0], row[1]) for row in cur]
+    conn.close()
+    assert len(composants) == 2
+    assert composants[0] == (0, "jacques")
+    assert composants[1] == (1, "chirac")
+
+
+def test_rechercher_concepts_composant(lexique_v4):
+    """recherche 'Jacques' retourne les concepts NP contenant 'jacques' comme composant."""
+    results = lexique_v4.rechercher_concepts("Jacques")
+    # Doit trouver le concept 8 (jacques chirac) via composants
+    found = [r for r in results if "chirac" in (r.get("_lemme") or "").lower()]
+    assert len(found) >= 1
+    assert "président" in found[0]["definition"].lower()
+
+
+def test_rechercher_concepts_composant_multi_mots(lexique_v4):
+    """recherche 'Jacques Chirac' retourne le NP via composants."""
+    results = lexique_v4.rechercher_concepts("Jacques Chirac")
+    found = [r for r in results if "chirac" in (r.get("_lemme") or "").lower()]
+    assert len(found) >= 1
+
+
+# --- Categories avec propagation ancetres ---
+
+def test_categories_de_avec_ancetres(lexique_v4):
+    """categories_de() inclut les ancetres via la closure table."""
+    # Concept chat (sens 1) est dans "animal", dont l'ancetre est "être vivant"
+    cats = lexique_v4.categories_de(1, inclure_ancetres=True)
+    assert "animal" in cats
+    assert "être vivant" in cats
+
+
+def test_categories_de_sans_ancetres(lexique_v4):
+    """categories_de(inclure_ancetres=False) retourne seulement les categories directes."""
+    cats = lexique_v4.categories_de(1, inclure_ancetres=False)
+    assert "animal" in cats
+    assert "être vivant" not in cats
 
 
 # --- Fixture CSV pour test v3 compat ---
