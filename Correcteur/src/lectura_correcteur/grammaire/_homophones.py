@@ -602,11 +602,24 @@ def verifier_homophones(
                 # "gruda est contrainte", "ayala est fondatrice"
                 # VER: en texte apprenant, -ez/-ent/-ons = PP mal conjugue
                 # ("leal est enlevez" = "est enlevé", pas "et enlevez")
+                # Exception: NOM PROPRE inside PP = complement, not subject
+                # "chez honda est remporte" → "et remporte"
                 if (
                     prev_pos == "NOM PROPRE"
                     and next_pos in ("NOM", "ADJ", "VER")
                 ):
-                    _next_is_coord = False
+                    _np_in_pp = False
+                    if i >= 2:
+                        _pp2_np = pos_tags[i - 2] if i - 2 < len(pos_tags) else ""
+                        _pp2_np_l = result[i - 2].lower()
+                        if (
+                            _pp2_np == "PRE"
+                            or _pp2_np_l in PREPOSITIONS
+                            or _pp2_np_l in ("du", "des", "aux")
+                        ):
+                            _np_in_pp = True
+                    if not _np_in_pp:
+                        _next_is_coord = False
                 # Guard: DET_def_sg + NOM + est + bare_NOM = copula (passive/predicative)
                 # "la ville est prise", "le site est leadeur"
                 # Definite article guarantees singular subject → copula
@@ -796,17 +809,24 @@ def verifier_homophones(
                 _prev_low_nc = result[i - 1].lower()
                 _next_pos_nc = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _next_low_nc = result[i + 1].lower()
-                if _prev_pos_nc == "" and len(_prev_low_nc) >= 2:
+                if _prev_pos_nc in ("", "NOM PROPRE") and len(_prev_low_nc) >= 2:
                     _is_name_coord = False
                     # OOV + est + OOV/NOM PROPRE
-                    if (
+                    if _prev_pos_nc == "" and (
                         _next_pos_nc == "NOM PROPRE"
                         or (_next_pos_nc == "" and len(_next_low_nc) >= 2)
                     ):
                         _is_name_coord = True
-                    # OOV + est + plural NOM (coordination)
+                    # NOM PROPRE + est + NOM PROPRE (strict: both must be names)
                     elif (
-                        _next_pos_nc == "NOM"
+                        _prev_pos_nc == "NOM PROPRE"
+                        and _next_pos_nc == "NOM PROPRE"
+                    ):
+                        _is_name_coord = True
+                    # OOV + est + plural NOM (OOV prev only)
+                    elif (
+                        _prev_pos_nc == ""
+                        and _next_pos_nc == "NOM"
                         and _next_low_nc.endswith(("s", "x", "z"))
                         and len(_next_low_nc) > 2
                     ):
@@ -910,6 +930,19 @@ def verifier_homophones(
                             and i + 2 < n
                             and (pos_tags[i + 2] if i + 2 < len(pos_tags) else "").startswith(("ART", "DET"))
                         )
+                        # "de X est de Y": accept "de" without ART when
+                        # matching de-form precedes (tight parallel)
+                        # Guard: require NOM/PROPRE at i+2 to exclude
+                        # copula "est de VALUE" (est de 800mm, est de plus)
+                        or (
+                            _next_low_pp in ("de", "d'", "d\u2019", "d")
+                            and i >= 2
+                            and result[i - 2].lower()
+                            in ("de", "d'", "d\u2019", "d", "du", "des")
+                            and i + 2 < n
+                            and (pos_tags[i + 2] if i + 2 < len(pos_tags) else "")
+                            in ("NOM", "NOM PROPRE")
+                        )
                     )
                 )
                 if _is_safe_prep:
@@ -925,12 +958,12 @@ def verifier_homophones(
                         if _kpp_pos == "PRE" and _kpp_low == _next_low_pp:
                             _found_same_prep = True
                             break
-                        # Contraction match: "du/des" before, "de" after
-                        if _next_low_pp == "de" and _kpp_low in _DE_FORMS:
+                        # Bidirectional contraction matching for de-forms
+                        if _next_low_pp in _DE_FORMS and _kpp_low in _DE_FORMS:
                             _found_same_prep = True
                             break
-                        # Contraction match: "au/aux" before, "à" after
-                        if _next_low_pp == "à" and _kpp_low in _A_FORMS:
+                        # Bidirectional contraction matching for à-forms
+                        if _next_low_pp in _A_FORMS and _kpp_low in _A_FORMS:
                             _found_same_prep = True
                             break
                     if _found_same_prep:
@@ -944,6 +977,52 @@ def verifier_homophones(
                             explication="'est' -> 'et' (parallel PRE structure)",
                         ))
                         continue
+
+        # PREP + NOM/PROPRE + est + VER(non-PP, non-INF) → coordination
+        # When prev word is inside a PP, it cannot be subject for "est"
+        # "chez honda est remporte" → "et remporte"
+        # Guard: next must not be PP (copula: "est construite")
+        # Guard: next must not be infinitive
+        if curr_low == "est" and pos in ("VER", "AUX"):
+            if i >= 2 and i + 1 < n:
+                _p1_pnv = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                _p2_pnv = pos_tags[i - 2] if i - 2 < len(pos_tags) else ""
+                _p2_low_pnv = result[i - 2].lower()
+                _n1_pnv = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                _n1_low_pnv = result[i + 1].lower()
+                _modes_pnv = morpho.get("mode", [])
+                _n1_mode_pnv = _modes_pnv[i + 1] if i + 1 < len(_modes_pnv) else "_"
+                # Guard: skip if next is also ADJ in lexique (copula)
+                # "en richardson est present" → copula, not coordination
+                _n1_also_adj_pnv = False
+                if lexique is not None:
+                    _n1i_pnv = lexique.info(_n1_low_pnv)
+                    _n1_also_adj_pnv = any(
+                        (e.get("cgram") or "").startswith("ADJ")
+                        for e in _n1i_pnv
+                    )
+                if (
+                    _p1_pnv in ("NOM", "NOM PROPRE", "")
+                    and (
+                        _p2_pnv == "PRE"
+                        or _p2_low_pnv in PREPOSITIONS
+                        or _p2_low_pnv in ("du", "des", "aux")
+                    )
+                    and _n1_pnv in ("VER", "AUX")
+                    and not _n1_low_pnv.endswith(_PP_SUFFIXES)
+                    and _n1_mode_pnv != "inf"
+                    and not _n1_also_adj_pnv
+                ):
+                    ancien = result[i]
+                    result[i] = "et"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="et",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'est' -> 'et' (NOM in PP + VER coordination)",
+                    ))
+                    continue
 
         # "est" comme CON -> probablement "et"
         if curr_low == "est" and pos == "CON":
@@ -1589,6 +1668,13 @@ def verifier_homophones(
                             prev_pos in ("NOM", "NOM PROPRE", "PRO:per")
                             and next_pos in ("VER", "AUX", "ADV")
                         )
+                        # "qui on culminé" → "qui ont culminé"
+                        # PRO:rel + on + PP = relative clause with avoir
+                        or (
+                            prev_pos == "PRO:rel"
+                            and next_pos in ("VER", "AUX")
+                            and result[i + 1].lower().endswith(_PP_SUFFIXES)
+                        )
                     )
                 ):
                     ancien = result[i]
@@ -1745,21 +1831,21 @@ def verifier_homophones(
                         ))
                         continue
 
-        # "se" (PRO:per) + NOM -> "ce" (determinant)
+        # "se" (PRO:per) + NOM/ADJ -> "ce" (determinant)
         # Guard: si le mot suivant est aussi VER dans le lexique, c'est un
         # infinitif (se faire, se dire, etc.) et "se" est correct
         if curr_low == "se" and pos == "PRO:per":
             if i + 1 < n:
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _next_also_ver = False
-                if next_pos == "NOM" and lexique is not None:
+                if next_pos in ("NOM", "ADJ", "ADJ:pos") and lexique is not None:
                     _ni = lexique.info(result[i + 1])
                     _next_also_ver = any(
                         e.get("cgram", "").startswith("VER")
                         or e.get("cgram", "").startswith("AUX")
                         for e in _ni
                     )
-                if next_pos == "NOM" and not _next_also_ver:
+                if next_pos in ("NOM", "ADJ", "ADJ:pos") and not _next_also_ver:
                     ancien = result[i]
                     result[i] = "ce"
                     corrections.append(Correction(
@@ -1767,7 +1853,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="ce",
                         type_correction=TypeCorrection.GRAMMAIRE,
-                        explication="'se' -> 'ce' (determinant devant nom)",
+                        explication="'se' -> 'ce' (determinant devant nom/adj)",
                     ))
                     continue
 
@@ -2036,9 +2122,19 @@ def verifier_homophones(
                 # "mes" + NOM PROPRE = adversatif "mais Pierre"
                 elif next_pos_m == "NOM PROPRE":
                     _mes_is_mais = True
+                # "mes" + ART/DET = impossible possessif → "mais"
+                # "mes la performance", "mes les cardinaux"
+                elif next_pos_m.startswith(("ART", "DET")):
+                    _mes_is_mais = True
+                # "mes" + PRE = impossible possessif → "mais"
+                # "mes avec retenue", "mes pour trouvé"
+                elif next_pos_m == "PRE":
+                    _mes_is_mais = True
+                # "mes" + CON = impossible possessif → "mais"
+                # "mes comme le pouvoir"
+                elif next_pos_m == "CON":
+                    _mes_is_mais = True
                 # "mes" + NOM = possessif (correct) → pas de correction
-                # Guard: sauf si le NOM est aussi conjonction dans le lexique?
-                # Non, rester conservateur. "mes amis" = correct.
             if _mes_is_mais:
                 ancien = result[i]
                 result[i] = "mais"
