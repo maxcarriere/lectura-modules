@@ -58,6 +58,10 @@ def verifier_participes_passes(
         # Adverbes supplementaires (bloquaient le scan AUX)
         "très", "fortement", "également", "presque",
         "autrefois", "officiellement", "entièrement",
+        "complètement", "spécialement", "généralement",
+        "particulièrement", "principalement", "habituellement",
+        "actuellement", "initialement", "finalement",
+        "assez", "peu", "aujourd", "hui",
         # PP de etre (compound aux "a été")
         "été",
     })
@@ -74,9 +78,9 @@ def verifier_participes_passes(
         aller_found = False
         prep_inf_found = False
         _PREP_INF = frozenset({
-            "pour", "sans", "afin",
+            "pour", "sans", "afin", "à", "d'", "d\u2019",
         })
-        for j in range(i - 1, max(-1, i - 4), -1):
+        for j in range(i - 1, max(-1, i - 6), -1):
             w = result[j].lower()
             if w in AUXILIAIRES:
                 aux_found = True
@@ -105,17 +109,37 @@ def verifier_participes_passes(
                 if _r1_infos:
                     _r1_best = max(_r1_infos, key=lambda e: float(e.get("freq") or 0))
                     if _r1_best.get("cgram") in ("NOM", "ADJ"):
-                        _skip_r1_nom = True
+                        # Override: strong etre forms (fut, sera, soit...)
+                        # strongly signal PP context even for NOM-dominant words
+                        # "fut mater" = was tamed, not "fut the mate"
+                        _STRONG_ETRE = frozenset({
+                            "fut", "fût", "sera", "serait", "soit",
+                            "soient", "furent", "seront",
+                        })
+                        if aux_word in _STRONG_ETRE:
+                            _skip_r1_nom = False
+                        else:
+                            _skip_r1_nom = True
             if not _skip_r1_nom:
                 candidats = generer_candidats_participe(curr)
+                # Check if the -er form is a known verb (allows low-freq PP)
+                _er_is_verb = False
+                if lexique is not None and curr_low.endswith("er"):
+                    _er_info_r1 = lexique.info(curr_low)
+                    _er_is_verb = any(
+                        e.get("cgram") in ("VER", "AUX")
+                        for e in _er_info_r1
+                    ) if _er_info_r1 else False
                 for candidate in candidats:
                     if lexique is None or lexique.existe(candidate):
                         # Guard: PP candidate with zero frequency
                         # (leadé, carté etc. are not real PPs)
+                        # Exception: if -er form is a known verb, allow
                         if (
                             lexique is not None
                             and hasattr(lexique, "frequence")
                             and lexique.frequence(candidate) < 0.05
+                            and not _er_is_verb
                         ):
                             continue
                         ancien = result[i]
@@ -289,9 +313,12 @@ def verifier_participes_passes(
                 )
                 if _er_best.get("cgram") in ("NOM", "ADJ", "NOM PROPRE"):
                     _skip_r567 = True
-            # Guard: ANY NOM PROPRE entry → proper name (carter, etc.)
+            # Guard: NOM PROPRE entry with non-trivial freq → proper name
+            # (carter, etc.). Skip entries with freq=0 (phantom PROPRE tags
+            # on common verbs like "publier", "allier")
             if not _skip_r567 and any(
                 "PROPRE" in (e.get("cgram") or "")
+                and float(e.get("freq") or 0) > 0.5
                 for e in _er_infos
             ):
                 _skip_r567 = True

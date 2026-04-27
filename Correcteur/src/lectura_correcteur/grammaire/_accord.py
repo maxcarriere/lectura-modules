@@ -937,7 +937,7 @@ def verifier_accords(
                 _nlc = result[i + 1].lower()
                 if _npc in (
                     "NOM", "NOM PROPRE", "ART", "ART:def", "ART:ind",
-                    "DET", "PRE",
+                    "DET", "?", "",
                 ) or _nlc.endswith(("'", "\u2019")):
                     _skip_est_coord = True
                 # Guard: single-letter fragment (orphan elision "l", "d")
@@ -963,6 +963,18 @@ def verifier_accords(
                 elif (
                     _npc in ("ADJ", "ADJ:pos")
                     and not _nlc.endswith(("s", "x", "z"))
+                ):
+                    _skip_est_coord = True
+                # Guard: est + singular PP = passive voice
+                # "est située", "est construit" → singular, not coordination
+                elif (
+                    _npc in ("VER", "AUX")
+                    and not _nlc.endswith(("s", "x", "z"))
+                    and _nlc.endswith((
+                        "\u00e9", "\u00e9e",  # é, ée
+                        "i", "ie", "u", "ue",
+                        "it", "ite", "ert", "erte",
+                    ))
                 ):
                     _skip_est_coord = True
 

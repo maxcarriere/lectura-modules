@@ -319,6 +319,93 @@ def verifier_homophones(
                         and prev_low.endswith(_PP_SUFFIXES)
                     ):
                         _is_nom_subj = False
+                    # Fallback: NOM blocked by PP guard → scan deeper
+                    # for a singular subject before the PP chain.
+                    # "le barrage et construit" → subject = "le barrage"
+                    # Require VER/AUX POS + PP suffix (POS alone is
+                    # too broad: "voit", "marque", "reste" are V3s not PP).
+                    # Also block when prev is a PP (PP coordination:
+                    # "dessinée par X et produite" → et links two PPs).
+                    _deep_scan_pp = (
+                        (
+                            next_pos in ("VER", "AUX")
+                            and (
+                                next_low.endswith(_PP_SUFFIXES)
+                                or next_low in ("né", "née", "nés", "nées")
+                                # Infinitive -er: chain et→est then
+                                # PP corrects er→é
+                                or (next_low.endswith("er")
+                                    and len(next_low) >= 5)
+                            )
+                        )
+                        # ADJ with PP suffix: copula + predicate adj
+                        # ("le prêt et gratuit"→"est gratuit")
+                        or (
+                            next_pos in ("ADJ", "ADJ:pos")
+                            and len(next_low) >= 4
+                            and next_low.endswith(_PP_SUFFIXES)
+                        )
+                    )
+                    _prev_is_pp = (
+                        prev_pos in ("VER", "AUX", "ADJ", "ADJ:pos")
+                        and prev_low.endswith(_PP_SUFFIXES)
+                    )
+                    if (
+                        not _is_nom_subj
+                        and not _is_pronoun_subj
+                        and _deep_scan_pp
+                        and not _prev_is_pp
+                    ):
+                        _SING_DET_DEEP = frozenset({
+                            "le", "la", "l'", "l\u2019",
+                            "ce", "cette", "cet",
+                            "mon", "ma", "ton", "ta", "son", "sa",
+                            "un", "une", "quel", "quelle",
+                        })
+                        _j_deep = i - 1
+                        _found_earlier_pp = False
+                        while _j_deep >= max(0, i - 10):
+                            _jdp = pos_tags[_j_deep] if _j_deep < len(pos_tags) else ""
+                            _jdl = result[_j_deep].lower()
+                            if _jdp in ("NOM", "NOM PROPRE", "ADJ", "?", ""):
+                                _j_deep -= 1
+                                continue
+                            if _jdp == "PRE" or _jdl in PREPOSITIONS:
+                                _j_deep -= 1
+                                continue
+                            if _jdl in ("du", "des", "aux", "d'", "d\u2019"):
+                                _j_deep -= 1
+                                continue
+                            # VER/AUX in the chain
+                            if _jdp in ("VER", "AUX"):
+                                if _jdl.endswith(_PP_SUFFIXES):
+                                    # Earlier PP → likely coordination
+                                    _found_earlier_pp = True
+                                    _j_deep -= 1
+                                    continue
+                                # Finite verb = clause boundary
+                                break
+                            if _jdp.startswith(("ART", "DET")):
+                                # DET in a PP — check if PRE before it
+                                if _j_deep > 0:
+                                    _jdp2 = pos_tags[_j_deep - 1] if _j_deep - 1 < len(pos_tags) else ""
+                                    _jdl2 = result[_j_deep - 1].lower()
+                                    if _jdp2 == "PRE" or _jdl2 in PREPOSITIONS or _jdl2 in ("du", "des", "aux"):
+                                        _j_deep -= 2
+                                        continue
+                                    # VER/AUX before DET = clause
+                                    # boundary ("cause la mort",
+                                    # "commençant le mars")
+                                    if _jdp2 in ("VER", "AUX"):
+                                        break
+                                # DET not in PP + no earlier PP coord
+                                if (
+                                    not _found_earlier_pp
+                                    and _jdl in _SING_DET_DEEP
+                                ):
+                                    _is_nom_subj = True
+                                break
+                            break
                     if _is_pronoun_subj or _is_nom_subj:
                         ancien = result[i]
                         result[i] = "est"
@@ -1067,11 +1154,22 @@ def verifier_homophones(
                 and (pos_tags[i - 1] if i - 1 < len(pos_tags) else "") == "PRE"
             )
             # Guard: mot suivant est NOM/NOM PROPRE → possessif, pas copule
+            # Override: si NOM est clairement pluriel, "son" (singulier)
+            # ne peut pas etre un possessif ("son morts" impossible)
             _next_is_nom_son = (
                 i + 1 < n
                 and (pos_tags[i + 1] if i + 1 < len(pos_tags) else "")
                 in ("NOM", "NOM PROPRE")
             )
+            if _next_is_nom_son and i + 1 < n and lexique is not None:
+                _nsn_low = result[i + 1].lower()
+                if (
+                    _nsn_low.endswith(("s", "x"))
+                    and len(_nsn_low) >= 4
+                ):
+                    _nsn_base = _nsn_low[:-1]
+                    if lexique.existe(_nsn_base):
+                        _next_is_nom_son = False
             # Guard: "du son" = "de+le son" (son=NOM, not verb)
             _prev_du_son = (
                 i > 0
@@ -1079,9 +1177,66 @@ def verifier_homophones(
             )
             _plur_subj_direct = False
             if not _prev_pre and not _next_is_nom_son and not _prev_du_son:
+                # "son" + ART → impossible possessive (DET+DET),
+                # must be "sont" (e.g. "ils son les premiers")
+                if i + 1 < n:
+                    _next_pos_son = (
+                        pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                    )
+                    if _next_pos_son.startswith(("ART", "DET")):
+                        _plur_subj_direct = True
+                # "son" + ADV → often "sont" with adverb
+                # "ils son aussi partis" → "sont aussi"
+                if (
+                    not _plur_subj_direct
+                    and i + 1 < n
+                ):
+                    _next_pos_son = (
+                        pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                    )
+                    _next_low_son = result[i + 1].lower()
+                    if (
+                        _next_pos_son == "ADV"
+                        and _next_low_son in (
+                            "aussi", "encore", "toujours",
+                            "souvent", "donc", "alors",
+                            "vraiment", "tous", "toutes",
+                            "beaucoup", "également",
+                            "très", "plus", "moins",
+                        )
+                    ):
+                        # Check for plural subject before (traverse PP chains)
+                        # Don't treat "qui" as plural (relative pronoun
+                        # with unknown antecedent number); scan past it.
+                        for _k_adv in range(i - 1, max(-1, i - 10), -1):
+                            _w_adv = result[_k_adv].lower()
+                            _pk_adv = (
+                                pos_tags[_k_adv]
+                                if _k_adv < len(pos_tags) else ""
+                            )
+                            if _w_adv in ("ils", "elles"):
+                                _plur_subj_direct = True
+                                break
+                            if (
+                                _pk_adv in ("NOM", "ADJ")
+                                and _w_adv.endswith(("s", "x", "z"))
+                            ):
+                                _plur_subj_direct = True
+                                break
+                            if _pk_adv in (
+                                "ART:def", "ART:ind", "ART",
+                                "DET", "ADJ:pos", "ADJ", "ADV",
+                                "PRO:rel",
+                                # Traverse PP chains (a chevet plat, de X)
+                                "NOM", "NOM PROPRE", "PRE",
+                            ) or _w_adv in (
+                                "du", "des", "aux", "au",
+                            ):
+                                continue
+                            break
                 # "son" + clearly plural ADJ/VER → "sont" (no subject needed)
                 # "son" is singular possessive, cannot precede a plural word.
-                if i + 1 < n and lexique is not None:
+                if not _plur_subj_direct and i + 1 < n and lexique is not None:
                     _nlow_sc = result[i + 1].lower()
                     _npos_sc = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                     if (
@@ -1108,16 +1263,20 @@ def verifier_homophones(
                                 ):
                                     _plur_subj_direct = False
                 if not _plur_subj_direct:
-                    for _k in range(i - 1, max(-1, i - 5), -1):
+                    for _k in range(i - 1, max(-1, i - 10), -1):
                         _w = result[_k].lower()
                         _pk = pos_tags[_k] if _k < len(pos_tags) else ""
-                        if _w in ("ils", "elles", "qui"):
+                        if _w in ("ils", "elles"):
                             _plur_subj_direct = True
                             break
                         if _pk in ("NOM", "ADJ") and _w.endswith(("s", "x", "z")):
                             _plur_subj_direct = True
                             break
-                        if _pk in ("ART:def", "ART:ind", "ART", "DET", "ADJ:pos", "ADJ", "ADV", "PRO:rel"):
+                        if _pk in (
+                            "ART:def", "ART:ind", "ART", "DET",
+                            "ADJ:pos", "ADJ", "ADV", "PRO:rel",
+                            "NOM", "NOM PROPRE", "PRE",
+                        ) or _w in ("du", "des", "aux", "au"):
                             continue
                         break  # Verbe ou autre → arreter
             if _plur_subj_direct and lexique is not None and lexique.existe("sont"):
@@ -1181,7 +1340,10 @@ def verifier_homophones(
                 next_low = result[i + 1].lower()
                 _next_verb = next_pos in ("VER", "AUX") or (
                     len(next_low) >= 4 and next_low.endswith(_PP_SUFFIXES)
-                    and next_pos not in ("NOM", "NOM PROPRE", "ADJ")
+                    and next_pos not in (
+                        "NOM", "NOM PROPRE", "ADJ", "ADV",
+                        "PRE", "CON", "ART:def", "ART:ind",
+                    )
                 )
                 # "son" + clearly plural PP → "sont" (no subject scan needed)
                 # "son" is singular possessive, cannot precede a plural PP.
@@ -1204,17 +1366,22 @@ def verifier_homophones(
                     # Verifier qu'un sujet pluriel precede
                     _plur_subj = _next_clearly_plural
                     if not _plur_subj:
-                        for _k in range(i - 1, max(-1, i - 5), -1):
+                        for _k in range(i - 1, max(-1, i - 10), -1):
                             _w = result[_k].lower()
-                            if _w in ("ils", "elles", "qui"):
+                            if _w in ("ils", "elles"):
                                 _plur_subj = True
                                 break
                             _pk = pos_tags[_k] if _k < len(pos_tags) else ""
                             if _pk in ("NOM", "ADJ") and _w.endswith(("s", "x", "z")):
                                 _plur_subj = True
                                 break
-                            if _pk not in ("ADV", "PRE", "ADJ:pos", "ADJ", "PRO:rel"):
-                                break
+                            if _pk in (
+                                "ADV", "PRE", "ADJ:pos", "ADJ",
+                                "PRO:rel", "NOM", "NOM PROPRE",
+                                "ART:def", "ART:ind", "ART", "DET",
+                            ) or _w in ("du", "des", "aux", "au"):
+                                continue
+                            break
                     if _plur_subj and lexique is not None and lexique.existe("sont"):
                         ancien = result[i]
                         result[i] = "sont"
@@ -1609,10 +1776,25 @@ def verifier_homophones(
             if i + 1 < n:
                 _next_low_el = result[i + 1].lower()
                 if _next_low_el in (
-                    "a", "est", "va", "fait", "peut", "sait", "veut",
-                    "doit", "avait", "était", "devait", "pouvait",
-                    "sera", "fera", "ira", "aura", "fut",
+                    "a", "est", "va", "fait", "peut", "sait",
+                    "veut", "doit", "avait", "était", "devait",
+                    "pouvait", "sera", "fera", "ira", "aura",
+                    "fut",
                 ):
+                    # Guard: si un mot proche apres le verbe porte un accord
+                    # pluriel feminin, c'est le verbe qui est faux, pas le pronom
+                    # Ex: "elles est marquées" → garder "elles", CONJ fixera le verbe
+                    _plur_agree_el = False
+                    for _k_el in range(i + 2, min(n, i + 5)):
+                        _kw_el = result[_k_el].lower()
+                        if _kw_el.endswith(("ées", "ées", "ées")):
+                            _plur_agree_el = True
+                            break
+                        if _kw_el.endswith(("és", "ies", "ues", "ites", "ertes")):
+                            _plur_agree_el = True
+                            break
+                    if _plur_agree_el:
+                        continue
                     ancien = result[i]
                     _elle = "Elle" if ancien[0].isupper() else "elle"
                     result[i] = _elle
@@ -1634,6 +1816,14 @@ def verifier_homophones(
                 prev_low = result[i - 1].lower() if i > 0 else ""
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _prev_is_fragment = prev_low in ("qu", "qu'", "qu\u2019", "l", "l'", "l\u2019")
+                _clitic_3pl = False
+                # Override: clitic + on after ils/elles
+                # "ils l on hissé" → "ils l'ont hissé"
+                if _prev_is_fragment and i > 1:
+                    _p2_low_ont = result[i - 2].lower()
+                    if _p2_low_ont in ("ils", "elles"):
+                        _prev_is_fragment = False
+                        _clitic_3pl = True
                 # Strong rule: "ils/elles on" → always "ont"
                 _prev_3pl = prev_low in ("ils", "elles")
                 # Guard: si le mot suivant est un verbe conjugue (pas un PP),
@@ -1656,14 +1846,21 @@ def verifier_homophones(
                 )
                 # "on été" is never valid French → always "ont été"
                 _next_on_ete = (result[i + 1].lower() == "été")
+                # "on" + ART/DET → "ont" (pronoun can't
+                # precede article: "on un aspect" → "ont un")
+                _next_is_art = next_pos.startswith(
+                    ("ART", "DET")
+                )
                 if (
                     not _prev_is_fragment
                     and not _next_is_conjugated
                     and not _prev_in_pp
                     and (
                         _prev_3pl
+                        or _clitic_3pl
                         or _next_ont_lieu
                         or _next_on_ete
+                        or _next_is_art
                         or (
                             prev_pos in ("NOM", "NOM PROPRE", "PRO:per")
                             and next_pos in ("VER", "AUX", "ADV")
@@ -1701,6 +1898,24 @@ def verifier_homophones(
             ))
             continue
 
+        # "ont" + negation → "on" (negation goes BEFORE auxiliary:
+        # "n'ont pas", never "ont ne"/"ont n'")
+        # "ont ne sait rien" → "on ne sait rien"
+        if curr_low == "ont" and pos in ("AUX", "VER"):
+            if i + 1 < n:
+                _next_ont = result[i + 1].lower()
+                if _next_ont in ("ne", "n'", "n\u2019"):
+                    ancien = result[i]
+                    result[i] = "on"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="on",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'ont' -> 'on' (negation apres = pronom)",
+                    ))
+                    continue
+
         # "ont" (AUX) suivi d'un VER non-PP → probablement "on" + present
         # "ont trouve" → "on trouve", "ont les imagine" → "on les imagine"
         if curr_low == "ont" and pos in ("AUX", "VER"):
@@ -1732,6 +1947,58 @@ def verifier_homophones(
                         corrige="on",
                         type_correction=TypeCorrection.GRAMMAIRE,
                         explication="'ont' -> 'on' (suivi verbe non-PP)",
+                    ))
+                    continue
+
+        # --- peu / peut ---
+        # "peu" + infinitif → "peut" (pouvoir 3sg)
+        # "on peu voir" → "on peut voir"
+        # Guard: only after subject pronoun or NOM
+        if curr_low == "peu" and pos == "ADV":
+            if i + 1 < n and i > 0:
+                _next_pos_peu = (
+                    pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                )
+                _next_low_peu = result[i + 1].lower()
+                _prev_low_peu = result[i - 1].lower()
+                _prev_pos_peu = (
+                    pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                )
+                # Next must be infinitive or "être"/"pas"
+                _is_inf = (
+                    _next_pos_peu in ("VER", "AUX")
+                    and (
+                        _next_low_peu.endswith(
+                            ("er", "ir", "oir", "re")
+                        )
+                        or _next_low_peu in (
+                            "être", "avoir", "faire",
+                        )
+                    )
+                )
+                # Also allow "peu" + "pas"/"plus" → "peut pas"
+                _is_neg = _next_low_peu in ("pas", "plus")
+                if (
+                    (_is_inf or _is_neg)
+                    and (
+                        _prev_pos_peu in (
+                            "PRO:ind", "PRO:per", "NOM",
+                            "NOM PROPRE",
+                        )
+                        or _prev_low_peu in (
+                            "on", "il", "elle", "qui",
+                            "ne", "n'", "n\u2019",
+                        )
+                    )
+                ):
+                    ancien = result[i]
+                    result[i] = "peut"
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige="peut",
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication="'peu' -> 'peut' (pouvoir + infinitif)",
                     ))
                     continue
 
@@ -1834,18 +2101,49 @@ def verifier_homophones(
         # "se" (PRO:per) + NOM/ADJ -> "ce" (determinant)
         # Guard: si le mot suivant est aussi VER dans le lexique, c'est un
         # infinitif (se faire, se dire, etc.) et "se" est correct
+        # Exception: PRE + "se" = impossible reflexif (avec se titre → ce)
         if curr_low == "se" and pos == "PRO:per":
             if i + 1 < n:
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                # Accept ADV-tagged words that also have ADJ/NOM entry
+                # (e.g. "nouveau" mis-tagged ADV but is really ADJ)
+                _eff_nom_adj = next_pos in ("NOM", "ADJ", "ADJ:pos")
+                if (
+                    not _eff_nom_adj
+                    and next_pos == "ADV"
+                    and lexique is not None
+                ):
+                    _ni_adv = lexique.info(result[i + 1])
+                    if any(
+                        (e.get("cgram") or "").startswith(("ADJ", "NOM"))
+                        for e in _ni_adv
+                    ):
+                        _eff_nom_adj = True
                 _next_also_ver = False
-                if next_pos in ("NOM", "ADJ", "ADJ:pos") and lexique is not None:
+                if _eff_nom_adj and lexique is not None:
                     _ni = lexique.info(result[i + 1])
                     _next_also_ver = any(
                         e.get("cgram", "").startswith("VER")
                         or e.get("cgram", "").startswith("AUX")
                         for e in _ni
                     )
-                if next_pos in ("NOM", "ADJ", "ADJ:pos") and not _next_also_ver:
+                # Override: PRE before "se" → reflexive impossible
+                # "avec se titre" → "ce titre", "de se centre" → "ce"
+                if _next_also_ver and i > 0:
+                    _prev_pos_se = (
+                        pos_tags[i - 1]
+                        if i - 1 < len(pos_tags) else ""
+                    )
+                    _prev_low_se = result[i - 1].lower()
+                    if (
+                        _prev_pos_se == "PRE"
+                        or _prev_low_se in PREPOSITIONS
+                        or _prev_low_se in (
+                            "du", "des", "aux", "au",
+                        )
+                    ):
+                        _next_also_ver = False
+                if _eff_nom_adj and not _next_also_ver:
                     ancien = result[i]
                     result[i] = "ce"
                     corrections.append(Correction(
@@ -2067,8 +2365,16 @@ def verifier_homophones(
                 elif _kp_low in ("il", "elle", "on"):
                     _peux_subj = "3"
                 break
-            if _peux_subj == "12":
-                pass  # correct: je/tu peux
+            # Guard: plural nominal subject → leave for conjugaison Rule 3
+            # "les hélicoptères peux" → "peuvent" (not "peu")
+            _peux_plur_subj = False
+            if _peux_subj is None and i > 0:
+                _pp_prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                _pp_prev_low = result[i - 1].lower()
+                if _pp_prev_pos == "NOM" and _pp_prev_low.endswith(("s", "x", "z")):
+                    _peux_plur_subj = True
+            if _peux_subj == "12" or _peux_plur_subj:
+                pass  # correct: je/tu peux OR plural subject → conjugaison
             elif _peux_subj == "3":
                 # 3e personne → "peut" (conjugaison)
                 _peux_target = "peut"

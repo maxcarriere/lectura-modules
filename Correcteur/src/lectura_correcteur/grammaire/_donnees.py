@@ -141,9 +141,37 @@ IRREGULIERS_3PL: dict[str, str] = {
     "résout": "résolvent", "ouvre": "ouvrent",
     "offre": "offrent", "souffre": "souffrent",
     "couvre": "couvrent", "cueille": "cueillent",
-    # P1p/P2p → P3p (irreguliers etre/avoir)
+    # P1s/P2s/P1p/P2p → P3p (irreguliers etre/avoir)
+    "suis": "sont", "es": "sont",
     "sommes": "sont", "êtes": "sont",
     "avons": "ont", "avez": "ont",
+    "ai": "ont", "as": "ont",
+    # P1p/P2p → P3p (irreguliers modaux et 3e groupe)
+    "devons": "doivent", "devez": "doivent",
+    "pouvons": "peuvent", "pouvez": "peuvent",
+    "voulons": "veulent", "voulez": "veulent",
+    "savons": "savent", "savez": "savent",
+    "tenons": "tiennent", "tenez": "tiennent",
+    "venons": "viennent", "venez": "viennent",
+    "voyons": "voient", "voyez": "voient",
+    "croyons": "croient", "croyez": "croient",
+    "buvons": "boivent", "buvez": "boivent",
+    "mettons": "mettent", "mettez": "mettent",
+    "battons": "battent", "battez": "battent",
+    "suivons": "suivent", "suivez": "suivent",
+    "vivons": "vivent", "vivez": "vivent",
+    "prenons": "prennent", "prenez": "prennent",
+    "maintenons": "maintiennent", "maintenez": "maintiennent",
+    "obtenons": "obtiennent", "obtenez": "obtiennent",
+    "devenons": "deviennent", "devenez": "deviennent",
+    "revenons": "reviennent", "revenez": "reviennent",
+    "provenons": "proviennent", "provenez": "proviennent",
+    "convenons": "conviennent", "convenez": "conviennent",
+    # P1s/P2s → P3p (irreguliers)
+    "peux": "peuvent", "dois": "doivent", "veux": "veulent",
+    "vaux": "valent", "sais": "savent",
+    "deviens": "deviennent", "proviens": "proviennent",
+    "suis": "sont",
 }
 
 
@@ -183,7 +211,9 @@ def generer_candidats_3pl(mot: str) -> list[str]:
 
     # --- C. Depuis P2s (-es → -ent) ---
     # "utilises" → "utilisent", "offres" → "offrent"
-    if low.endswith("es") and not low.endswith("tes") and len(low) > 3:
+    # Note: no "-tes" exclusion — lexique.existe() filters invalid candidates
+    # (acceptes→acceptent ✓, faites→faitent ✗ lexique)
+    if low.endswith("es") and len(low) > 3:
         candidats.append(low[:-2] + "ent")
 
     # --- D. Depuis P2p (-ez → -ent) ---
@@ -204,6 +234,11 @@ AUXILIAIRES = frozenset({
     "sera", "seras", "seront", "serons", "serez",
     "serait", "serais", "seraient", "serions", "seriez",
     "fut", "fût", "fus", "furent", "fûmes", "fûtes",
+    # Subjonctif (passif : "qu'il soit reconnu", "soient attribuées")
+    "soit", "soient", "sois", "soyons", "soyez",
+    "ait", "aie", "aies", "aient", "ayons", "ayez",
+    # Participe present (ayant publié, étant donné)
+    "ayant", "étant",
     # Infinitifs (passif : "pour être expulsé", "peut être accompagné")
     "être", "avoir",
 })
@@ -228,6 +263,7 @@ ETRE_FORMES = frozenset({
     "serai", "seras", "sera", "serons", "serez", "seront",
     "serais", "serait", "serions", "seriez", "seraient",
     "fus", "fut", "fût", "fûmes", "fûtes", "furent",
+    "soit", "soient", "sois", "soyons", "soyez",
     "être",  # infinitif (passif: "peut être pratiquée")
 })
 

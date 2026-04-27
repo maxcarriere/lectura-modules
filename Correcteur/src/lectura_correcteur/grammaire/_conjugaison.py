@@ -60,6 +60,8 @@ def _nombre_sujet_nominal(
 
     # Memoriser le premier NOM rencontre (pour le fallback)
     _first_nom_j = -1
+    # Track if we've crossed a PP boundary (du/au/des/PRE)
+    _crossed_pp = False
 
     # Scan arriere : sauter NOM/ADJ, detecter DET, sauter PP
     while j >= 0:
@@ -67,6 +69,22 @@ def _nombre_sujet_nominal(
         mot_j = mots[j].lower()
 
         if pos_j in ("NOM", "NOM PROPRE", "ADJ"):
+            if _first_nom_j < 0:
+                _first_nom_j = j
+            j -= 1
+            continue
+
+        # VER/AUX tagged words ending in plural marks (données, prises)
+        # may be NOM in subject position. Treat like NOM for scanning.
+        # Only apply before any PP boundary to avoid scanning through
+        # complements ("les plaques du marbre blanc bia a" → "plaques"
+        # is beyond PP "du", should not be treated as NOM here).
+        if (
+            not _crossed_pp
+            and pos_j in ("VER", "AUX")
+            and mot_j.endswith(("s", "x", "z"))
+            and len(mot_j) > 3
+        ):
             if _first_nom_j < 0:
                 _first_nom_j = j
             j -= 1
@@ -89,10 +107,11 @@ def _nombre_sujet_nominal(
         # Tout NOM vu apres (plus pres du verbe) est dans un PP
         if mot_j in ("du", "au", "aux"):
             _first_nom_j = -1
+            _crossed_pp = True
             j -= 1
             continue
 
-        if pos_j in ("ART:def", "ART:ind", "ART", "DET", "DET:dem", "ADJ:pos"):
+        if pos_j in ("ART:def", "ART:ind", "ART", "DET", "DET:dem", "ADJ:pos", "ADJ:dem"):
             # Verifier si ce DET est dans un complement prepositionnel
             if j > 0:
                 prev_pos = pos_tags[j - 1] if j - 1 < len(pos_tags) else ""
@@ -102,6 +121,7 @@ def _nombre_sujet_nominal(
                     # Tout NOM vu apres (plus pres du verbe) est dans ce PP
                     # "des" before a numeral/DET = "de+les" (PP marker)
                     _first_nom_j = -1
+                    _crossed_pp = True
                     j -= 2
                     continue
                 # ADJ/quantifier between PRE and DET:
@@ -111,6 +131,7 @@ def _nombre_sujet_nominal(
                     _pp2_mot_sn = mots[j - 2].lower()
                     if _pp2_pos_sn == "PRE" or _pp2_mot_sn in PREPOSITIONS or _pp2_mot_sn == "des":
                         _first_nom_j = -1
+                        _crossed_pp = True
                         j -= 3  # sauter DET + ADJ + PRE
                         continue
                 # "des" apres un NOM/ADJ/PRO = contraction "de+les" (PP)
@@ -121,6 +142,7 @@ def _nombre_sujet_nominal(
                     "NOM", "ADJ", "NOM PROPRE",
                     "PRO:dem", "PRO:rel", "PRO:ind",
                 ):
+                    _crossed_pp = True
                     j -= 1  # sauter "des" (la PRE est incorporee)
                     continue
             # Pas de preposition devant → c'est le DET du sujet
@@ -155,6 +177,7 @@ def _nombre_sujet_nominal(
         if pos_j == "PRE" or mot_j in PREPOSITIONS:
             # Tout NOM vu apres (plus pres du verbe) est dans un PP
             _first_nom_j = -1
+            _crossed_pp = True
             j -= 1
             continue
 
@@ -250,6 +273,57 @@ def verifier_conjugaisons(
         pos = pos_tags[i] if i < len(pos_tags) else ""
         curr = result[i]
 
+        # Regle 2b : "qui" + P1p/P2p etre/avoir → P3p
+        # En relative, P1p/P2p sans pronom correspondant est une erreur
+        # "qui sommes executees" → "qui sont executees"
+        # "qui avez fui" → "qui ont fui"
+        # Guard: "nous qui sommes" / "vous qui etes" = correct
+        _P1P2_TO_3PL = {
+            "sommes": "sont", "êtes": "sont",
+            "avons": "ont", "avez": "ont",
+            "es": "sont", "suis": "sont",
+            "ai": "ont", "as": "ont",
+        }
+        _MATCHING_PRONOUN = {
+            "sommes": "nous", "avons": "nous",
+            "êtes": "vous", "avez": "vous",
+            "es": "tu", "as": "tu",
+            "suis": "je", "ai": "je",
+        }
+        curr_low = curr.lower()
+        if (
+            curr_low in _P1P2_TO_3PL
+            and i > 0
+            and (pos in ("VER", "AUX", "?", "")
+                 or curr_low in ETRE_FORMES
+                 or curr_low in AVOIR_FORMES)
+        ):
+            _pp_r2b = result[i - 1].lower()
+            if _pp_r2b in ("qui", "ne", "n'", "n\u2019"):
+                _match_pron = _MATCHING_PRONOUN.get(curr_low, "")
+                _has_match = False
+                for _k_r2b in range(i - 2, max(-1, i - 5), -1):
+                    _w_r2b = result[_k_r2b].lower()
+                    if _w_r2b == _match_pron:
+                        _has_match = True
+                        break
+                    # Stop at clause boundary
+                    _pk_r2b = pos_tags[_k_r2b] if _k_r2b < len(pos_tags) else ""
+                    if _pk_r2b in ("VER", "AUX", "CON"):
+                        break
+                if not _has_match:
+                    _repl_r2b = _P1P2_TO_3PL[curr_low]
+                    ancien = result[i]
+                    result[i] = transferer_casse(curr, _repl_r2b)
+                    corrections.append(Correction(
+                        index=i,
+                        original=ancien,
+                        corrige=result[i],
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        explication=f"'{curr_low}' -> '{_repl_r2b}' (P1p/P2p -> P3p en relative/negation)",
+                    ))
+                    continue
+
         # Regle 3a : Formes fausses (allent->vont, etc.) — AVANT le check POS
         # car le tagger peut mal etiqueter ces formes (NOM au lieu de VER)
         # Verifie aussi le mot original (avant correction orthographique)
@@ -283,9 +357,19 @@ def verifier_conjugaisons(
             _imm_prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
             _imm_prev_low = result[i - 1].lower()
             _after_prep = _imm_prev_pos == "PRE" or _imm_prev_low in PREPOSITIONS
-            _after_det_r3 = _imm_prev_pos.startswith(("ART", "DET", "ADJ:pos"))
+            # Exception: quantifiers tagged ART:ind can be pronoun subjects
+            # ("plusieurs est" = "plusieurs sont", not DET + NOM)
+            _QUANT_PRONOUNS = frozenset({
+                "plusieurs", "certains", "certaines",
+                "quelques-uns", "quelques-unes",
+                "tous", "toutes",
+            })
+            _after_det_r3 = (
+                _imm_prev_pos.startswith(("ART", "DET", "ADJ:pos", "ADJ:dem", "ADJ:ind"))
+                and _imm_prev_low not in _QUANT_PRONOUNS
+            )
             _curr_prev_low = result[i - 1].lower()
-            prev_is_3pl = not _after_prep and not _after_det_r3 and (
+            _subject_is_pronoun_r3 = (
                 _curr_prev_low in SUJETS_3PL
                 or (
                     i - 1 < len(origs)
@@ -293,28 +377,26 @@ def verifier_conjugaisons(
                     # Respecter elles→elle / ils→il (homophones)
                     and _curr_prev_low not in ("il", "elle", "on")
                 )
+            )
+            prev_is_3pl = not _after_prep and not _after_det_r3 and (
+                _subject_is_pronoun_r3
                 or _est_sujet_nominal_pluriel(result, pos_tags, origs, i)
             )
 
             # Guard est→sont : si le contexte suggere une coordination
             # (NOM/ADJ + est + NOM/ART/DET/PRE), laisser homophones decider
+            # Exception: pronoun subjects (elles/ils) are unambiguous → skip guard
             _skip_coord = False
-            if prev_is_3pl and curr.lower() == "est" and i + 1 < n:
+            if prev_is_3pl and not _subject_is_pronoun_r3 and curr.lower() == "est" and i + 1 < n:
                 _next_pos_c = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _next_low_c = result[i + 1].lower()
                 if _next_pos_c in (
                     "NOM", "NOM PROPRE", "ART", "ART:def", "ART:ind",
-                    "DET", "PRE",
+                    "DET", "?", "",
                 ) or _next_low_c.endswith(("'", "\u2019")):
                     _skip_coord = True
                 # Guard: single-letter fragment (orphan elision "l", "d")
                 elif len(_next_low_c) == 1 and _next_low_c.isalpha():
-                    _skip_coord = True
-                # Guard: ADJ already plural → coordination ("fédéraux et municipaux")
-                elif (
-                    _next_pos_c in ("ADJ", "ADJ:pos")
-                    and _next_low_c.endswith(("s", "x", "z"))
-                ):
                     _skip_coord = True
                 # Guard: VER/AUX not a PP form → conjugated verb = coordination
                 # ("tensions et récupère", "alsace et détruisent")
@@ -332,6 +414,20 @@ def verifier_conjugaisons(
                 elif (
                     _next_pos_c in ("ADJ", "ADJ:pos")
                     and not _next_low_c.endswith(("s", "x", "z"))
+                    and _curr_prev_low not in SUJETS_3PL
+                ):
+                    _skip_coord = True
+                # Guard: est + singular PP (VER ending in -é/-ée/-i/-ie/-u/-ue/-it/-ert)
+                # = passive voice ("est située", "est construit"), not coordination
+                # Plural PPs (-és/-ées/-is/-ies) suggest 3pl, allow correction.
+                elif (
+                    _next_pos_c in ("VER", "AUX")
+                    and not _next_low_c.endswith(("s", "x", "z"))
+                    and _next_low_c.endswith((
+                        "\u00e9", "\u00e9e",  # é, ée
+                        "i", "ie", "u", "ue",
+                        "it", "ite", "ert", "erte",
+                    ))
                     and _curr_prev_low not in SUJETS_3PL
                 ):
                     _skip_coord = True
@@ -367,6 +463,24 @@ def verifier_conjugaisons(
                             key=lambda e: float(e.get("freq") or 0),
                         )
                         if (_best_sing_r3.get("cgram") or "") in ("NOM", "ADJ"):
+                            # Guard: require significant NOM/ADJ freq
+                            # (devon freq=0.35 is a proper noun, not a real NOM;
+                            # graphique freq=4.34 is a real NOM/ADJ)
+                            _nom_adj_freq_r3 = float(
+                                _best_sing_r3.get("freq") or 0,
+                            )
+                            if _nom_adj_freq_r3 > 2.0:
+                                _skip_nom_adj_r3 = True
+                    # Also check the current (plural) form directly
+                    # (frites: NOM freq=3.56, VER freq=10.67 — singular "frite"
+                    # has VER as best, but "frites" as NOM is significant)
+                    if not _skip_nom_adj_r3:
+                        _curr_infos_r3 = lexique.info(_curr_low_r3)
+                        if _curr_infos_r3 and any(
+                            (e.get("cgram") or "") in ("NOM", "ADJ")
+                            and float(e.get("freq") or 0) > 2.0
+                            for e in _curr_infos_r3
+                        ):
                             _skip_nom_adj_r3 = True
 
             if prev_is_3pl and not _skip_coord and not _skip_causatif and not _skip_nom_adj_r3 and not curr.lower().endswith(("ent", "nt")):
@@ -645,7 +759,9 @@ def verifier_conjugaisons(
                     )
                     if (_best_cand_5d.get("cgram") or "") in ("NOM", "ADJ"):
                         _cand_is_p3s = False
-                if _cand_is_p3s and _nombre_sujet_nominal(
+                # Guard: PLUR_DET immediately before → NOM pluriel, pas VER
+                _prev_is_plur_det_5d = result[i - 1].lower() in PLUR_DET
+                if _cand_is_p3s and not _prev_is_plur_det_5d and _nombre_sujet_nominal(
                     result, pos_tags, origs, i,
                 ) == "sing":
                     ancien = result[i]
@@ -797,8 +913,12 @@ def _lemmatiser_verbe(mot: str, temps: str) -> str | None:
                 # 2e groupe : finissait → finiss → finir
                 if radical.endswith("iss"):
                     return radical[:-3] + "ir"
+                # 3e groupe -oir : avait → av → avoir (NOT avir)
+                # Try -oir before -ir for radicals ending in v
+                if radical.endswith("v"):
+                    return radical + "oir"
                 # 3e groupe : dormait → dorm → dormir
-                if radical.endswith(("m", "t", "v", "n")) and not radical.endswith("e"):
+                if radical.endswith(("m", "t", "n")) and not radical.endswith("e"):
                     return radical + "ir"
                 # 1er groupe : mangeait → mange → manger
                 # radical se termine deja par 'e' (mange) → juste ajouter 'r'
@@ -1231,6 +1351,28 @@ def _corriger_par_suffixe(
             for cand in (_rad_acc_ez2 + "e", _rad_acc_ez2 + "t"):
                 if lexique is not None and lexique.existe(cand):
                     return cand
+        # Lexique fallback: find lemme → P3s indicatif present
+        # Handles irregular verbs: pouvez→peut, devez→doit
+        if lexique is not None and hasattr(lexique, "formes_de"):
+            _ez_infos = lexique.info(mot)
+            _ez_lemmes = set(
+                e.get("lemme", "")
+                for e in _ez_infos
+                if e.get("cgram") in ("VER", "AUX")
+            )
+            for _ez_lem in _ez_lemmes:
+                if not _ez_lem:
+                    continue
+                for _ez_f in lexique.formes_de(_ez_lem):
+                    if (
+                        str(_ez_f.get("personne")) == "3"
+                        and _ez_f.get("nombre") in ("singulier", "s")
+                        and _ez_f.get("temps") == "present"
+                        and _ez_f.get("mode") == "indicatif"
+                    ):
+                        _ez_cand = _ez_f.get("ortho", "")
+                        if _ez_cand and _ez_cand.lower() != low:
+                            return _ez_cand
 
     # Il/elle/on (P3s) : -ons (P1p) -> trouver forme P3s
     # "il contenons" -> "il contient"
@@ -1289,6 +1431,28 @@ def _corriger_par_suffixe(
             for cand in (_rad_accent2 + "e", _rad_accent2 + "t"):
                 if lexique is not None and lexique.existe(cand):
                     return cand
+        # Lexique fallback: find lemme → P3s indicatif present
+        # Handles irregular verbs: pouvons→peut, devons→doit
+        if lexique is not None and hasattr(lexique, "formes_de"):
+            _ons_infos = lexique.info(mot)
+            _ons_lemmes = set(
+                e.get("lemme", "")
+                for e in _ons_infos
+                if e.get("cgram") in ("VER", "AUX")
+            )
+            for _ons_lem in _ons_lemmes:
+                if not _ons_lem:
+                    continue
+                for _ons_f in lexique.formes_de(_ons_lem):
+                    if (
+                        str(_ons_f.get("personne")) == "3"
+                        and _ons_f.get("nombre") in ("singulier", "s")
+                        and _ons_f.get("temps") == "present"
+                        and _ons_f.get("mode") == "indicatif"
+                    ):
+                        _ons_cand = _ons_f.get("ortho", "")
+                        if _ons_cand and _ons_cand.lower() != low:
+                            return _ons_cand
 
     # Il/elle/on (P3s) : -iens/-iens (P1/P2) -> P3s -ient
     # "il deviens" -> "il devient"

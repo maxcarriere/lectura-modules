@@ -130,15 +130,11 @@ _COMPOSES_TRAIT: dict[str, str] = {
 # Paires de tokens a remplacer par un seul mot
 # (token1, token2) -> remplacement, avec guard optionnel sur le token suivant
 _SPECIAL_MERGES: list[tuple[tuple[str, str], str, frozenset[str] | None]] = [
-    # "d'" + "en" -> "dans" quand suivi d'un article/det
-    (("d'", "en"), "dans", frozenset({
-        "la", "le", "les", "l'", "l\u2019", "un", "une", "des",
-        "là", "l",  # variantes sans accent / sans apostrophe
-        "son", "sa", "ses", "mon", "ma", "mes", "ton", "ta", "tes",
-        "leur", "leurs", "notre", "votre", "nos", "vos",
-        "de", "ce", "cette", "ces",
-    })),
+    # d'en→dans est gere en dur dans _tenter_fusion (blacklist)
 ]
+
+# Expressions figees avec "d'en" (ne pas fusionner en "dans")
+_DEN_EXPRESSIONS = frozenset({"haut", "bas", "face", "dessous", "dessus"})
 
 
 def _tenter_fusion(tokens: list[str], lexique: Any) -> list[str]:
@@ -147,9 +143,35 @@ def _tenter_fusion(tokens: list[str], lexique: Any) -> list[str]:
     i = 0
     while i < len(tokens):
         if i + 1 < len(tokens):
-            # Fusions speciales (d'en -> dans quand suivi d'un article)
-            _merged = False
+            # d'en → dans : fusionner sauf si suivi d'un infinitif ou expression
             _pair = (tokens[i].lower(), tokens[i + 1].lower())
+            if _pair in (("d'", "en"), ("d\u2019", "en")):
+                _merge_den = False
+                if i + 2 < len(tokens):
+                    _nxt_den = tokens[i + 2].lower()
+                    if _nxt_den in _DEN_EXPRESSIONS:
+                        pass  # expression figee → garder "d'en"
+                    elif (
+                        _nxt_den.endswith(("er", "ir", "oir", "re"))
+                        and hasattr(lexique, "info")
+                    ):
+                        # Verbe infinitif → garder "d'en" (= de + en + VER)
+                        _den_infos = lexique.info(tokens[i + 2])
+                        _den_is_verb = any(
+                            (e.get("cgram") or "").startswith(("VER", "AUX"))
+                            for e in _den_infos
+                        )
+                        if not _den_is_verb:
+                            _merge_den = True
+                    else:
+                        _merge_den = True
+                if _merge_den:
+                    result.append("dans")
+                    i += 2
+                    continue
+
+            # Fusions speciales generiques
+            _merged = False
             for (_t1, _t2), _repl, _guard_next in _SPECIAL_MERGES:
                 if _pair == (_t1, _t2):
                     if _guard_next is None or (
