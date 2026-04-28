@@ -67,18 +67,31 @@ def generer_candidats(
     low = mot.lower()
     seen: set[str] = set()
     candidats: list[Candidat] = []
+    cfg = config or CorrecteurConfig()
 
     # --- Tier 1 : identite + homophones ---
     candidats.extend(_tier1_identite_homophones(low, lexique, seen))
 
-    # --- Tier 2 : edit distance (hors-lexique uniquement) ---
-    if not dans_lexique:
+    # --- Tier 2 : edit distance ---
+    # Actif pour les mots hors-lexique, et aussi pour les mots in-lexique
+    # dont la frequence est en dessous du seuil de suspicion.
+    suspicion_freq = (
+        dans_lexique
+        and cfg.seuil_freq_suspicion > 0.0
+        and hasattr(lexique, "frequence")
+        and lexique.frequence(low) < cfg.seuil_freq_suspicion
+    )
+    if not dans_lexique or suspicion_freq:
         if suggestions is not None:
             candidats.extend(
                 _tier2_from_suggestions(low, suggestions, lexique, seen),
             )
         else:
             candidats.extend(_tier2_edit_distance(low, lexique, g2p, seen))
+        # Toujours tenter le canal G2P en complement (les suggestions
+        # SymSpell ne couvrent pas forcement les candidats phonetiques)
+        if g2p is not None and suggestions is not None:
+            candidats.extend(_tier2_g2p(low, lexique, g2p, seen))
 
     # --- Tier 3 : variantes morphologiques (in-lexique) ---
     if dans_lexique:
@@ -313,6 +326,50 @@ def _tier2_edit_distance(
         d2_valides.sort(key=lambda x: -x.freq)
         candidats.extend(d2_valides)
 
+    return candidats
+
+
+def _tier2_g2p(
+    mot: str,
+    lexique: Any,
+    g2p: Any,
+    seen: set[str],
+) -> list[Candidat]:
+    """Tier 2 G2P : candidats phonetiques (phone exacte + d<=1)."""
+    candidats: list[Candidat] = []
+    if not hasattr(lexique, "homophones"):
+        return candidats
+    phone_mot = g2p.prononcer(mot) if hasattr(g2p, "prononcer") else None
+    if not phone_mot:
+        return candidats
+
+    from lectura_correcteur._phones import generer_phones_d1
+
+    phones_a_tester = [phone_mot] + generer_phones_d1(phone_mot)
+    phones_vus: set[str] = set()
+    for p in phones_a_tester:
+        if p in phones_vus:
+            continue
+        phones_vus.add(p)
+        for entry in lexique.homophones(p):
+            ortho = entry.get("ortho", "")
+            if not ortho:
+                continue
+            ortho_low = ortho.lower()
+            if ortho_low in seen:
+                continue
+            seen.add(ortho_low)
+            candidats.append(Candidat(
+                forme=ortho_low,
+                source="g2p",
+                freq=float(entry.get("freq") or 0),
+                edit_dist=_edit_distance(mot, ortho_low),
+                pos=entry.get("cgram", ""),
+                phone=entry.get("phone", ""),
+                lemme=entry.get("lemme", ""),
+                genre=entry.get("genre", ""),
+                nombre=entry.get("nombre", ""),
+            ))
     return candidats
 
 

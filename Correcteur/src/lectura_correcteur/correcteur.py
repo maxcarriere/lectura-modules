@@ -17,6 +17,7 @@ from typing import Any
 from lectura_correcteur._candidats import generer_candidats
 from lectura_correcteur._coherence import appliquer_coherence
 from lectura_correcteur._config import CorrecteurConfig
+from lectura_correcteur._phones import _RuleBasedG2P
 from lectura_correcteur._tagger_lexique import LexiqueTagger
 from lectura_correcteur._scoring import (
     extraire_contexte,
@@ -24,6 +25,7 @@ from lectura_correcteur._scoring import (
 )
 from lectura_correcteur._symspell import SymSpellIndex, _obtenir_formes
 from lectura_correcteur._types import (
+    Candidat,
     Correction,
     MotAnalyse,
     ResultatCorrection,
@@ -35,6 +37,24 @@ from lectura_correcteur.orthographe import VerificateurOrthographe
 from lectura_correcteur.orthographe._resegmentation import resegmenter
 from lectura_correcteur.orthographe._sms import expander_sms
 from lectura_correcteur.syntaxe import appliquer_syntaxe
+
+
+def _explication_ortho(top: Candidat, original: str) -> tuple[str, str]:
+    """Retourne (regle, explication) pour une correction orthographique."""
+    src = top.source
+    if src in ("ortho_d1", "ortho_d2"):
+        return "ortho.distance", f"Mot hors lexique, distance {src[-1]}"
+    if src == "ortho_suggestion":
+        return "ortho.distance", "Mot hors lexique, suggestion orthographique"
+    if src == "homophone":
+        return "ortho.homophone", f"Homophone : '{original}' -> '{top.forme}'"
+    if src == "g2p":
+        return "ortho.phonetique", "Correction phonetique (G2P)"
+    if src == "phone_proche":
+        return "ortho.phonetique", "Mot proche phonetiquement"
+    if src == "morpho":
+        return "ortho.morpho", "Variante morphologique"
+    return "ortho.autre", f"Correction orthographique ({src})"
 
 
 class Correcteur:
@@ -68,6 +88,14 @@ class Correcteur:
         self._tagger = tagger if tagger is not None else LexiqueTagger(self._lexique)
         self._tokeniseur = tokeniseur
         self._g2p = g2p
+        # Reutiliser le tagger comme G2P s'il a la capacite prononcer/g2p
+        if self._g2p is None and hasattr(self._tagger, "prononcer"):
+            self._g2p = self._tagger
+        elif self._g2p is None and hasattr(self._tagger, "g2p"):
+            self._g2p = self._tagger
+        # Fallback : estimateur phonetique par regles (zero dependance)
+        if self._g2p is None:
+            self._g2p = _RuleBasedG2P()
         # Garder un LexiqueTagger pour les regles de grammaire
         # (regles calibrees sur ses POS, ex: est→ADJ)
         self._lex_tagger = (
@@ -301,6 +329,7 @@ class Correcteur:
                     contexte, self._lexique,
                     dans_lexique=dans_lex,
                     config=self._config,
+                    g2p=self._g2p,
                 )
                 if scored:
                     top = scored[0]
@@ -317,6 +346,16 @@ class Correcteur:
                             analysis.type_correction = TypeCorrection.HORS_LEXIQUE
                         if top.pos:
                             analysis.pos = top.pos
+                        if top.source != "identite":
+                            _regle, _expl = _explication_ortho(top, analysis.original)
+                            all_corrections.append(Correction(
+                                index=j,
+                                original=analysis.original,
+                                corrige=top.forme,
+                                type_correction=analysis.type_correction,
+                                regle=_regle,
+                                explication=_expl,
+                            ))
 
                     # Populate suggestions_scored with top-5 candidates
                     analysis.suggestions_scored = [
@@ -404,6 +443,7 @@ class Correcteur:
                         analysis.pos, analysis.morpho,
                         contexte, self._lexique,
                         config=self._config,
+                        g2p=self._g2p,
                     )
                     if scored:
                         top = scored[0]
@@ -419,6 +459,16 @@ class Correcteur:
                                 analysis.type_correction = TypeCorrection.GRAMMAIRE
                             elif top.source != "identite":
                                 analysis.type_correction = TypeCorrection.HORS_LEXIQUE
+                            if top.source != "identite":
+                                _regle, _expl = _explication_ortho(top, analysis.original)
+                                all_corrections.append(Correction(
+                                    index=j,
+                                    original=analysis.original,
+                                    corrige=top.forme,
+                                    type_correction=analysis.type_correction,
+                                    regle=_regle,
+                                    explication=_expl,
+                                ))
         else:
             after_rules = decided_words
 

@@ -25,6 +25,7 @@ def verifier_ponctuation(tokens: list[str]) -> list[Correction]:
                     original=ancien,
                     corrige=tokens[i],
                     type_correction=TypeCorrection.SYNTAXE,
+                    regle="syntaxe.majuscule",
                     explication="Majuscule en debut de phrase",
                 ))
 

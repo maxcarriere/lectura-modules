@@ -116,6 +116,7 @@ def verifier_accords(
                             original=ancien,
                             corrige=result[i],
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.genre_det",
                             explication="'ce' -> 'cette' (NOM feminin)",
                         ))
 
@@ -146,6 +147,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.pronom",
                     explication="Restauration du pronom pluriel",
                 ))
                 curr = result[i]
@@ -193,6 +195,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=result[i],
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.genre_det",
                                 explication=f"DET masc→fem (NOM '{result[nom_idx]}' est feminin)",
                             ))
                             curr = result[i]
@@ -218,6 +221,7 @@ def verifier_accords(
                                         original=ancien,
                                         corrige=cand,
                                         type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="accord.genre_adj",
                                         explication=f"ADJ fem→masc (DET+NOM '{result[nom_idx]}' sont masculins)",
                                     ))
                                     break
@@ -304,6 +308,7 @@ def verifier_accords(
                                             original=ancien,
                                             corrige=cand,
                                             type_correction=TypeCorrection.GRAMMAIRE,
+                                            regle="accord.genre_adj",
                                             explication="Accord en genre ADJ antepose + NOM fem",
                                         ))
                                         curr = result[i]
@@ -369,6 +374,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=candidate,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.nombre_nom",
                                     explication=f"Accord pluriel apres '{prev_low}'",
                                 ))
                                 break
@@ -395,6 +401,7 @@ def verifier_accords(
                             original=ancien,
                             corrige=candidate,
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.nombre_nom",
                             explication=f"Accord pluriel (det+adj+nom) apres '{prev2_low}'",
                         ))
                         break
@@ -515,6 +522,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=cand,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_adj",
                                     explication="Accord en genre NOM fem + ADJ",
                                 ))
                                 # Update curr_low for subsequent rules
@@ -533,6 +541,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=fallback,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_adj",
                                     explication="Accord en genre NOM fem + ADJ (fallback)",
                                 ))
                                 curr = result[i]
@@ -591,6 +600,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=cand,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_adj",
                                     explication="Accord en genre NOM masc + ADJ",
                                 ))
                                 curr = result[i]
@@ -662,6 +672,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=candidate,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.nombre_adj",
                                     explication="Accord pluriel adj post-nominal",
                                 ))
                                 break
@@ -725,6 +736,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=candidate,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.nombre_adj",
                                     explication="Depluralization ADJ apres NOM singulier",
                                 ))
                                 curr = result[i]
@@ -782,6 +794,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=candidate,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.nombre_nom",
                                     explication="Depluralization NOM apres ADJ singulier",
                                 ))
                                 curr = result[i]
@@ -888,6 +901,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=candidate,
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.nombre_nom",
                                 explication=f"Depluralization apres DET singulier '{_det_word_1e}'",
                             ))
                             curr = result[i]
@@ -1031,6 +1045,7 @@ def verifier_accords(
                             original=ancien,
                             corrige=candidate,
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.sujet_verbe",
                             explication="Accord sujet pluriel -> verbe 3pl",
                         ))
                         break
@@ -1064,6 +1079,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=cand,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_attribut",
                                     explication="Accord attribut en genre (sujet fem)",
                                 ))
                                 curr = result[i]
@@ -1084,6 +1100,7 @@ def verifier_accords(
                                     original=ancien,
                                     corrige=cand,
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_attribut",
                                     explication="Accord attribut en genre (sujet masc)",
                                 ))
                                 curr = result[i]
@@ -1116,6 +1133,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=candidate,
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.nombre_attribut",
                                 explication="Accord attribut apres copule plurielle",
                             ))
                             break
@@ -1212,6 +1230,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=candidate,
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.nombre_attribut",
                                 explication="Depluralization attribut apres copule singuliere",
                             ))
                             curr = result[i]
@@ -1244,6 +1263,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=candidate,
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.nombre_adj",
                                 explication="Accord ADJ coordonne (pluriel)",
                             ))
                             curr = result[i]
@@ -1294,7 +1314,8 @@ def verifier_accords(
                                         original=ancien,
                                         corrige=cand,
                                         type_correction=TypeCorrection.GRAMMAIRE,
-                                        explication="Accord ADJ coordonne en genre (fem)",
+                                        regle="accord.genre_adj",
+                                    explication="Accord ADJ coordonne en genre (fem)",
                                     ))
                                     curr = result[i]
                                     curr_low = curr.lower()
@@ -1317,6 +1338,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=candidate,
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.genre_adj",
                                 explication=f"Accord en genre apres '{prev_low}'",
                             ))
                             break
@@ -1382,6 +1404,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=candidate,
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.nombre_nom",
                                 explication=f"Depluralization apres DET singulier '{prev_low}'",
                             ))
                             break
@@ -1426,6 +1449,7 @@ def verifier_accords(
                                 original=ancien,
                                 corrige=result[i],
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.genre_det",
                                 explication=f"'ces' -> '{_repl}' (NOM singulier)",
                             ))
 
@@ -1460,6 +1484,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.preposition",
                     explication="'pars' -> 'par' (preposition)",
                 ))
 
@@ -1484,6 +1509,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.preposition",
                     explication="'surs' -> 'sur' (preposition)",
                 ))
 
@@ -1511,6 +1537,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.nombre_nom",
                     explication="'étés' -> 'été' (PP invariable apres avoir)",
                 ))
 
@@ -1555,6 +1582,7 @@ def verifier_accords(
                             original=ancien,
                             corrige=result[i],
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.det_nom_ver",
                             explication=f"DET sing + VER -ent → NOM '{_nom_cand}'",
                         ))
                         break
@@ -1581,6 +1609,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.preposition",
                     explication="'pendants' -> 'pendant' (preposition)",
                 ))
 
@@ -1597,6 +1626,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.nombre_adj",
                     explication="'toutes' -> 'toute' (devant DET singulier)",
                 ))
 
@@ -1641,6 +1671,7 @@ def verifier_accords(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="accord.sujet_verbe",
                         explication="PRO P3s + NOM -s → VER P3s",
                     ))
 
@@ -1674,6 +1705,7 @@ def verifier_accords(
                         original=ancien,
                         corrige=_cand_18,
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="accord.expression",
                         explication=f"'en {ancien}' -> 'en {_cand_18}' (expression)",
                     ))
                     break
@@ -1690,6 +1722,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.expression",
                     explication="'en fin de comptes' -> 'en fin de compte' (expression)",
                 ))
 
@@ -1717,6 +1750,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.expression",
                     explication="'avoir lieus' -> 'avoir lieu' (expression)",
                 ))
 
@@ -1729,6 +1763,7 @@ def verifier_accords(
                 original=ancien,
                 corrige=result[i],
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="accord.expression",
                 explication="'sur glaces' -> 'sur glace' (expression)",
             ))
 
@@ -1753,6 +1788,7 @@ def verifier_accords(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="accord.expression",
                         explication="'faire parties' -> 'faire partie' (expression)",
                     ))
 
@@ -1778,6 +1814,7 @@ def verifier_accords(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.preposition",
                     explication="'contres' -> 'contre' (preposition)",
                 ))
 
@@ -1807,6 +1844,7 @@ def verifier_accords(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="accord.expression",
                         explication="'fautes de' -> 'faute de' (expression)",
                     ))
 

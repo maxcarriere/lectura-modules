@@ -23,3 +23,7 @@ class CorrecteurConfig:
     seuil_confiance_pos: float = 0.7
     max_suggestions: int = 5
     distance_suggestions: int = 2
+    seuil_freq_suspicion: float = 0.0  # freq en dessous de laquelle un mot
+    # present dans le lexique est quand meme soumis aux candidats d=1/d=2.
+    # 0.0 = desactive (comportement par defaut : seuls les OOV sont corriges).
+    # Ex: 1.0 = mots archaiques/rares aussi candidats a la correction.

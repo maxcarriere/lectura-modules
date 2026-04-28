@@ -39,10 +39,22 @@ def test_correction_dataclass():
         original="et",
         corrige="est",
         type_correction=TypeCorrection.GRAMMAIRE,
+        regle="homophone.et_est",
         explication="'et' -> 'est' (verbe attendu)",
     )
     assert c.index == 0
+    assert c.regle == "homophone.et_est"
     assert c.explication != ""
+
+
+def test_correction_regle_default():
+    c = Correction(
+        index=0,
+        original="test",
+        corrige="test",
+        type_correction=TypeCorrection.AUCUNE,
+    )
+    assert c.regle == ""
 
 
 def test_no_g2p_fields():

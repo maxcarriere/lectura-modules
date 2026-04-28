@@ -320,6 +320,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.relatif",
                         explication=f"'{curr_low}' -> '{_repl_r2b}' (P1p/P2p -> P3p en relative/negation)",
                     ))
                     continue
@@ -346,6 +347,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.sujet_pluriel",
                         explication="ils/elles + forme fausse -> 3pl",
                     ))
                     continue
@@ -494,6 +496,7 @@ def verifier_conjugaisons(
                             original=ancien,
                             corrige=candidate,
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="conjugaison.sujet_pluriel",
                             explication="ils/elles + verbe -> 3pl",
                         ))
                         break
@@ -549,6 +552,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.personne",
                         explication=f"Conjugaison P{personne}",
                     ))
                     continue
@@ -575,6 +579,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.sujet_pluriel",
                         explication="Sujet nominal pluriel + imp/fut -> 3pl",
                     ))
                     continue
@@ -610,6 +615,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.sujet_singulier",
                         explication="Sujet nominal singulier + imp/fut -> P3s",
                     ))
                     continue
@@ -724,6 +730,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.sujet_singulier",
                         explication="Sujet nominal singulier + verbe plur -> P3s",
                     ))
 
@@ -771,6 +778,7 @@ def verifier_conjugaisons(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="conjugaison.sujet_singulier",
                         explication="Sujet nominal singulier + P2s -> P3s",
                     ))
 
@@ -825,6 +833,7 @@ def verifier_conjugaisons(
                                     original=ancien,
                                     corrige=result[i],
                                     type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="conjugaison.relatif",
                                     explication="'qui' + mauvaise personne -> P3s",
                                 ))
 

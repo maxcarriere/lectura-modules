@@ -177,6 +177,11 @@ class G2PUnifieAdapter:
         g2p_list = result.get("g2p", [])
         return g2p_list[0] if g2p_list else ""
 
+    def prononcer(self, mot: str) -> str | None:
+        """Alias de g2p() pour satisfaire l'interface _candidats.py."""
+        r = self.g2p(mot)
+        return r if r else None
+
 
 def creer_adapter_g2p_unifie(
     model_dir: str | Path | None = None,

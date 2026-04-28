@@ -20,7 +20,7 @@ class TaggerProtocol(Protocol):
 class G2PProtocol(Protocol):
     """Protocol duck-typing pour un module G2P (grapheme-to-phoneme)."""
 
-    def g2p(self, word: str) -> str: ...
+    def prononcer(self, mot: str) -> str | None: ...
 
 
 class TokeniseurProtocol(Protocol):
@@ -80,6 +80,7 @@ class Correction:
     original: str
     corrige: str
     type_correction: TypeCorrection
+    regle: str = ""          # identifiant stable ("homophone.et_est", "ortho.distance", etc.)
     explication: str = ""
 
 

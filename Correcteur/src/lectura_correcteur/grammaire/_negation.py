@@ -85,6 +85,7 @@ def verifier_negation(
                 original=verbe,
                 corrige="n'" + verbe,
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="negation.elision",
                 explication="Negation incomplete -> elision n'",
             ))
         else:
@@ -95,6 +96,7 @@ def verifier_negation(
                 original="",
                 corrige="ne",
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="negation.insertion",
                 explication="Negation incomplete -> insertion de 'ne'",
             ))
 

@@ -55,6 +55,14 @@ def _est_variante_accent(original: str, candidat: str) -> bool:
     return original.translate(_DESACCENTUER) == candidat.translate(_DESACCENTUER)
 
 
+def _est_nom_propre_seul(mot: str, lexique) -> bool:
+    """True si toutes les entrees du lexique pour ce mot sont des noms propres."""
+    infos = lexique.info(mot)
+    if not infos:
+        return False
+    return all(e.get("cgram") == "NOM PROPRE" for e in infos)
+
+
 def _est_doublement_consonne(original: str, candidat: str) -> bool:
     """Verifie si le candidat ne differe que par un doublement/dedoublement de consonne."""
     if abs(len(original) - len(candidat)) != 1:
@@ -299,6 +307,14 @@ def suggerer(
                 valides_d1.append((c, _freq(c)))
                 seen.add(c)
 
+    # Filtrer les noms propres quand le mot source est en minuscule :
+    # un nom propre (ex: "Pomès") ne devrait pas corriger un mot commun.
+    if low == mot.lower() and hasattr(lexique, "info"):
+        valides_d1 = [
+            (c, f) for c, f in valides_d1
+            if not _est_nom_propre_seul(c, lexique)
+        ]
+
     # Separer accent-only vs other au sein de d=1
     accent_d1 = [(c, f) for c, f in valides_d1 if _est_variante_accent(low, c)]
     other_d1 = [(c, f) for c, f in valides_d1 if not _est_variante_accent(low, c)]
@@ -307,6 +323,11 @@ def suggerer(
 
     # --- Phase 2 : balayage d'accents multi-positions ---
     accent_sweep = _variantes_accents(low, lexique)
+    if low == mot.lower() and hasattr(lexique, "info"):
+        accent_sweep = [
+            (c, f) for c, f in accent_sweep
+            if not _est_nom_propre_seul(c, lexique)
+        ]
     for c, f in accent_sweep:
         seen.add(c)
 

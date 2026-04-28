@@ -86,6 +86,7 @@ def appliquer_coherence(
                 original=orig,
                 corrige=remplacement[0],
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="coherence.pos",
                 explication="COHERENCE_POS",
             ))
 

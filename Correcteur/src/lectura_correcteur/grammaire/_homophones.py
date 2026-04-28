@@ -76,6 +76,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="est",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'et' -> 'est' (n'est pas)",
                     ))
                     continue
@@ -97,6 +98,7 @@ def verifier_homophones(
                                 original=ancien,
                                 corrige="est",
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="homophone.et_est",
                                 explication="'et' -> 'est' (sujet + _ + adjectif)",
                             ))
                             continue
@@ -166,6 +168,7 @@ def verifier_homophones(
                                 original=ancien,
                                 corrige="est",
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="homophone.et_est",
                                 explication="'et' -> 'est' (NOM singulier + _ + adjectif)",
                             ))
                             continue
@@ -414,6 +417,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="est",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.et_est",
                             explication="'et' -> 'est' (sujet + _ + participe)",
                         ))
                         continue
@@ -508,6 +512,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="est",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'et' -> 'est' (sujet + _ + article)",
                     ))
                     continue
@@ -536,6 +541,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="est",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'et' -> 'est' (sujet + _ + attribut)",
                     ))
                     continue
@@ -584,6 +590,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="et",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.et_est",
                     explication="'est' -> 'et' (entre...et)",
                 ))
                 continue
@@ -855,6 +862,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="et",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'est' -> 'et' (coordination NOM/ADJ + DET/PRO)",
                     ))
                     continue
@@ -883,6 +891,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="et",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'est' -> 'et' (pluriel + ADJ = coordination)",
                     ))
                     continue
@@ -939,6 +948,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="et",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.et_est",
                             explication="'est' -> 'et' (noms propres coordination)",
                         ))
                         continue
@@ -990,6 +1000,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="et",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'est' -> 'et' (VER + VER coordination)",
                     ))
                     continue
@@ -1061,6 +1072,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="et",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.et_est",
                             explication="'est' -> 'et' (parallel PRE structure)",
                         ))
                         continue
@@ -1107,6 +1119,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="et",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.et_est",
                         explication="'est' -> 'et' (NOM in PP + VER coordination)",
                     ))
                     continue
@@ -1120,6 +1133,7 @@ def verifier_homophones(
                 original=ancien,
                 corrige="et",
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="homophone.et_est",
                 explication="'est' -> 'et' (conjonction attendue)",
             ))
             continue
@@ -1139,6 +1153,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="sont",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.son_sont",
                     explication="'son' -> 'sont' (negation ne...pas)",
                 ))
                 continue
@@ -1287,6 +1302,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="sont",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.son_sont",
                     explication="'son' -> 'sont' (sujet pluriel, copule)",
                 ))
                 # Pluraliser aussi le mot suivant s'il est ADJ dans le lexique
@@ -1312,6 +1328,7 @@ def verifier_homophones(
                                         original=_anc,
                                         corrige=_cand,
                                         type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="homophone.son_sont",
                                         explication="Accord pluriel apres 'sont'",
                                     ))
                                     break
@@ -1390,6 +1407,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="sont",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.son_sont",
                             explication="'son' -> 'sont' (sujet pluriel + participe)",
                         ))
                         continue
@@ -1403,6 +1421,7 @@ def verifier_homophones(
                 original=ancien,
                 corrige="son",
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="homophone.son_sont",
                 explication="'sont' -> 'son' (possessif)",
             ))
             continue
@@ -1421,6 +1440,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="son",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.son_sont",
                         explication="'sont' -> 'son' (PRE + possessif + NOM)",
                     ))
                     continue
@@ -1458,6 +1478,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="son",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.son_sont",
                             explication="'sont' -> 'son' (possessif + NOM/ADJ)",
                         ))
                         continue
@@ -1508,6 +1529,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="à",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.a_a",
                         explication="'a' -> 'à' (preposition)",
                     ))
                     continue
@@ -1534,6 +1556,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="a",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.a_a",
                             explication="'à' -> 'a' (auxiliaire avoir apres sujet)",
                         ))
                         break
@@ -1554,6 +1577,7 @@ def verifier_homophones(
                 original=ancien,
                 corrige="a",
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="homophone.a_a",
                 explication="'à' -> 'a' (auxiliaire avoir)",
             ))
             continue
@@ -1571,6 +1595,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="où",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.ou_ou",
                     explication="'ou' -> 'où' (pronom relatif)",
                 ))
                 continue
@@ -1586,6 +1611,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="où",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.ou_ou",
                     explication="'ou' -> 'où' (adverbe interrogatif)",
                 ))
                 continue
@@ -1624,6 +1650,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="où",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.ou_ou",
                             explication="'ou' -> 'où' (interrogatif indirect)",
                         ))
                         continue
@@ -1700,6 +1727,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="ou",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ou_ou",
                         explication="'où' -> 'ou' (coordination)",
                     ))
                     continue
@@ -1731,6 +1759,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="où",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ou_ou",
                         explication="'ou' -> 'où' (relatif apres NOM)",
                     ))
                     continue
@@ -1764,6 +1793,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="où",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ou_ou",
                         explication="'ou' -> 'où' (relatif + verbe conjugue)",
                     ))
                     continue
@@ -1803,6 +1833,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige=_elle,
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.elle_elles",
                         explication="'elles' -> 'elle' (verbe singulier)",
                     ))
                     continue
@@ -1881,6 +1912,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="ont",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.on_ont",
                         explication="'on' -> 'ont' (auxiliaire 3pl)",
                     ))
                     continue
@@ -1894,6 +1926,7 @@ def verifier_homophones(
                 original=ancien,
                 corrige="on",
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="homophone.on_ont",
                 explication="'ont' -> 'on' (pronom indefini)",
             ))
             continue
@@ -1912,6 +1945,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="on",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.on_ont",
                         explication="'ont' -> 'on' (negation apres = pronom)",
                     ))
                     continue
@@ -1946,6 +1980,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="on",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.on_ont",
                         explication="'ont' -> 'on' (suivi verbe non-PP)",
                     ))
                     continue
@@ -1998,6 +2033,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="peut",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.peu_peut",
                         explication="'peu' -> 'peut' (pouvoir + infinitif)",
                     ))
                     continue
@@ -2024,6 +2060,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="se",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ce_se",
                         explication="'ce' -> 'se' (pronom reflexif devant verbe)",
                     ))
                     continue
@@ -2061,6 +2098,7 @@ def verifier_homophones(
                                 original=ancien,
                                 corrige="se",
                                 type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="homophone.ce_se",
                                 explication="'ce' -> 'se' (NOM feminin = verbe)",
                             ))
                             continue
@@ -2094,6 +2132,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="ce",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.ce_se",
                             explication="'se' -> 'ce' (demonstratif devant copule)",
                         ))
                         continue
@@ -2151,6 +2190,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="ce",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ce_se",
                         explication="'se' -> 'ce' (determinant devant nom/adj)",
                     ))
                     continue
@@ -2168,6 +2208,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="ce",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ce_se",
                         explication="'se' -> 'ce' (demonstratif relatif)",
                     ))
                     continue
@@ -2185,6 +2226,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="là",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.la_la",
                     explication="'la' -> 'là' (adverbe de lieu)",
                 ))
                 continue
@@ -2198,6 +2240,7 @@ def verifier_homophones(
                 original=ancien,
                 corrige="la",
                 type_correction=TypeCorrection.GRAMMAIRE,
+                regle="homophone.la_la",
                 explication="'là' -> 'la' (article)",
             ))
             continue
@@ -2222,6 +2265,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="leur",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.leur_leurs",
                         explication="'leurre(s)' -> 'leur' (possessif/pronom)",
                     ))
                     continue
@@ -2240,6 +2284,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="leurs",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.leur_leurs",
                             explication="'leur' -> 'leurs' (NOM pluriel)",
                         ))
                         continue
@@ -2258,6 +2303,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="leur",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.leur_leurs",
                             explication="'leurs' -> 'leur' (NOM singulier)",
                         ))
                         continue
@@ -2275,6 +2321,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="leur",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.leur_leurs",
                         explication="'leurs' -> 'leur' (pronom COI devant verbe)",
                     ))
                     continue
@@ -2298,6 +2345,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="leur",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.leur_leurs",
                             explication="'leurs' -> 'leur' (ADJ + NOM singulier)",
                         ))
                         continue
@@ -2324,6 +2372,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="ça",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.ca_sa",
                             explication="'sa' -> 'ça' (suivi d'un verbe)",
                         ))
                         continue
@@ -2341,6 +2390,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige="sa",
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.ca_sa",
                         explication="'ça' -> 'sa' (suivi d'un nom/adj)",
                     ))
                     continue
@@ -2404,6 +2454,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige=_peux_target,
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.peux_peut",
                     explication=_peux_expl,
                 ))
                 continue
@@ -2449,6 +2500,7 @@ def verifier_homophones(
                     original=ancien,
                     corrige="mais",
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.mes_mais",
                     explication="'mes' -> 'mais' (conjonction adversative)",
                 ))
                 continue
@@ -2493,6 +2545,7 @@ def verifier_homophones(
                         original=ancien,
                         corrige=candidate,
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="homophone.pp_infinitif",
                         explication="PP -> infinitif apres aller/PRE/faire",
                     ))
                     continue
@@ -2526,6 +2579,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="liste",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.det_nom_ver",
                             explication="'listent' -> 'liste' (nom)",
                         ))
                         continue
@@ -2561,6 +2615,7 @@ def verifier_homophones(
                             original=ancien,
                             corrige="entre",
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.det_nom_ver",
                             explication="'entrent' -> 'entre' (preposition)",
                         ))
                         continue

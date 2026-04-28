@@ -149,6 +149,7 @@ def verifier_participes_passes(
                             original=ancien,
                             corrige=result[i],
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="participe.infinitif_vers_pp",
                             explication="Infinitif apres auxiliaire -> participe passe",
                         ))
                         break
@@ -172,6 +173,7 @@ def verifier_participes_passes(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="participe.infinitif_vers_pp",
                         explication="Present apres auxiliaire -> participe passe",
                     ))
                     continue
@@ -194,6 +196,7 @@ def verifier_participes_passes(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="participe.pp_vers_infinitif",
                     explication="PP apres modal -> infinitif",
                 ))
                 continue
@@ -210,6 +213,7 @@ def verifier_participes_passes(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="participe.pp_vers_infinitif",
                     explication="PP -> infinitif apres aller",
                 ))
                 continue
@@ -226,6 +230,7 @@ def verifier_participes_passes(
                     original=ancien,
                     corrige=result[i],
                     type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="participe.pp_vers_infinitif",
                     explication="PP -> infinitif apres preposition",
                 ))
                 continue
@@ -290,6 +295,7 @@ def verifier_participes_passes(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="participe.base_avoir",
                         explication="PP accorde -> base apres avoir",
                     ))
                     continue
@@ -619,6 +625,7 @@ def verifier_participes_passes(
                             original=ancien,
                             corrige=result[i],
                             type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="participe.infinitif_vers_pp",
                             explication="Infinitif -> PP (apposition/nom)",
                         ))
                     if result[i] != curr:
@@ -851,6 +858,7 @@ def verifier_pp_accord_etre(
                         original=ancien,
                         corrige=result[i],
                         type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="participe.accord_etre",
                         explication=f"Accord PP avec sujet ({genre} {nombre}) apres etre",
                     ))
                 break

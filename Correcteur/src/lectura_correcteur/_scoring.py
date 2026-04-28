@@ -232,7 +232,7 @@ def _s_morpho(candidat: Candidat, contexte: dict[str, Any]) -> float:
 
 
 def _s_phone(candidat: Candidat, phone_original: str) -> float:
-    """Proximite phonetique : 1.0 identique, 0.5 d_phone=1, 0.0 sinon."""
+    """Proximite phonetique : 1.0 identique, decroissance progressive."""
     if not phone_original or not candidat.phone:
         return 0.5  # pas d'info -> neutre
     if candidat.phone == phone_original:
@@ -241,6 +241,8 @@ def _s_phone(candidat: Candidat, phone_original: str) -> float:
     d = _phone_distance(phone_original, candidat.phone)
     if d <= 1:
         return 0.5
+    if d <= 2:
+        return 0.25
     return 0.0
 
 
@@ -304,6 +306,7 @@ def scorer_candidats(
     *,
     dans_lexique: bool = True,
     config: CorrecteurConfig | None = None,
+    g2p: Any | None = None,
 ) -> list[Candidat]:
     """Score les candidats et les trie par score decroissant.
 
@@ -316,6 +319,7 @@ def scorer_candidats(
         lexique: Objet lexique.
         dans_lexique: False pour les mots OOV (pas de bonus identite).
         config: Configuration du correcteur (pour activer_azerty).
+        g2p: Objet G2P optionnel (pour estimer phone des OOV).
 
     Returns:
         Liste de Candidat tries par score decroissant.
@@ -327,6 +331,12 @@ def scorer_candidats(
     phone_original = ""
     if hasattr(lexique, "phone_de"):
         phone_original = lexique.phone_de(mot_original) or ""
+    if not phone_original and g2p is not None:
+        phone_original = (
+            g2p.prononcer(mot_original)
+            if hasattr(g2p, "prononcer")
+            else ""
+        ) or ""
 
     # Apres "avoir", le CRF POS est souvent faux (ex: "visite" tague NOM
     # alors que c'est VER/PP). On neutralise S_pos pour ne pas penaliser
@@ -338,10 +348,17 @@ def scorer_candidats(
 
     azerty_actif = config is not None and config.activer_azerty
 
+    # Pour les OOV, la frequence est un signal plus fort (le mot original
+    # n'existe pas, donc un candidat frequent est probablement le bon).
+    w_freq = W_FREQ if dans_lexique else 0.15
+
     for c in candidats:
         s_id = _s_identite(c, contexte, lexique) if dans_lexique else 0.0
         s_fr = _s_freq(c)
         s_ed = _s_edit(c)
+        # OOV identity: "being close to a non-existent word" has no value.
+        if not dans_lexique and c.source == "identite":
+            s_ed = 0.0
         s_po = 0.5 if neutraliser_pos else _s_pos(c, pos_crf)
         s_mo = _s_morpho(c, contexte)
         s_ph = _s_phone(c, phone_original)
@@ -350,7 +367,7 @@ def scorer_candidats(
 
         c.score = (
             W_IDENTITE * s_id
-            + W_FREQ * s_fr
+            + w_freq * s_fr
             + W_EDIT * s_ed
             + W_POS * s_po
             + W_MORPHO * s_mo

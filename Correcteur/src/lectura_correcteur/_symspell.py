@@ -13,7 +13,7 @@ class SymSpellIndex:
     """Index de deletion pre-calcule pour suggestions rapides.
 
     A la construction, genere toutes les delete-1 de chaque forme du lexique
-    et les stocke dans un dict inverse {deletion: [formes_originales]}.
+    et les stocke dans un dict inverse {deletion: {formes_originales}}.
 
     A la requete, genere delete-1 et delete-2 du mot d'entree et cherche
     les correspondances dans l'index.
@@ -28,17 +28,15 @@ class SymSpellIndex:
             formes: Ensemble de toutes les formes du lexique (minuscules).
         """
         self._formes = formes
-        self._index: dict[str, list[str]] = {}
+        self._index: dict[str, set[str]] = {}
         for mot in formes:
             # Indexer le mot lui-meme (pour trouver les insertions d=1)
-            self._index.setdefault(mot, [])
-            if mot not in self._index[mot]:
-                self._index[mot].append(mot)
+            self._index.setdefault(mot, set()).add(mot)
             # Indexer ses deletions d=1
             for d in _deletions(mot):
-                lst = self._index.setdefault(d, [])
-                if mot not in lst:
-                    lst.append(mot)
+                self._index.setdefault(d, set()).add(mot)
+
+    _EMPTY: frozenset[str] = frozenset()
 
     def suggestions(self, mot: str, max_n: int = 500) -> list[str]:
         """Genere des candidats pour un mot inconnu.
@@ -59,8 +57,9 @@ class SymSpellIndex:
         low = mot.lower()
         seen: set[str] = set()
         result: list[str] = []
+        _empty = self._EMPTY
 
-        def _add(candidates: list[str]) -> None:
+        def _add(candidates) -> None:
             for c in candidates:
                 if c not in seen and c != low:
                     seen.add(c)
@@ -69,12 +68,12 @@ class SymSpellIndex:
                         return
 
         # d=0 : le mot lui-meme dans l'index (insertions)
-        _add(self._index.get(low, []))
+        _add(self._index.get(low, _empty))
 
         # d=1 : deletions du mot d'entree
         del1 = _deletions(low)
         for d in del1:
-            _add(self._index.get(d, []))
+            _add(self._index.get(d, _empty))
             if len(result) >= max_n:
                 break
 
@@ -82,7 +81,7 @@ class SymSpellIndex:
         if len(result) < max_n:
             for d in del1:
                 for d2 in _deletions(d):
-                    _add(self._index.get(d2, []))
+                    _add(self._index.get(d2, _empty))
                     if len(result) >= max_n:
                         break
                 if len(result) >= max_n:
