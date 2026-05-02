@@ -76,8 +76,17 @@ class OnnxInferenceEngineV2:
     ):
         import onnxruntime as ort
 
-        logger.info("Loading G2P V2 ONNX model from %s", onnx_path)
-        self.session = ort.InferenceSession(str(onnx_path))
+        onnx_path = Path(onnx_path)
+        enc_path = onnx_path.with_suffix(onnx_path.suffix + ".enc")
+
+        if enc_path.exists():
+            logger.info("Loading G2P V2 ONNX model from %s (encrypted)", enc_path)
+            from lectura_nlp._crypto import load_encrypted_model
+            model_bytes = load_encrypted_model(enc_path)
+            self.session = ort.InferenceSession(model_bytes)
+        else:
+            logger.info("Loading G2P V2 ONNX model from %s", onnx_path)
+            self.session = ort.InferenceSession(str(onnx_path))
 
         with open(vocab_path, encoding="utf-8") as f:
             data = json.load(f)

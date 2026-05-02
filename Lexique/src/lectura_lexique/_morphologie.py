@@ -32,6 +32,10 @@ def _personne_nombre_from_entry(entry: dict[str, Any]) -> tuple[str, str]:
             if c in "sp":
                 nombre = c
 
+    # Normaliser nombre long ("singulier"→"s", "pluriel"→"p")
+    if len(nombre) > 1:
+        nombre = nombre[0]
+
     return personne, nombre
 
 

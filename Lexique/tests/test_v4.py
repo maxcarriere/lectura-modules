@@ -35,7 +35,9 @@ def db_v4_path():
             freq_lm10 REAL,
             freq_frwac REAL,
             freq_composite REAL,
-            source TEXT
+            source TEXT,
+            orthocode TEXT DEFAULT '',
+            consonne_latente TEXT DEFAULT ''
         );
         CREATE TABLE lemmes (
             id INTEGER PRIMARY KEY,
@@ -59,6 +61,7 @@ def db_v4_path():
             id INTEGER PRIMARY KEY,
             lemme_id INTEGER,
             sens_num INTEGER,
+            label TEXT,
             definition TEXT,
             registre TEXT,
             theme TEXT,
@@ -67,6 +70,13 @@ def db_v4_path():
             qid TEXT,
             source TEXT
         );
+        CREATE TABLE concept_proprietes (
+            concept_id INTEGER NOT NULL,
+            cle TEXT NOT NULL,
+            valeur TEXT NOT NULL,
+            PRIMARY KEY (concept_id, cle)
+        );
+        CREATE INDEX idx_concept_proprietes_cle ON concept_proprietes(cle);
         CREATE TABLE categories (
             id INTEGER PRIMARY KEY,
             label TEXT NOT NULL UNIQUE,
@@ -113,7 +123,8 @@ def db_v4_path():
             concept_id INTEGER,
             lemme_id INTEGER,
             role TEXT,
-            position INTEGER
+            position INTEGER,
+            priorite INTEGER NOT NULL DEFAULT 1
         );
 
         CREATE INDEX idx_formes_ortho ON formes(ortho COLLATE NOCASE);
@@ -141,6 +152,10 @@ def db_v4_path():
             (10, "jacques chirac", "NOM PROPRE", None, "personne", None, None, 2.0, None, None, None, None),
             (11, "jacques", "NOM PROPRE", None, "prénom", None, None, 1.0, None, None, None, None),
             (12, "chirac", "NOM PROPRE", None, "patronyme", None, None, 0.5, None, None, None, None),
+            # Locution : pomme de terre
+            (13, "pomme", "NOM", "f", None, None, None, 10.0, 5.0, 4.0, 8.0, 4.0),
+            (14, "terre", "NOM", "f", None, None, None, 30.0, 20.0, 15.0, 25.0, 3.0),
+            (15, "pomme de terre", "NOM", "f", None, None, None, 3.0, 1.0, 1.0, 2.0, 4.0),
         ],
     )
 
@@ -166,6 +181,9 @@ def db_v4_path():
             (15, "jacques chirac", 10, "Np", None, None, None, None, 2.0, None, None, None, "NP"),
             (16, "jacques", 11, "Np", None, None, None, None, 1.0, None, None, None, "NP"),
             (17, "chirac", 12, "Np", None, None, None, None, 0.5, None, None, None, "NP"),
+            (18, "pomme", 13, "Ncfs", "pɔm", "mɔp", 1, "pɔm", 10.0, 5.0, 4.0, 8.0, "GLAFF"),
+            (19, "terre", 14, "Ncfs", "tɛʁ", "ʁɛt", 1, "tɛʁ", 30.0, 20.0, 15.0, 25.0, "GLAFF"),
+            (20, "pomme de terre", 15, "Ncfs", "pɔm.də.tɛʁ", "ʁɛt.əd.mɔp", 3, "pɔm.də.tɛʁ", 3.0, 1.0, 1.0, 2.0, "GLAFF"),
         ],
     )
 
@@ -185,18 +203,45 @@ def db_v4_path():
                 f"UPDATE {table} SET freq_composite = ? WHERE id = ?", updates
             )
 
-    # Concepts
+    # Concepts (with label)
     conn.executemany(
-        "INSERT INTO concepts (id, lemme_id, sens_num, definition, registre, theme, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO concepts (id, lemme_id, sens_num, label, definition, registre, theme, source) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            (1, 1, 1, "Petit felin domestique.", None, "zoologie", "wiktionnaire"),
-            (2, 1, 2, "Jeu de poursuite entre enfants.", "familier", None, "wiktionnaire"),
-            (3, 2, 1, "Macher et avaler un aliment.", None, "cuisine", "wiktionnaire"),
-            (4, 3, 1, "De taille elevee.", None, None, "wiktionnaire"),
-            (5, 4, 1, "Capitale de la France.", None, "géographie", "wiktionnaire"),
-            (6, 4, 2, "Prenom masculin d'origine grecque.", None, None, "wiktionnaire"),
-            (7, 5, 1, "De faible taille.", None, None, "wiktionnaire"),
-            (8, 10, 1, "Président de la République française (1995-2007).", None, "politique", "wiktionnaire"),
+            (1, 1, 1, "chat", "Petit felin domestique.", None, "zoologie", "wiktionnaire"),
+            (2, 1, 2, "chat", "Jeu de poursuite entre enfants.", "familier", None, "wiktionnaire"),
+            (3, 2, 1, "manger", "Macher et avaler un aliment.", None, "cuisine", "wiktionnaire"),
+            (4, 3, 1, "grand", "De taille elevee.", None, None, "wiktionnaire"),
+            (5, 4, 1, "paris", "Capitale de la France.", None, "géographie", "wiktionnaire"),
+            (6, 4, 2, "paris", "Prenom masculin d'origine grecque.", None, None, "wiktionnaire"),
+            (7, 5, 1, "petit", "De faible taille.", None, None, "wiktionnaire"),
+            (8, 10, 1, "jacques chirac", "Président de la République française (1995-2007).", None, "politique", "wiktionnaire"),
+            # pomme : fruit
+            (9, 13, 1, "pomme", "Fruit du pommier.", None, "botanique", "wiktionnaire"),
+            # terre : sol
+            (10, 14, 1, "terre", "Sol sur lequel on marche.", None, "géologie", "wiktionnaire"),
+            # pomme de terre : locution avec son propre label
+            (11, 15, 1, "pomme de terre", "Tubercule comestible de la plante Solanum tuberosum.", None, "alimentation", "wiktionnaire"),
+        ],
+    )
+
+    # Concept properties (enrichment via concept_proprietes)
+    conn.executemany(
+        "INSERT INTO concept_proprietes (concept_id, cle, valeur) VALUES (?, ?, ?)",
+        [
+            # paris (concept 5)
+            (5, "wikipedia_url", "https://fr.wikipedia.org/wiki/Paris"),
+            (5, "image", "Paris_-_Eiffelturm.jpg"),
+            (5, "coordonnees", "48.8566,2.3522"),
+            (5, "population", "2161000"),
+            (5, "pays", "France"),
+            (5, "gentile", "parisien"),
+            # jacques chirac (concept 8)
+            (8, "wikipedia_url", "https://fr.wikipedia.org/wiki/Jacques_Chirac"),
+            (8, "image", "Jacques_Chirac.jpg"),
+            (8, "date_naissance", "1932-11-29"),
+            (8, "date_deces", "2019-09-26"),
+            (8, "nationalite", "France"),
         ],
     )
 
@@ -243,12 +288,15 @@ def db_v4_path():
     )
 
     # Composants NP multi-mots
-    # "jacques chirac" (concept 8) -> composants: jacques (lemme 11), chirac (lemme 12)
+    # "jacques chirac" (concept 8) -> composants: jacques (lemme 11, prenom=3), chirac (lemme 12, nom=2)
+    # "pomme de terre" (concept 11) -> composants: pomme (lemme 13, prio=2), terre (lemme 14, prio=3)
     conn.executemany(
-        "INSERT INTO concept_composants (concept_id, lemme_id, role, position) VALUES (?, ?, ?, ?)",
+        "INSERT INTO concept_composants (concept_id, lemme_id, role, position, priorite) VALUES (?, ?, ?, ?, ?)",
         [
-            (8, 11, "composant", 0),  # jacques
-            (8, 12, "composant", 1),  # chirac
+            (8, 11, "composant", 0, 3),   # jacques = prenom → prio 3
+            (8, 12, "composant", 1, 2),   # chirac = nom → prio 2
+            (11, 13, "composant", 0, 2),  # pomme → prio 2 (mot principal)
+            (11, 14, "composant", 1, 3),  # terre → prio 3 (secondaire)
         ],
     )
 
@@ -740,6 +788,196 @@ def test_categories_de_sans_ancetres(lexique_v4):
     cats = lexique_v4.categories_de(1, inclure_ancetres=False)
     assert "animal" in cats
     assert "être vivant" not in cats
+
+
+# --- Concept label ---
+
+def test_concept_label(lexique_v4):
+    """concepts_de() retourne le label du concept."""
+    concepts = lexique_v4.concepts_de("chat", "NOM")
+    assert len(concepts) >= 2
+    assert concepts[0]["label"] == "chat"
+
+
+def test_concept_label_multi_mot(lexique_v4):
+    """Un concept multi-mot a un label distinct du lemme parent."""
+    concepts = lexique_v4.concepts_de("pomme de terre", "NOM")
+    assert len(concepts) == 1
+    assert concepts[0]["label"] == "pomme de terre"
+
+
+# --- concepts_associes() ---
+
+def test_concepts_associes_priorite_2(lexique_v4):
+    """concepts_associes(priorite=2) retourne les concepts ou le lemme est mot principal."""
+    results = lexique_v4.concepts_associes("pomme", priorite=2)
+    assert len(results) >= 1
+    labels = [r.get("label", "") for r in results]
+    assert "pomme de terre" in labels
+    assert all(r["_priorite"] == 2 for r in results)
+
+
+def test_concepts_associes_priorite_3(lexique_v4):
+    """concepts_associes(priorite=3) retourne les concepts ou le lemme est secondaire."""
+    results = lexique_v4.concepts_associes("terre", priorite=3)
+    assert len(results) >= 1
+    labels = [r.get("label", "") for r in results]
+    assert "pomme de terre" in labels
+    assert all(r["_priorite"] == 3 for r in results)
+
+
+def test_concepts_associes_all(lexique_v4):
+    """concepts_associes() sans filtre retourne tous les niveaux."""
+    results = lexique_v4.concepts_associes("chirac")
+    assert len(results) >= 1
+    assert any("chirac" in (r.get("label") or "").lower() for r in results)
+
+
+def test_concepts_associes_inexistant(lexique_v4):
+    """concepts_associes() retourne [] pour un lemme sans composants."""
+    results = lexique_v4.concepts_associes("xyztotoinexistant")
+    assert results == []
+
+
+# --- rechercher_concepts par label ---
+
+def test_rechercher_concepts_par_label(lexique_v4):
+    """rechercher_concepts() trouve un concept par son label multi-mots."""
+    results = lexique_v4.rechercher_concepts("pomme de terre")
+    found = [r for r in results if r.get("label") == "pomme de terre"]
+    assert len(found) >= 1
+    assert "tubercule" in found[0]["definition"].lower()
+
+
+# --- definitions() inclut label ---
+
+def test_definitions_inclut_label(lexique_v4):
+    """definitions() retourne le label du concept."""
+    defs = lexique_v4.definitions("pomme de terre", "NOM")
+    assert len(defs) >= 1
+    assert defs[0]["label"] == "pomme de terre"
+
+
+# --- Locution pomme de terre ---
+
+def test_locution_pomme_de_terre(lexique_v4):
+    """La locution 'pomme de terre' existe comme lemme + concept + composants."""
+    # Existe comme lemme
+    assert lexique_v4.existe("pomme de terre")
+    # A un concept
+    concepts = lexique_v4.concepts_de("pomme de terre", "NOM")
+    assert len(concepts) >= 1
+    assert "tubercule" in concepts[0]["definition"].lower()
+    # Est trouvable via composants depuis "pomme"
+    assoc = lexique_v4.concepts_associes("pomme")
+    labels = [r.get("label", "") for r in assoc]
+    assert "pomme de terre" in labels
+
+
+# --- Composants NP avec priorite ---
+
+def test_composants_np_priorite(db_v4_path):
+    """Les composants NP ont les bonnes priorites."""
+    conn = sqlite3.connect(str(db_v4_path))
+    cur = conn.execute(
+        "SELECT l.lemme, cc.priorite "
+        "FROM concept_composants cc "
+        "JOIN lemmes l ON cc.lemme_id = l.id "
+        "WHERE cc.concept_id = 8 "
+        "ORDER BY cc.position"
+    )
+    composants = [(row[0], row[1]) for row in cur]
+    conn.close()
+    assert len(composants) == 2
+    assert composants[0] == ("jacques", 3)   # prenom → prio 3
+    assert composants[1] == ("chirac", 2)    # nom → prio 2
+
+
+# --- concept_detail() ---
+
+def test_concept_detail(lexique_v4):
+    """concept_detail() retourne la fiche complete d'un concept."""
+    detail = lexique_v4.concept_detail(1)
+    assert detail is not None
+    assert detail["label"] == "chat"
+    assert "felin" in detail["definition"].lower()
+    assert detail["_lemme"] == "chat"
+    assert detail["_cgram"] == "NOM"
+
+
+def test_concept_detail_enrichment(lexique_v4):
+    """concept_detail() retourne les proprietes d'enrichissement Wikidata."""
+    detail = lexique_v4.concept_detail(8)  # jacques chirac
+    assert detail is not None
+    props = detail["_proprietes"]
+    assert props["wikipedia_url"] == "https://fr.wikipedia.org/wiki/Jacques_Chirac"
+    assert props["image"] == "Jacques_Chirac.jpg"
+    assert props["date_naissance"] == "1932-11-29"
+    assert props["date_deces"] == "2019-09-26"
+    assert props["nationalite"] == "France"
+
+
+def test_concept_detail_composants(lexique_v4):
+    """concept_detail() inclut les composants."""
+    detail = lexique_v4.concept_detail(8)  # jacques chirac
+    assert detail is not None
+    comps = detail["_composants"]
+    assert len(comps) == 2
+    assert comps[0]["comp_lemme"] == "chirac"  # prio 2 d'abord (tri par priorite)
+    assert comps[0]["priorite"] == 2
+    assert comps[1]["comp_lemme"] == "jacques"
+    assert comps[1]["priorite"] == 3
+
+
+def test_concept_detail_relations(lexique_v4):
+    """concept_detail() inclut exemples et categories."""
+    detail = lexique_v4.concept_detail(1)  # chat sens 1
+    assert detail is not None
+    assert len(detail["_exemples"]) == 2
+    assert "animal" in detail["_categories"]
+
+
+def test_concept_detail_antonymes(lexique_v4):
+    """concept_detail() inclut les antonymes."""
+    detail = lexique_v4.concept_detail(4)  # grand
+    assert detail is not None
+    ant_ids = [a["id"] for a in detail["_antonymes"]]
+    assert 7 in ant_ids  # petit
+
+
+def test_concept_detail_inexistant(lexique_v4):
+    """concept_detail() retourne None pour un ID inexistant."""
+    assert lexique_v4.concept_detail(99999) is None
+
+
+def test_concept_detail_wikipedia_paris(lexique_v4):
+    """concept_detail() retourne les proprietes pour Paris."""
+    detail = lexique_v4.concept_detail(5)  # paris sens 1
+    assert detail is not None
+    props = detail["_proprietes"]
+    assert props["wikipedia_url"] == "https://fr.wikipedia.org/wiki/Paris"
+    assert props["image"] == "Paris_-_Eiffelturm.jpg"
+    assert props["coordonnees"] == "48.8566,2.3522"
+    assert props["population"] == "2161000"
+    assert props["pays"] == "France"
+    assert props["gentile"] == "parisien"
+
+
+def test_proprietes_concept(lexique_v4):
+    """proprietes_concept() retourne un dict cle-valeur."""
+    props = lexique_v4.proprietes_concept(5)  # paris
+    assert isinstance(props, dict)
+    assert props["wikipedia_url"] == "https://fr.wikipedia.org/wiki/Paris"
+    assert props["coordonnees"] == "48.8566,2.3522"
+    # Concept sans proprietes
+    props_empty = lexique_v4.proprietes_concept(1)  # chat
+    assert props_empty == {}
+
+
+def test_proprietes_concept_inexistant(lexique_v4):
+    """proprietes_concept() retourne {} pour un ID inexistant."""
+    props = lexique_v4.proprietes_concept(99999)
+    assert props == {}
 
 
 # --- Fixture CSV pour test v3 compat ---
