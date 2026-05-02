@@ -71,6 +71,7 @@ class Lexique:
 
         # Schema version (3 or 4) — detected at first SQLite access
         self._schema_version: int = 3
+        self._table_cache: dict[str, bool] = {}
 
         # Detecter la version du schema AVANT de charger les formes
         if self._backend == "sqlite":
@@ -133,18 +134,38 @@ class Lexique:
         return self._conn
 
     def _detect_schema_version(self) -> None:
-        """Detecte si la BDD utilise le schema v4 (table lemmes presente)."""
+        """Detecte la version du schema BDD (3, 4 ou 5)."""
         conn = self._get_conn()
         try:
-            conn.execute("SELECT 1 FROM lemmes LIMIT 1")
-            self._schema_version = 4
+            conn.execute("SELECT 1 FROM sens LIMIT 1")
+            self._schema_version = 5
         except sqlite3.OperationalError:
-            self._schema_version = 3
+            try:
+                conn.execute("SELECT 1 FROM lemmes LIMIT 1")
+                self._schema_version = 4
+            except sqlite3.OperationalError:
+                self._schema_version = 3
 
     @property
     def schema_version(self) -> int:
-        """Version du schema BDD (3 ou 4)."""
+        """Version du schema BDD (3, 4 ou 5)."""
         return self._schema_version
+
+    def _has_table(self, name: str) -> bool:
+        """Verifie l'existence d'une table dans la BDD SQLite (cache)."""
+        if name in self._table_cache:
+            return self._table_cache[name]
+        if self._backend != "sqlite":
+            self._table_cache[name] = False
+            return False
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (name,),
+        )
+        exists = cur.fetchone() is not None
+        self._table_cache[name] = exists
+        return exists
 
     def _charger_index(self) -> None:
         """Niveaux 2-4 : construit les index phone, ortho et lemme (CSV/TSV)."""
@@ -739,13 +760,16 @@ class Lexique:
     # --- Methodes : Definitions multi-sens ---
 
     def definitions(self, mot: str, cgram: str | None = None) -> list[dict[str, Any]]:
-        """Definitions multiples depuis la table definitions (v3) ou concepts (v4).
+        """Definitions multiples depuis la table definitions (v3), concepts (v4) ou sens (v5).
 
         Retourne [] si la table est absente (compatibilite anciennes BDD).
         Ordonne par cgram, sens_num.
         """
         if self._backend != "sqlite":
             return []
+
+        if self._schema_version >= 5:
+            return self._definitions_v5(mot, cgram)
 
         if self._schema_version >= 4:
             # v4 : deleguer vers concepts_de
@@ -754,6 +778,7 @@ class Lexique:
             for c in concepts:
                 d: dict[str, Any] = dict(c)
                 d["lemme"] = mot
+                d["label"] = c.get("label") or mot
                 d["domaine"] = c.get("theme") or ""
                 # Recuperer exemples, synonymes, antonymes pour compat v3
                 cid = c.get("id")
@@ -840,6 +865,36 @@ class Lexique:
 
     # --- Methodes facades : Recherche ---
 
+    @staticmethod
+    def _pattern_to_sql(pattern: str) -> tuple[str, str] | None:
+        """Convertit un pattern regex simple en clause SQL native.
+
+        Returns (operator, value) ou None si le pattern est complexe.
+        Ex: ``^chat$`` → ``("=", "chat")``,
+            ``^chat``  → ``("LIKE", "chat%")``.
+        """
+        import re as _re
+        has_start = pattern.startswith("^")
+        has_end = pattern.endswith("$")
+        body = pattern[has_start:len(pattern) - has_end if has_end else len(pattern)]
+        # Verifier que body est un litteral echappe (pas de metacaracteres regex)
+        try:
+            literal = _re.sub(r"\\(.)", r"\1", body)
+            if _re.escape(literal) != body:
+                return None
+        except Exception:
+            return None
+        # Echapper les jokers LIKE
+        literal = literal.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        if has_start and has_end:
+            return ("=", literal)
+        elif has_start:
+            return ("LIKE", literal + "%")
+        elif has_end:
+            return ("LIKE", "%" + literal)
+        else:
+            return ("LIKE", "%" + literal + "%")
+
     def rechercher(
         self, pattern: str, champ: str = "ortho", limite: int = 50,
     ) -> list[dict[str, Any]]:
@@ -851,19 +906,36 @@ class Lexique:
             except _re.error:
                 return []
             conn = self._get_conn()
-            conn.create_function("REGEXP", 2, lambda p, s: bool(regex.search(s)) if s else False)
             col = "phone" if champ == "phone" else "ortho"
+
+            # Optimisation : utiliser = ou LIKE pour les patterns simples
+            # (100-1000x plus rapide que REGEXP sur 1.4M lignes)
+            sql_opt = self._pattern_to_sql(pattern)
 
             if self._schema_version >= 4:
                 col_qualified = f"f.{col}"
+                if sql_opt is not None:
+                    op, val = sql_opt
+                    if op == "=":
+                        where = f"{col_qualified} = ? COLLATE NOCASE"
+                    else:
+                        where = f"{col_qualified} LIKE ? COLLATE NOCASE ESCAPE '\\'"
+                    params: tuple = (val, limite)
+                else:
+                    conn.create_function(
+                        "REGEXP", 2,
+                        lambda p, s: bool(regex.search(s)) if s else False,
+                    )
+                    where = f"{col_qualified} REGEXP ?"
+                    params = (pattern, limite)
                 cur = conn.execute(
                     "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
                     "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
-                    f"WHERE {col_qualified} REGEXP ? "
+                    f"WHERE {where} "
                     "ORDER BY f.freq_composite DESC LIMIT ?",
-                    (pattern, limite),
+                    params,
                 )
                 results: list[dict[str, Any]] = []
                 seen: set[str] = set()
@@ -876,11 +948,25 @@ class Lexique:
                         results.append(entry)
                 return results
             else:
+                if sql_opt is not None:
+                    op, val = sql_opt
+                    if op == "=":
+                        where = f"{col} = ? COLLATE NOCASE"
+                    else:
+                        where = f"{col} LIKE ? COLLATE NOCASE ESCAPE '\\'"
+                    params = (val, limite)
+                else:
+                    conn.create_function(
+                        "REGEXP", 2,
+                        lambda p, s: bool(regex.search(s)) if s else False,
+                    )
+                    where = f"{col} REGEXP ?"
+                    params = (pattern, limite)
                 cur = conn.execute(
                     f"SELECT * FROM {self._table} "  # noqa: S608
-                    f"WHERE {col} REGEXP ? "
+                    f"WHERE {where} "
                     f"ORDER BY freq_opensubs DESC LIMIT ?",
-                    (pattern, limite),
+                    params,
                 )
                 colonnes = [desc[0] for desc in cur.description]
                 mapping = resoudre_colonnes(colonnes)
@@ -1593,22 +1679,50 @@ class Lexique:
             return None
         return dict(row)  # type: ignore[return-value]
 
-    def concepts_de(self, lemme: str, cgram: str | None = None) -> list[Concept]:
-        """Retourne les concepts (sens) d'un lemme (v4 uniquement).
+    def rechercher_lemmes(
+        self, pattern: str, limite: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Recherche des lemmes par pattern (LIKE %pattern%).
+
+        Necessite v4+. Retourne [] si indisponible.
+
+        Args:
+            pattern: Texte a chercher (LIKE %pattern%)
+            limite: Nombre max de resultats
+
+        Returns:
+            Liste de dicts avec id, lemme, cgram, genre, freq_composite
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT id, lemme, cgram, genre, freq_composite "
+            "FROM lemmes WHERE lemme LIKE ? COLLATE NOCASE "
+            "ORDER BY freq_composite DESC LIMIT ?",
+            (f"%{pattern}%", limite),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+    def sens_de(self, lemme: str, cgram: str | None = None) -> list[dict[str, Any]]:
+        """Retourne les sens (definitions) d'un lemme.
+
+        En v5, lit la table ``sens``. En v4, lit ``concepts`` (wiktionnaire).
 
         Args:
             lemme: Le lemme a chercher
             cgram: Filtre categorie optionnel
 
         Returns:
-            Liste de Concept ordonnee par sens_num
+            Liste de dicts ordonnee par sens_num
         """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
+        table = "sens" if self._schema_version >= 5 else "concepts"
         if cgram:
             cur = conn.execute(
-                "SELECT c.* FROM concepts c "
+                f"SELECT c.* FROM {table} c "
                 "JOIN lemmes l ON c.lemme_id = l.id "
                 "WHERE l.lemme = ? COLLATE NOCASE AND l.cgram = ? "
                 "ORDER BY c.sens_num",
@@ -1616,65 +1730,339 @@ class Lexique:
             )
         else:
             cur = conn.execute(
-                "SELECT c.* FROM concepts c "
+                f"SELECT c.* FROM {table} c "
                 "JOIN lemmes l ON c.lemme_id = l.id "
                 "WHERE l.lemme = ? COLLATE NOCASE "
                 "ORDER BY c.sens_num",
                 (normaliser_ortho(lemme),),
             )
-        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+        return [dict(row) for row in cur.fetchall()]
 
-    def synonymes_de(self, concept_id: int) -> list[Concept]:
-        """Retourne les concepts synonymes d'un concept (v4 uniquement).
+    def concepts_de(self, lemme: str, cgram: str | None = None) -> list[Concept]:
+        """Alias de sens_de() pour retrocompatibilite v4."""
+        return self.sens_de(lemme, cgram)  # type: ignore[return-value]
 
-        Chaque concept retourne inclut un champ ``_lemme`` avec le nom du lemme.
+    def entites_associees(
+        self,
+        lemme: str,
+        type_lien: str | None = None,
+        pertinence: int | None = None,
+        cgram: str | None = None,
+        limite: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Retourne les entites liees a un lemme.
+
+        En v5, lit ``entite_lemmes``. En v4, lit ``concept_composants``.
+
+        Args:
+            lemme: Le lemme a chercher
+            type_lien: 'homonyme' ou 'composant' (v5). None = tous.
+            pertinence: Filtrer par pertinence (1 ou 2). None = tous.
+            cgram: Categorie grammaticale pour disambiguer les homonymes.
+            limite: Nombre max de resultats
+
+        Returns:
+            Liste de dicts avec _type, _pertinence
         """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
+
+        if self._schema_version >= 5:
+            params: list[str | int] = [normaliser_ortho(lemme)]
+            extra = ""
+            if cgram is not None:
+                extra += "AND l.cgram = ? "
+                params.append(cgram)
+            if type_lien is not None:
+                extra += "AND el.type = ? "
+                params.append(type_lien)
+            if pertinence is not None:
+                extra += "AND el.pertinence = ? "
+                params.append(pertinence)
+            params.append(limite)
+            cur = conn.execute(
+                "SELECT DISTINCT e.*, el.type AS _type, el.pertinence AS _pertinence "
+                "FROM entites e "
+                "JOIN entite_lemmes el ON el.entite_id = e.id "
+                "JOIN lemmes l ON el.lemme_id = l.id "
+                "WHERE l.lemme = ? COLLATE NOCASE "
+                f"{extra}"
+                "ORDER BY el.type, el.pertinence, e.label "
+                "LIMIT ?",
+                params,
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+        # v4 : ancien schema concept_composants
+        params = [normaliser_ortho(lemme)]
+        prio_clause = ""
+        if pertinence is not None:
+            prio_clause = "AND cc.priorite = ? "
+            params.append(pertinence)
+        params.append(limite)
+        try:
+            cur = conn.execute(
+                "SELECT DISTINCT c.*, l.lemme AS _lemme, l.cgram AS _cgram, "
+                "cc.priorite AS _priorite "
+                "FROM concepts c "
+                "JOIN concept_composants cc ON cc.concept_id = c.id "
+                "JOIN lemmes l_comp ON cc.lemme_id = l_comp.id "
+                "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+                "WHERE l_comp.lemme = ? COLLATE NOCASE "
+                f"{prio_clause}"
+                "ORDER BY cc.priorite, c.sens_num "
+                "LIMIT ?",
+                params,
+            )
+            return [dict(row) for row in cur.fetchall()]
+        except Exception:
+            return []
+
+    def concepts_associes(
+        self,
+        lemme: str,
+        priorite: int | None = None,
+        limite: int = 50,
+    ) -> list[Concept]:
+        """Alias de entites_associees() pour retrocompatibilite v4."""
+        return self.entites_associees(  # type: ignore[return-value]
+            lemme, pertinence=priorite, limite=limite,
+        )
+
+    def synonymes_de(self, id_ou_lemme_id: int) -> list[Concept]:
+        """Retourne les synonymes.
+
+        En v5, ``id_ou_lemme_id`` est un lemme_id et lit ``lemme_synonymes``.
+        En v4, c'est un concept_id et lit ``concept_synonymes``.
+
+        Chaque resultat inclut un champ ``_lemme`` avec le nom du lemme.
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        if self._schema_version >= 5:
+            cur = conn.execute(
+                "SELECT l.id, l.lemme AS _lemme, l.cgram AS _cgram "
+                "FROM lemmes l "
+                "JOIN lemme_synonymes ls ON "
+                "  (ls.lemme_b = l.id AND ls.lemme_a = ?) OR "
+                "  (ls.lemme_a = l.id AND ls.lemme_b = ?)",
+                (id_ou_lemme_id, id_ou_lemme_id),
+            )
+            return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
         cur = conn.execute(
             "SELECT c.*, l.lemme AS _lemme FROM concepts c "
             "LEFT JOIN lemmes l ON c.lemme_id = l.id "
             "JOIN concept_synonymes cs ON "
             "  (cs.concept_b = c.id AND cs.concept_a = ?) OR "
             "  (cs.concept_a = c.id AND cs.concept_b = ?)",
-            (concept_id, concept_id),
+            (id_ou_lemme_id, id_ou_lemme_id),
         )
         return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
 
-    def antonymes_de(self, concept_id: int) -> list[Concept]:
-        """Retourne les concepts antonymes d'un concept (v4 uniquement).
+    def antonymes_de(self, id_ou_lemme_id: int) -> list[Concept]:
+        """Retourne les antonymes.
 
-        Chaque concept retourne inclut un champ ``_lemme`` avec le nom du lemme.
+        En v5, ``id_ou_lemme_id`` est un lemme_id et lit ``lemme_antonymes``.
+        En v4, c'est un concept_id et lit ``concept_antonymes``.
+
+        Chaque resultat inclut un champ ``_lemme`` avec le nom du lemme.
         """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
+        if self._schema_version >= 5:
+            cur = conn.execute(
+                "SELECT l.id, l.lemme AS _lemme, l.cgram AS _cgram "
+                "FROM lemmes l "
+                "JOIN lemme_antonymes la ON "
+                "  (la.lemme_b = l.id AND la.lemme_a = ?) OR "
+                "  (la.lemme_a = l.id AND la.lemme_b = ?)",
+                (id_ou_lemme_id, id_ou_lemme_id),
+            )
+            return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
         cur = conn.execute(
             "SELECT c.*, l.lemme AS _lemme FROM concepts c "
             "LEFT JOIN lemmes l ON c.lemme_id = l.id "
             "JOIN concept_antonymes ca ON "
             "  (ca.concept_b = c.id AND ca.concept_a = ?) OR "
             "  (ca.concept_a = c.id AND ca.concept_b = ?)",
-            (concept_id, concept_id),
+            (id_ou_lemme_id, id_ou_lemme_id),
         )
         return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
 
-    def exemples_de(self, concept_id: int) -> list[str]:
-        """Retourne les exemples d'usage d'un concept (v4 uniquement)."""
-        if self._backend != "sqlite" or self._schema_version < 4:
+    def hyperonymes_de(self, lemme_id: int) -> list[dict[str, Any]]:
+        """Retourne les hyperonymes d'un lemme (IS-A).
+
+        Lit ``lemme_hyperonymes`` en v5. Retourne [] si la table n'existe pas.
+        """
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        if not self._has_table("lemme_hyperonymes"):
             return []
         conn = self._get_conn()
         cur = conn.execute(
+            "SELECT l.id, l.lemme AS _lemme, l.cgram AS _cgram "
+            "FROM lemmes l "
+            "JOIN lemme_hyperonymes lh ON lh.hyperonyme_id = l.id "
+            "WHERE lh.lemme_id = ?",
+            (lemme_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def hyponymes_de(self, lemme_id: int) -> list[dict[str, Any]]:
+        """Retourne les hyponymes d'un lemme (types de...).
+
+        Lookup inverse de ``lemme_hyperonymes`` : WHERE hyperonyme_id = ?.
+        Retourne [] si la table n'existe pas.
+        """
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        if not self._has_table("lemme_hyperonymes"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT l.id, l.lemme AS _lemme, l.cgram AS _cgram "
+            "FROM lemmes l "
+            "JOIN lemme_hyperonymes lh ON lh.lemme_id = l.id "
+            "WHERE lh.hyperonyme_id = ?",
+            (lemme_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def derives_de(self, lemme_id: int) -> list[dict[str, Any]]:
+        """Retourne les termes derives d'un lemme.
+
+        Lit ``lemme_derives`` (bidirectionnel). Retourne [] si la table n'existe pas.
+        """
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        if not self._has_table("lemme_derives"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT l.id, l.lemme AS _lemme, l.cgram AS _cgram "
+            "FROM lemmes l "
+            "JOIN lemme_derives ld ON "
+            "  (ld.lemme_b = l.id AND ld.lemme_a = ?) OR "
+            "  (ld.lemme_a = l.id AND ld.lemme_b = ?)",
+            (lemme_id, lemme_id),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def apparentes_sem(self, lemme_id: int) -> list[dict[str, Any]]:
+        """Retourne les termes apparentes semantiquement.
+
+        Lit ``lemme_apparentes_sem`` (bidirectionnel). Retourne [] si la table n'existe pas.
+        """
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        if not self._has_table("lemme_apparentes_sem"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT l.id, l.lemme AS _lemme, l.cgram AS _cgram "
+            "FROM lemmes l "
+            "JOIN lemme_apparentes_sem la ON "
+            "  (la.lemme_b = l.id AND la.lemme_a = ?) OR "
+            "  (la.lemme_a = l.id AND la.lemme_b = ?)",
+            (lemme_id, lemme_id),
+        )
+        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+
+    def proverbes_de(self, lemme_id: int) -> list[str]:
+        """Retourne les proverbes et expressions lies a un lemme.
+
+        Lit ``lemme_proverbes``. Retourne [] si la table n'existe pas.
+        """
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        if not self._has_table("lemme_proverbes"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT texte FROM lemme_proverbes WHERE lemme_id = ?",
+            (lemme_id,),
+        )
+        return [row[0] for row in cur.fetchall() if row[0]]
+
+    def rechercher_dans_proverbes(
+        self, terme: str, limite: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Recherche les lemmes lies aux proverbes contenant *terme*.
+
+        Lit ``lemme_proverbes``. Retourne [] si la table n'existe pas.
+
+        Args:
+            terme: Texte a chercher dans le proverbe (LIKE %terme%)
+            limite: Nombre max de resultats
+
+        Returns:
+            Liste de dicts avec id, lemme, cgram, genre, freq_composite
+        """
+        if self._backend != "sqlite" or not self._has_table("lemme_proverbes"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT DISTINCT l.id, l.lemme, l.cgram, l.genre, l.freq_composite "
+            "FROM lemme_proverbes p JOIN lemmes l ON p.lemme_id = l.id "
+            "WHERE p.texte LIKE ? COLLATE NOCASE "
+            "ORDER BY l.freq_composite DESC LIMIT ?",
+            (f"%{terme}%", limite),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+    def rechercher_dans_definitions(
+        self, terme: str, limite: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Recherche les lemmes dont une definition contient le terme.
+
+        Necessite la table ``sens`` (v5). Retourne [] si indisponible.
+
+        Args:
+            terme: Texte a chercher (LIKE %terme%)
+            limite: Nombre max de resultats
+
+        Returns:
+            Liste de dicts avec id, lemme, cgram, genre, freq_composite
+        """
+        if self._backend != "sqlite" or not self._has_table("sens"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT DISTINCT l.id, l.lemme, l.cgram, l.genre, l.freq_composite "
+            "FROM sens s JOIN lemmes l ON s.lemme_id = l.id "
+            "WHERE s.definition LIKE ? "
+            "ORDER BY l.freq_composite DESC LIMIT ?",
+            (f"%{terme}%", limite),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+    def exemples_de(self, sens_id: int) -> list[str]:
+        """Retourne les exemples d'usage d'un sens.
+
+        En v5, lit ``sens_exemples``. En v4, lit ``concept_exemples``.
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        if self._schema_version >= 5:
+            cur = conn.execute(
+                "SELECT texte FROM sens_exemples WHERE sens_id = ?",
+                (sens_id,),
+            )
+            return [row[0] for row in cur.fetchall() if row[0]]
+        cur = conn.execute(
             "SELECT exemple FROM concept_exemples WHERE concept_id = ?",
-            (concept_id,),
+            (sens_id,),
         )
         return [row[0] for row in cur.fetchall() if row[0]]
 
     def categories_de(
-        self, concept_id: int, inclure_ancetres: bool = True,
+        self, entite_ou_concept_id: int, inclure_ancetres: bool = True,
     ) -> list[str]:
-        """Retourne les categories d'un concept (v4 uniquement).
+        """Retourne les categories d'une entite (v5) ou d'un concept (v4).
 
         Si *inclure_ancetres* est True, remonte la hierarchie via la
         closure table pour inclure automatiquement les categories parentes.
@@ -1682,21 +2070,23 @@ class Lexique:
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
+        join_table = "entite_categories" if self._schema_version >= 5 else "concept_categories"
+        id_col = "entite_id" if self._schema_version >= 5 else "concept_id"
         if inclure_ancetres:
             cur = conn.execute(
                 "SELECT DISTINCT anc.label FROM categories anc "
                 "JOIN categorie_hierarchie h ON anc.id = h.ancestor_id "
-                "JOIN concept_categories cc ON cc.categorie_id = h.descendant_id "
-                "WHERE cc.concept_id = ? "
+                f"JOIN {join_table} cc ON cc.categorie_id = h.descendant_id "
+                f"WHERE cc.{id_col} = ? "
                 "ORDER BY h.depth, anc.label",
-                (concept_id,),
+                (entite_ou_concept_id,),
             )
         else:
             cur = conn.execute(
                 "SELECT cat.label FROM categories cat "
-                "JOIN concept_categories cc ON cc.categorie_id = cat.id "
-                "WHERE cc.concept_id = ?",
-                (concept_id,),
+                f"JOIN {join_table} cc ON cc.categorie_id = cat.id "
+                f"WHERE cc.{id_col} = ?",
+                (entite_ou_concept_id,),
             )
         return [row[0] for row in cur.fetchall() if row[0]]
 
@@ -1768,17 +2158,42 @@ class Lexique:
         cur = conn.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
 
-    def concepts_par_categorie(
+    def entites_par_categorie(
         self, label: str, inclure_descendants: bool = False
-    ) -> list[Concept]:
-        """Retourne les concepts lies a une categorie (v4 uniquement).
+    ) -> list[dict[str, Any]]:
+        """Retourne les entites liees a une categorie.
 
-        Si *inclure_descendants* est True, inclut aussi les concepts des
-        sous-categories (requete transitive via la closure table).
+        En v5, lit ``entite_categories`` + ``entites``.
+        En v4, lit ``concept_categories`` + ``concepts``.
+
+        Si *inclure_descendants* est True, inclut les sous-categories.
         """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
+
+        if self._schema_version >= 5:
+            if inclure_descendants:
+                sql = (
+                    "SELECT DISTINCT e.* FROM entites e "
+                    "JOIN entite_categories ec ON e.id = ec.entite_id "
+                    "JOIN categorie_hierarchie h ON ec.categorie_id = h.descendant_id "
+                    "JOIN categories cat ON h.ancestor_id = cat.id "
+                    "WHERE cat.label = ? COLLATE NOCASE "
+                    "ORDER BY e.label"
+                )
+            else:
+                sql = (
+                    "SELECT DISTINCT e.* FROM entites e "
+                    "JOIN entite_categories ec ON e.id = ec.entite_id "
+                    "JOIN categories cat ON ec.categorie_id = cat.id "
+                    "WHERE cat.label = ? COLLATE NOCASE "
+                    "ORDER BY e.label"
+                )
+            cur = conn.execute(sql, (label,))
+            return [dict(row) for row in cur.fetchall()]
+
+        # v4
         if inclure_descendants:
             sql = (
                 "SELECT DISTINCT c.*, l.lemme AS _lemme FROM concepts c "
@@ -1799,26 +2214,28 @@ class Lexique:
                 "ORDER BY l.lemme, c.sens_num"
             )
         cur = conn.execute(sql, (label,))
-        return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+        return [dict(row) for row in cur.fetchall()]
 
-    def rechercher_concepts(
-        self, pattern: str, limite: int = 50,
+    def concepts_par_categorie(
+        self, label: str, inclure_descendants: bool = False
     ) -> list[Concept]:
-        """Recherche des concepts par mot-cle dans la definition ou le lemme (v4).
+        """Alias de entites_par_categorie() pour retrocompatibilite v4."""
+        return self.entites_par_categorie(label, inclure_descendants)  # type: ignore[return-value]
 
-        Supporte les recherches multi-mots : chaque mot doit apparaitre
-        dans la definition OU le lemme (intersection).
+    def rechercher_entites(
+        self, pattern: str, limite: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Recherche des entites par mot-cle dans le label ou la description.
 
-        Etend la recherche aux composants NP multi-mots : si "Jacques"
-        est cherche, les concepts dont un composant matche "jacques"
-        seront aussi retournes.
+        En v5, cherche dans ``entites`` + ``entite_lemmes``.
+        En v4, cherche dans ``concepts`` + ``concept_composants``.
 
         Args:
             pattern: Texte a chercher (un ou plusieurs mots)
             limite: Nombre max de resultats
 
         Returns:
-            Liste de Concept (avec champ _lemme ajoute)
+            Liste de dicts
         """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
@@ -1827,13 +2244,16 @@ class Lexique:
         if not words:
             return []
 
-        # Construire les conditions : chaque mot doit matcher dans definition OU lemme
+        if self._schema_version >= 5:
+            return self._rechercher_entites_v5(conn, words, limite)
+
+        # v4 : chercher dans concepts + concept_composants
         conditions = []
         params: list[str] = []
         for word in words:
             like_pat = f"%{word}%"
-            conditions.append("(c.definition LIKE ? OR l.lemme LIKE ?)")
-            params.extend([like_pat, like_pat])
+            conditions.append("(c.definition LIKE ? OR l.lemme LIKE ? OR c.label LIKE ?)")
+            params.extend([like_pat, like_pat, like_pat])
 
         where = " AND ".join(conditions)
         params.append(str(limite))
@@ -1845,19 +2265,16 @@ class Lexique:
             "ORDER BY l.lemme, c.sens_num LIMIT ?",
             params,
         )
-        results = [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
+        results = [dict(row) for row in cur.fetchall()]
 
-        # Si peu de resultats, chercher aussi via composants NP
+        # Completer via composants NP
         if len(results) < limite:
             seen_ids = {r["id"] for r in results}
             remaining = limite - len(results)
-
-            # Chaque mot doit matcher un composant du meme concept
-            # On utilise une sous-requete GROUP BY + HAVING COUNT
             having_parts = []
             comp_params: list[str] = []
             or_parts = []
-            for i, word in enumerate(words):
+            for word in words:
                 like_pat = f"%{word}%"
                 or_parts.append("cl.lemme LIKE ?")
                 comp_params.append(like_pat)
@@ -1887,12 +2304,262 @@ class Lexique:
                 for row in cur2.fetchall():
                     d = dict(row)
                     if d["id"] not in seen_ids:
-                        results.append(d)  # type: ignore[arg-type]
+                        results.append(d)
                         seen_ids.add(d["id"])
             except Exception:
-                pass  # concept_composants may not exist in older DBs
+                pass
 
         return results
+
+    def _rechercher_entites_v5(
+        self, conn: sqlite3.Connection, words: list[str], limite: int,
+    ) -> list[dict[str, Any]]:
+        """Recherche d'entites dans le schema v5."""
+        # Recherche dans label et description
+        conditions = []
+        params: list[str] = []
+        for word in words:
+            like_pat = f"%{word}%"
+            conditions.append("(e.label LIKE ? OR e.description LIKE ?)")
+            params.extend([like_pat, like_pat])
+
+        where = " AND ".join(conditions)
+        params.append(str(limite))
+        cur = conn.execute(
+            "SELECT DISTINCT e.* "
+            "FROM entites e "
+            f"WHERE {where} "
+            "ORDER BY e.label LIMIT ?",
+            params,
+        )
+        results = [dict(row) for row in cur.fetchall()]
+
+        # Completer via entite_lemmes
+        if len(results) < limite:
+            seen_ids = {r["id"] for r in results}
+            remaining = limite - len(results)
+            having_parts = []
+            comp_params: list[str] = []
+            or_parts = []
+            for word in words:
+                like_pat = f"%{word}%"
+                or_parts.append("l.lemme LIKE ?")
+                comp_params.append(like_pat)
+                having_parts.append(
+                    f"COUNT(DISTINCT CASE WHEN l.lemme LIKE ? THEN 1 END) > 0"
+                )
+                comp_params.append(like_pat)
+
+            or_clause = " OR ".join(or_parts)
+            having_clause = " AND ".join(having_parts)
+            comp_params.append(str(remaining))
+
+            try:
+                cur2 = conn.execute(
+                    "SELECT DISTINCT e.* "
+                    "FROM entites e "
+                    "WHERE e.id IN ("
+                    "  SELECT el.entite_id FROM entite_lemmes el "
+                    "  JOIN lemmes l ON el.lemme_id = l.id "
+                    f"  WHERE {or_clause} "
+                    f"  GROUP BY el.entite_id HAVING {having_clause}"
+                    ") "
+                    "ORDER BY e.label LIMIT ?",
+                    comp_params,
+                )
+                for row in cur2.fetchall():
+                    d = dict(row)
+                    if d["id"] not in seen_ids:
+                        results.append(d)
+                        seen_ids.add(d["id"])
+            except Exception:
+                pass
+
+        return results
+
+    def rechercher_concepts(
+        self, pattern: str, limite: int = 50,
+    ) -> list[Concept]:
+        """Alias de rechercher_entites() pour retrocompatibilite v4."""
+        return self.rechercher_entites(pattern, limite)  # type: ignore[return-value]
+
+    def proprietes_entite(self, entite_id: int) -> dict[str, str]:
+        """Proprietes cle-valeur d'une entite (v5) ou d'un concept (v4).
+
+        Retourne un dict {cle: valeur}.
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return {}
+        conn = self._get_conn()
+        table = "entite_proprietes" if self._schema_version >= 5 else "concept_proprietes"
+        id_col = "entite_id" if self._schema_version >= 5 else "concept_id"
+        try:
+            cur = conn.execute(
+                f"SELECT cle, valeur FROM {table} WHERE {id_col} = ?",
+                (entite_id,),
+            )
+            return {row[0]: row[1] for row in cur.fetchall()}
+        except sqlite3.OperationalError:
+            return {}
+
+    def proprietes_concept(self, concept_id: int) -> dict[str, str]:
+        """Alias de proprietes_entite() pour retrocompatibilite v4."""
+        return self.proprietes_entite(concept_id)
+
+    def entite_detail(self, entite_id: int) -> dict[str, Any] | None:
+        """Fiche complete d'une entite avec toutes ses relations.
+
+        En v5, lit ``entites`` + ``entite_lemmes`` + ``entite_proprietes``, etc.
+        En v4, lit ``concepts`` + ``concept_composants`` + ``concept_proprietes``.
+
+        Retourne l'entite enrichie avec :
+        - _categories, _proprietes, _composants (lemmes lies)
+        - _exemples (si existants)
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return None
+        conn = self._get_conn()
+
+        if self._schema_version >= 5:
+            cur = conn.execute(
+                "SELECT e.* FROM entites e WHERE e.id = ?",
+                (entite_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            result: dict[str, Any] = dict(row)
+
+            # Proprietes cle-valeur
+            result["_proprietes"] = self.proprietes_entite(entite_id)
+
+            # Categories
+            result["_categories"] = self.categories_de(entite_id)
+
+            # Lemmes lies (composants + homonymes)
+            cur2 = conn.execute(
+                "SELECT el.type, el.pertinence, el.position, "
+                "l.id AS comp_lemme_id, l.lemme AS comp_lemme, l.cgram AS comp_cgram "
+                "FROM entite_lemmes el "
+                "JOIN lemmes l ON el.lemme_id = l.id "
+                "WHERE el.entite_id = ? "
+                "ORDER BY el.type, el.pertinence, el.position",
+                (entite_id,),
+            )
+            result["_composants"] = [dict(r) for r in cur2.fetchall()]
+
+            # Exemples
+            cur3 = conn.execute(
+                "SELECT texte FROM entite_exemples WHERE entite_id = ?",
+                (entite_id,),
+            )
+            result["_exemples"] = [r[0] for r in cur3.fetchall() if r[0]]
+
+            return result
+
+        # v4
+        cur = conn.execute(
+            "SELECT c.*, l.lemme AS _lemme, l.cgram AS _cgram "
+            "FROM concepts c "
+            "LEFT JOIN lemmes l ON c.lemme_id = l.id "
+            "WHERE c.id = ?",
+            (entite_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+
+        result["_synonymes"] = self.synonymes_de(entite_id)
+        result["_antonymes"] = self.antonymes_de(entite_id)
+        result["_exemples"] = self.exemples_de(entite_id)
+        result["_categories"] = self.categories_de(entite_id)
+        result["_proprietes"] = self.proprietes_concept(entite_id)
+
+        cur2 = conn.execute(
+            "SELECT cc.position, cc.priorite, cc.role, "
+            "l.id AS comp_lemme_id, l.lemme AS comp_lemme, l.cgram AS comp_cgram "
+            "FROM concept_composants cc "
+            "JOIN lemmes l ON cc.lemme_id = l.id "
+            "WHERE cc.concept_id = ? "
+            "ORDER BY cc.priorite, cc.position",
+            (entite_id,),
+        )
+        result["_composants"] = [dict(r) for r in cur2.fetchall()]
+
+        return result
+
+    def concept_detail(self, concept_id: int) -> Concept | None:
+        """Alias de entite_detail() pour retrocompatibilite v4."""
+        return self.entite_detail(concept_id)  # type: ignore[return-value]
+
+    # --- Methodes v5 : sens, entites, lemmes apparentes ---
+
+    def _definitions_v5(self, mot: str, cgram: str | None = None) -> list[dict[str, Any]]:
+        """definitions() pour schema v5 : lit la table sens + lemme_synonymes."""
+        conn = self._get_conn()
+        sens = self.sens_de(mot, cgram)
+        results: list[dict[str, Any]] = []
+
+        # Recuperer le lemme_id une fois pour synonymes/antonymes
+        lemme_id = sens[0]["lemme_id"] if sens else None
+        if lemme_id is not None:
+            syn_lemmes = self.synonymes_de(lemme_id)
+            ant_lemmes = self.antonymes_de(lemme_id)
+            syn_words = [s["_lemme"] for s in syn_lemmes if s.get("_lemme")]
+            ant_words = [a["_lemme"] for a in ant_lemmes if a.get("_lemme")]
+        else:
+            syn_words = []
+            ant_words = []
+
+        for s in sens:
+            d: dict[str, Any] = dict(s)
+            d["lemme"] = mot
+            d["label"] = mot
+            d["domaine"] = s.get("theme") or ""
+            sid = s.get("id")
+            d["exemples"] = self.exemples_de(sid) if sid else []
+            # Synonymes/antonymes partages au niveau lemme
+            d["synonymes"] = syn_words
+            d["antonymes"] = ant_words
+            d["categories"] = []  # categories au niveau entite en v5
+            d["tags"] = []
+            results.append(d)
+        return results
+
+    def lemmes_apparentes(self, lemme: str, limite: int = 50) -> list[dict[str, Any]]:
+        """Trouve les lemmes multi-mots contenant le lemme donne.
+
+        Ex: lemmes_apparentes("pomme") → ["pomme de terre", "pomme d'adam"]
+
+        Fonctionne en v4 et v5.
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        pattern = f"% {lemme} %"
+        pattern_start = f"{lemme} %"
+        pattern_end = f"% {lemme}"
+        cur = conn.execute(
+            "SELECT * FROM lemmes "
+            "WHERE (lemme LIKE ? OR lemme LIKE ? OR lemme LIKE ?) COLLATE NOCASE "
+            "AND lemme != ? COLLATE NOCASE "
+            "ORDER BY freq_composite DESC, lemme "
+            "LIMIT ?",
+            (pattern, pattern_start, pattern_end, lemme, limite),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+    def exemples_entite(self, entite_id: int) -> list[str]:
+        """Retourne les exemples d'une entite (v5 uniquement)."""
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT texte FROM entite_exemples WHERE entite_id = ?",
+            (entite_id,),
+        )
+        return [row[0] for row in cur.fetchall() if row[0]]
 
     def decoder_multext(self, tag: str) -> dict[str, str]:
         """Decode un tag multext en traits lisibles. Delegue a _multext.py."""

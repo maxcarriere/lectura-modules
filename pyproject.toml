@@ -30,6 +30,7 @@ dependencies = [
     "lectura-aligneur>=2.2",
     "lectura-formules>=2.0",
     "lectura-lexique>=1.0",
+    "lectura-correcteur>=1.0",
 ]
 
 [project.optional-dependencies]

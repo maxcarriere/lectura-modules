@@ -49,6 +49,9 @@ _Outils-NLP/
 .claude/
 CLAUDE.md
 
+# Lexique DB (trop lourd pour GitHub — distribue separement)
+*.db
+
 # OS
 .DS_Store
 Thumbs.db

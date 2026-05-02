@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-correcteur"
+version = "1.0.0"
+description = "Correcteur orthographique et grammatical du francais — regles, homophones, accords, conjugaison, participes passes"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+keywords = ["correcteur", "french", "nlp", "orthographe", "grammaire", "homophones", "accords"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = ["lectura-lexique>=1.0"]
+
+[project.optional-dependencies]
+models = []
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Correcteur"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["scripts*", "benchmark*", "checkpoints*"]
+
+[tool.setuptools.package-data]
+lectura_correcteur = ["data/*.json", "data/*.json.gz", "data/*.db"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
