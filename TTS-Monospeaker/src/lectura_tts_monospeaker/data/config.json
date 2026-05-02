@@ -1,0 +1,34 @@
+{
+  "model": {
+    "n_phones": 51,
+    "d_model": 128,
+    "n_enc_layers": 4,
+    "n_dec_layers": 4,
+    "n_heads": 4,
+    "d_ff": 512,
+    "kernel_size": 9,
+    "n_mels": 80,
+    "n_phrase_types": 4
+  },
+  "audio": {
+    "sample_rate": 22050,
+    "n_fft": 1024,
+    "hop_length": 256,
+    "n_mels": 80,
+    "fmin": 0,
+    "fmax": 8000
+  },
+  "enhance": {
+    "spectral_alpha": 0.20,
+    "temporal_alpha": 0.20,
+    "noise_gate_threshold": -8.0,
+    "silence_val": -11.5,
+    "fade_frames": 5
+  },
+  "embeddings": {
+    "pitch_emb_weight": "PLACEHOLDER — genere par export_onnx.py",
+    "pitch_emb_bias": "PLACEHOLDER — genere par export_onnx.py",
+    "energy_emb_weight": "PLACEHOLDER — genere par export_onnx.py",
+    "energy_emb_bias": "PLACEHOLDER — genere par export_onnx.py"
+  }
+}

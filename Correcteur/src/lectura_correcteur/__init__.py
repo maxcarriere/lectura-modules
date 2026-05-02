@@ -23,7 +23,7 @@ Deux modes de fonctionnement :
     result = correcteur.corriger("Les enfant mange des pomme.")
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._types import (
