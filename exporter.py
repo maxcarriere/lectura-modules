@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-Export les fichiers du workspace vers output/Modules/ pour publication.
+Export les fichiers du workspace vers output/ pour publication.
 
-Niveau 1 (modules ouverts + API serveur) :
-  - Le code source Python est public
-  - Les modeles, donnees metier et l'algo d'alignement restent prives
-  - Les modeles numpy ne sont plus exportes (inference via API)
+Deux modes d'export :
+- PUBLIC  → output/Modules/         Code source (AGPL), sans modeles ni serveur
+                                     → GitHub + PyPI
+- PRIVE   → output/Modules-private/  Tout : code + modeles + serveur
+                                     → VPS / livraison client
 
 Usage :
-    python exporter.py              Exporte vers ../../output/Modules/
-    python exporter.py --dry-run    Montre ce qui serait copie sans rien faire
+    python exporter.py                        Export public + prive
+    python exporter.py --mode public          Export public uniquement
+    python exporter.py --mode private         Export prive uniquement
+    python exporter.py --dry-run              Apercu sans copie
+    python exporter.py --mode public --dry-run
 """
 
 import argparse
@@ -19,44 +23,58 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Plus de modeles numpy a exporter (inference via API serveur)
-EXTRAS: list[str] = []
+# ── Fichiers toujours exclus (outils internes du workspace) ──────────────
 
-# Fichiers a exclure de l'export (outils internes du workspace)
-EXCLUDE = [
+ALWAYS_EXCLUDE_FILES = [
     "exporter.py",
     "construire_wheels.py",
 ]
 
-# Dossiers a exclure (modules pas encore prets ou internes)
-EXCLUDE_DIRS = [
-    "Correcteur",
+# Extensions toujours exclues (artefacts de compilation)
+ALWAYS_EXCLUDE_EXTENSIONS = {".c", ".so"}
+
+# ── Exclusions PUBLIC (→ GitHub + PyPI) ──────────────────────────────────
+
+PUBLIC_EXCLUDE_DIRS = [
     "Exporter",
     "TTS",
     "TTS-Concat",
     "Pseudo-ortho",
     "dist_manylinux",
     "serveur",
+    "_Anciens Modules",
 ]
 
-# Fichiers specifiques a exclure (algo d'alignement + chargeur prive)
-EXCLUDE_FILES = [
-    "Aligneur/src/lectura_aligneur/lectura_aligneur.py",
-    "Aligneur/src/lectura_aligneur/_chargeur.py",
-]
-
-# Patterns de fichiers a exclure de l'export
-EXCLUDE_PATTERNS = [
-    # Donnees metier JSON (serveur uniquement)
-    "data/donnees_",
-    # Modeles ONNX et poids (serveur uniquement)
+PUBLIC_EXCLUDE_PATTERNS = [
     "modeles/",
     "modeles_numpy/",
+    "LICENCE-COMMERCIALE.md",
+    "editeur_weights.json.gz",
+    "ngram.db",
+    "Correcteur/src/lectura_correcteur/data/g2p_v2/",
+    "Correcteur/scripts/",
+    "Correcteur/benchmark/",
+    "Correcteur/checkpoints/",
+    "Correcteur/data/",
 ]
 
-# Extensions de fichiers a exclure
-EXCLUDE_EXTENSIONS = {".c", ".so"}
+# ── Exclusions PRIVE (→ VPS / client) ───────────────────────────────────
 
+PRIVATE_EXCLUDE_DIRS = [
+    "Exporter",
+    "TTS",
+    "TTS-Concat",
+    "Pseudo-ortho",
+    "dist_manylinux",
+    "_Anciens Modules",
+]
+
+PRIVATE_EXCLUDE_PATTERNS = [
+    "LICENCE.txt",
+]
+
+
+# ── Fonctions utilitaires ───────────────────────────────────────────────
 
 def get_git_files(repo_root: Path) -> list[str]:
     """Renvoie la liste des fichiers trackes par git."""
@@ -70,39 +88,34 @@ def get_git_files(repo_root: Path) -> list[str]:
     return [f for f in result.stdout.splitlines() if f]
 
 
-def collect_extra_files(repo_root: Path) -> list[str]:
-    """Collecte les fichiers des dossiers extras."""
-    files = []
-    for extra_dir in EXTRAS:
-        extra_path = repo_root / extra_dir
-        if extra_path.is_dir():
-            for root, _, filenames in os.walk(extra_path):
-                for filename in filenames:
-                    full = Path(root) / filename
-                    files.append(str(full.relative_to(repo_root)))
-    return files
+def get_untracked_files(repo_root: Path) -> list[str]:
+    """Renvoie les fichiers non trackes (modeles, serveur, etc.)."""
+    result = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [f for f in result.stdout.splitlines() if f]
 
 
-def _should_exclude(filepath: str) -> bool:
+def _should_exclude(
+    filepath: str,
+    exclude_dirs: list[str],
+    exclude_patterns: list[str],
+) -> bool:
     """Determine si un fichier doit etre exclu de l'export."""
-    # Fichiers explicitement exclus
-    if filepath in EXCLUDE:
+    if filepath in ALWAYS_EXCLUDE_FILES:
         return True
 
-    # Dossiers exclus
-    if any(filepath.startswith(d + "/") for d in EXCLUDE_DIRS):
+    if any(filepath.startswith(d + "/") for d in exclude_dirs):
         return True
 
-    # Fichiers specifiques exclus
-    if filepath in EXCLUDE_FILES:
+    if any(p in filepath for p in exclude_patterns):
         return True
 
-    # Patterns de fichiers exclus
-    if any(p in filepath for p in EXCLUDE_PATTERNS):
-        return True
-
-    # Extensions exclues (fichiers .c et .so generes par Cython)
-    for ext in EXCLUDE_EXTENSIONS:
+    for ext in ALWAYS_EXCLUDE_EXTENSIONS:
         if filepath.endswith(ext):
             return True
 
@@ -119,36 +132,45 @@ def format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} Mo"
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Export workspace vers output/Modules/")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Affiche ce qui serait copie sans rien faire",
-    )
-    args = parser.parse_args()
+# ── Export principal ────────────────────────────────────────────────────
 
-    repo_root = Path(__file__).resolve().parent
-    output_dir = repo_root.parent.parent / "output" / "Modules"
+def _exporter(
+    repo_root: Path,
+    output_dir: Path,
+    exclude_dirs: list[str],
+    exclude_patterns: list[str],
+    label: str,
+    dry_run: bool,
+    include_untracked: bool = False,
+) -> None:
+    """Exporte les fichiers vers output_dir avec les exclusions donnees."""
 
     # Collecter les fichiers
-    git_files = get_git_files(repo_root)
-    extra_files = collect_extra_files(repo_root)
+    all_files = get_git_files(repo_root)
 
-    # Fusionner sans doublons, en gardant l'ordre
-    all_files = list(dict.fromkeys(git_files + extra_files))
+    if include_untracked:
+        untracked = get_untracked_files(repo_root)
+        # Fusionner sans doublons
+        seen = set(all_files)
+        for f in untracked:
+            if f not in seen:
+                all_files.append(f)
+                seen.add(f)
 
     # Appliquer les exclusions
-    all_files = [f for f in all_files if not _should_exclude(f)]
+    all_files = [
+        f for f in all_files
+        if not _should_exclude(f, exclude_dirs, exclude_patterns)
+    ]
 
     # Verifier que tous les fichiers existent
     missing = [f for f in all_files if not (repo_root / f).exists()]
     if missing:
-        print(f"ATTENTION : {len(missing)} fichier(s) manquant(s) :")
+        print(f"  ATTENTION : {len(missing)} fichier(s) manquant(s) :")
         for f in missing[:10]:
-            print(f"  - {f}")
+            print(f"    - {f}")
         if len(missing) > 10:
-            print(f"  ... et {len(missing) - 10} autres")
+            print(f"    ... et {len(missing) - 10} autres")
 
     existing_files = [f for f in all_files if (repo_root / f).exists()]
 
@@ -167,9 +189,9 @@ def main():
 
     # Afficher le resume
     print(f"\n{'=' * 55}")
-    if args.dry_run:
+    if dry_run:
         print("  MODE DRY-RUN — rien ne sera copie")
-    print(f"  Export Niveau 1 (modules ouverts + API)")
+    print(f"  {label}")
     print(f"  Source : {repo_root}")
     print(f"     ->   {output_dir}")
     print(f"{'=' * 55}")
@@ -182,7 +204,13 @@ def main():
     print(f"  {'TOTAL':<20} {total_count:>10} {format_size(total_size):>10}")
 
     # Fichiers exclus notables
-    excluded_files = [f for f in git_files if _should_exclude(f)]
+    all_candidates = get_git_files(repo_root)
+    if include_untracked:
+        all_candidates = list(dict.fromkeys(all_candidates + get_untracked_files(repo_root)))
+    excluded_files = [
+        f for f in all_candidates
+        if _should_exclude(f, exclude_dirs, exclude_patterns)
+    ]
     if excluded_files:
         print(f"\n  Exclus : {len(excluded_files)} fichier(s)")
         for f in excluded_files[:15]:
@@ -190,8 +218,8 @@ def main():
         if len(excluded_files) > 15:
             print(f"    ... et {len(excluded_files) - 15} autres")
 
-    if args.dry_run:
-        print(f"\n  Dry-run termine. Relancer sans --dry-run pour copier.\n")
+    if dry_run:
+        print(f"\n  Dry-run termine.\n")
         return
 
     # Nettoyer l'ancien output (en preservant .git/)
@@ -224,6 +252,48 @@ def main():
     actual_count = sum(1 for f in output_dir.rglob("*") if f.is_file())
     print(f"\n  Verification : {actual_count} fichiers, {format_size(actual_size)}")
     print(f"  Export termine avec succes !\n")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Export workspace vers output/ (public et/ou prive)"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["public", "private", "both"],
+        default="both",
+        help="Mode d'export : public (GitHub/PyPI), private (VPS/client), both (defaut)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Affiche ce qui serait copie sans rien faire",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parent
+    output_base = repo_root.parent.parent / "output"
+
+    if args.mode in ("public", "both"):
+        _exporter(
+            repo_root=repo_root,
+            output_dir=output_base / "Modules",
+            exclude_dirs=PUBLIC_EXCLUDE_DIRS,
+            exclude_patterns=PUBLIC_EXCLUDE_PATTERNS,
+            label="Export PUBLIC (modules ouverts, sans modeles)",
+            dry_run=args.dry_run,
+        )
+
+    if args.mode in ("private", "both"):
+        _exporter(
+            repo_root=repo_root,
+            output_dir=output_base / "Modules-private",
+            exclude_dirs=PRIVATE_EXCLUDE_DIRS,
+            exclude_patterns=PRIVATE_EXCLUDE_PATTERNS,
+            label="Export PRIVE (code + modeles + serveur)",
+            dry_run=args.dry_run,
+            include_untracked=True,
+        )
 
 
 if __name__ == "__main__":
