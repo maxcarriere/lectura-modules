@@ -1,8 +1,8 @@
 # Lectura NLP — Modules de traitement du langage naturel pour le francais
 
 Briques logicielles autonomes pour le traitement du francais : tokenisation,
-phonetique, syllabes, formules. Installez tout d'un coup avec `pip install lectura`
-ou chaque module independamment.
+phonetique, syllabes, formules, correction orthographique et grammaticale.
+Installez tout d'un coup avec `pip install lectura` ou chaque module independamment.
 
 ## Modules
 
@@ -13,6 +13,8 @@ ou chaque module independamment.
 | **[P2G](P2G/)** | Phoneme-to-Grapheme unifie + POS + Morpho (IPA vers orthographe) | 3.0.0 | `pip install lectura-p2g` |
 | **[Aligneur-Syllabeur](Aligneur/)** | Alignement grapheme-phoneme, groupes de lecture, syllabation | 2.2.0 | `pip install lectura-aligneur` |
 | **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 2.0.0 | `pip install lectura-formules` |
+| **[Correcteur](Correcteur/)** | Correcteur orthographique et grammatical du francais | 1.0.0 | `pip install lectura-correcteur` |
+| **[Lexique](Lexique/)** | Acces au lexique francais (formes, frequences, POS, morphologie) | 1.0.0 | `pip install lectura-lexique` |
 
 ## Caracteristiques
 
