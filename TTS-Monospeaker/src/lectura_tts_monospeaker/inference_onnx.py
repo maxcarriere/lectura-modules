@@ -144,14 +144,17 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
         return []
 
     # Collecter uniquement les MOT pour G2P (les FORMULE ont deja leur IPA)
+    # Les mots composes (tirets) sont scindes en sous-mots pour le G2P
     all_mot_words: list[str] = []
     mot_counts: list[int] = []
     for sent_tokens in sentences:
-        n = sum(1 for t in sent_tokens if t.type.name == "MOT")
+        n = 0
+        for t in sent_tokens:
+            if t.type.name == "MOT":
+                parts = [p for p in t.text.split("-") if p]
+                all_mot_words.extend(parts)
+                n += len(parts)
         mot_counts.append(n)
-        all_mot_words.extend(
-            t.text for t in sent_tokens if t.type.name == "MOT"
-        )
 
     # Un seul appel G2P pour tous les mots (pas les formules)
     if all_mot_words:
@@ -236,15 +239,18 @@ def _build_word_entries(
 
     for tok in sent_tokens:
         if tok.type.name == "MOT":
-            if mi < len(mot_ipa):
-                entries.append({
-                    "ipa": mot_ipa[mi],
-                    "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
-                    "punct_before": pending_punct,
-                    "punct_after": None,
-                })
-                mi += 1
-                pending_punct = None
+            # Scinder les mots composes (tirets) — chaque partie a son IPA G2P
+            parts = [p for p in tok.text.split("-") if p]
+            for j, _part in enumerate(parts):
+                if mi < len(mot_ipa):
+                    entries.append({
+                        "ipa": mot_ipa[mi],
+                        "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
+                        "punct_before": pending_punct if j == 0 else None,
+                        "punct_after": None,
+                    })
+                    mi += 1
+                    pending_punct = None
 
         elif tok.type.name == "FORMULE":
             # Utiliser le phone des formules (construit morceau par morceau)
