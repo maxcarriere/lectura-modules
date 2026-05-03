@@ -243,7 +243,7 @@ class OnnxTTSEngine:
         self._ensure_loaded()
 
         from lectura_tts_monospeaker.phonemes import ipa_to_phones
-        from lectura_tts_monospeaker._enhance import enhance_mel, noise_gate, fade_out
+        from lectura_tts_monospeaker._enhance import enhance_mel, noise_gate, fade_out, waveform_silence_gate
 
         # Convertir IPA → phone IDs
         phones = ipa_to_phones(phonemes_ipa)
@@ -322,6 +322,9 @@ class OnnxTTSEngine:
         mel_input = mel_np[np.newaxis].astype(np.float32)
         audio = self._hifigan.run(None, {"mel": mel_input})[0]  # [1, 1, T_audio]
         audio = audio.squeeze()
+
+        # Gate silence post-vocoder (supprime les artefacts HiFi-GAN)
+        audio = waveform_silence_gate(audio, sample_rate=self._sample_rate)
 
         # Normaliser
         max_val = max(abs(audio.max()), abs(audio.min()), 1e-8)
