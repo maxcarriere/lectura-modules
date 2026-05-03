@@ -327,9 +327,15 @@ def _build_word_entries(
 
 
 def _build_ipa_simple(word_entries: list[dict]) -> str:
-    """Construit l'IPA sans liaisons (fallback sans aligneur)."""
+    """Construit l'IPA sans liaisons (fallback sans aligneur).
+
+    Insere des espaces entre les mots pour marquer les frontieres
+    (utile pour les phoneme_timings et le DTW d'alignement).
+    """
     parts: list[str] = []
-    for entry in word_entries:
+    for i, entry in enumerate(word_entries):
+        if i > 0 and not word_entries[i - 1].get("punct_after"):
+            parts.append(" ")
         parts.append(entry["ipa"])
         if entry["punct_after"]:
             parts.append(entry["punct_after"])
@@ -366,9 +372,14 @@ def _build_ipa_groupes(
     # Assembler l'IPA depuis les groupes + ponctuation inter-groupes
     # NB: phone_groupe ne contient PAS les consonnes de liaison,
     # elles sont indiquees dans jonctions ("liaison_z", "liaison_t", etc.)
+    # On insere des espaces entre les groupes pour marquer les frontieres.
     parts: list[str] = []
     wd_offset = 0
-    for grp in groupes:
+    for gi, grp in enumerate(groupes):
+        # Espace entre groupes (sauf avant le premier, et sauf apres ponctuation)
+        if gi > 0 and parts and parts[-1] not in (",", ".", "?", "!", "\u2026"):
+            parts.append(" ")
+
         # Reconstituer l'IPA du groupe avec insertions de liaison
         grp_phones = [m.phone for m in grp.mots]
         if grp.jonctions:
