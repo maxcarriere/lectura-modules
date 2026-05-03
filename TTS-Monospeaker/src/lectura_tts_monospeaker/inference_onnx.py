@@ -32,6 +32,66 @@ _SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
 # Durees minimales en frames pour la ponctuation (1 frame ≈ 11.6 ms)
 _PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 25}
 
+# Phones correspondant a des silences (zeroes dans l'audio)
+_SILENCE_PHONES = {"#", ",", ".", "?", "!", "\u2026"}
+
+
+def _zero_silence_regions(
+    audio: np.ndarray,
+    phones: list[str],
+    durations: np.ndarray,
+    hop_length: int,
+    fade_samples: int = 128,
+) -> np.ndarray:
+    """Remplace les zones SIL/ponctuation par du vrai silence.
+
+    Utilise les durees predites pour identifier precisement les regions
+    de silence et de ponctuation, puis les met a zero avec un court
+    fondu aux transitions pour eviter les clics.
+
+    Args:
+        audio: Signal float32 mono.
+        phones: Liste des phones (sans les SIL aux extremites).
+        durations: Durees en frames [SIL, phone1, ..., phoneN, SIL].
+        hop_length: Nombre d'echantillons par frame.
+        fade_samples: Longueur du fondu aux transitions.
+    """
+    if len(audio) == 0:
+        return audio
+
+    # Construire le masque : 1.0 = parole, 0.0 = silence
+    all_phones = ["#"] + list(phones) + ["#"]
+    mask = np.ones(len(audio), dtype=np.float32)
+
+    offset = 0
+    for i, phone in enumerate(all_phones):
+        dur_samples = int(durations[i]) * hop_length
+        if phone in _SILENCE_PHONES:
+            s = max(0, offset)
+            e = min(len(audio), offset + dur_samples)
+            mask[s:e] = 0.0
+        offset += dur_samples
+
+    # Lisser les transitions (fondu dans la zone de silence)
+    fade = fade_samples
+    diff = np.diff(mask, prepend=mask[0])
+
+    # Transitions 1→0 (parole → silence) : fondu au debut du silence
+    for idx in np.where(diff < -0.5)[0]:
+        e = min(len(audio), idx + fade)
+        n = e - idx
+        if n > 0:
+            mask[idx:e] = np.linspace(1.0, 0.0, n)
+
+    # Transitions 0→1 (silence → parole) : fondu a la fin du silence
+    for idx in np.where(diff > 0.5)[0]:
+        s = max(0, idx - fade)
+        n = idx - s
+        if n > 0:
+            mask[s:idx] = np.linspace(0.0, 1.0, n)
+
+    return audio * mask
+
 
 def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
     """Decoupe le texte en phrases, chacune avec IPA + phrase_type.
@@ -315,7 +375,7 @@ class OnnxTTSEngine:
         self._ensure_loaded()
 
         from lectura_tts_monospeaker.phonemes import ipa_to_phones
-        from lectura_tts_monospeaker._enhance import enhance_mel, noise_gate, fade_out, waveform_silence_gate
+        from lectura_tts_monospeaker._enhance import enhance_mel, noise_gate, fade_out
 
         # Convertir IPA → phone IDs
         phones = ipa_to_phones(phonemes_ipa)
@@ -405,15 +465,17 @@ class OnnxTTSEngine:
         audio = self._hifigan.run(None, {"mel": mel_input})[0]  # [1, 1, T_audio]
         audio = audio.squeeze()
 
-        # Gate silence post-vocoder (supprime les artefacts HiFi-GAN)
-        audio = waveform_silence_gate(audio, sample_rate=self._sample_rate)
+        # 8. Post-traitement audio
+        hop_length = self._config.get("audio", {}).get("hop_length", 256)
+
+        # Zeroing des silences/ponctuation (base sur les durees predites)
+        audio = _zero_silence_regions(audio, phones, durations, hop_length)
 
         # Normaliser
         max_val = max(abs(audio.max()), abs(audio.min()), 1e-8)
         audio = np.clip(audio / max_val, -1.0, 1.0).astype(np.float32)
 
-        # 8. Construire les timings phonemes
-        hop_length = self._config.get("audio", {}).get("hop_length", 256)
+        # 9. Construire les timings phonemes
         timings = self._build_timings(phones, durations, hop_length)
 
         return TTSResult(
