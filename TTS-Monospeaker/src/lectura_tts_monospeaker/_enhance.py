@@ -89,3 +89,72 @@ def fade_out(
         fade = np.linspace(1.0, 0.0, n)
         mel[:, -n:] = mel[:, -n:] * fade + silence_val * (1.0 - fade)
     return mel
+
+
+def waveform_silence_gate(
+    audio: np.ndarray,
+    sample_rate: int = 22050,
+    window_ms: float = 10.0,
+    threshold_db: float = -40.0,
+    fade_samples: int = 64,
+) -> np.ndarray:
+    """Gate les zones silencieuses de la forme d'onde (post-vocoder).
+
+    Calcule le RMS local par fenetre. La ou le RMS est sous le seuil,
+    le signal est attenue vers zero avec un fondu pour eviter les clics.
+
+    Args:
+        audio: Signal float32 mono.
+        sample_rate: Frequence d'echantillonnage.
+        window_ms: Taille de la fenetre d'analyse en ms.
+        threshold_db: Seuil en dB sous lequel on considere le silence.
+        fade_samples: Nombre d'echantillons pour le fondu entree/sortie.
+    """
+    if len(audio) == 0:
+        return audio
+
+    win_size = max(1, int(sample_rate * window_ms / 1000))
+    threshold_lin = 10 ** (threshold_db / 20)
+
+    # Calculer le RMS par fenetre
+    n_windows = len(audio) // win_size
+    if n_windows == 0:
+        return audio
+
+    # Masque de gate : 1.0 = garder, 0.0 = silence
+    gate = np.ones(len(audio), dtype=np.float32)
+
+    for i in range(n_windows):
+        start = i * win_size
+        end = start + win_size
+        rms = np.sqrt(np.mean(audio[start:end] ** 2))
+        if rms < threshold_lin:
+            gate[start:end] = 0.0
+
+    # Traiter le reste
+    remainder = len(audio) - n_windows * win_size
+    if remainder > 0:
+        start = n_windows * win_size
+        rms = np.sqrt(np.mean(audio[start:] ** 2))
+        if rms < threshold_lin:
+            gate[start:] = 0.0
+
+    # Lisser les transitions avec un fondu
+    diff = np.diff(gate, prepend=gate[0])
+    # Transitions 0→1 (ouverture)
+    opens = np.where(diff > 0.5)[0]
+    for idx in opens:
+        start = max(0, idx - fade_samples)
+        length = idx - start
+        if length > 0:
+            gate[start:idx] = np.linspace(0.0, 1.0, length)
+
+    # Transitions 1→0 (fermeture)
+    closes = np.where(diff < -0.5)[0]
+    for idx in closes:
+        end = min(len(audio), idx + fade_samples)
+        length = end - idx
+        if length > 0:
+            gate[idx:end] = np.linspace(1.0, 0.0, length)
+
+    return audio * gate
