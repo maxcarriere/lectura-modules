@@ -48,7 +48,6 @@ class EntreeLemme(TypedDict, total=False):
     lemme: str
     cgram: str
     genre: str
-    contrainte_nombre: str
     sous_type: str
     etymologie: str
     freq_opensubs: float

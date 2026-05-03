@@ -22,6 +22,30 @@ log = logging.getLogger(__name__)
 
 SEMITONE = 0.0577622  # log(2) / 12
 
+# Cache des mots avec correction G2P (evite de splitter les composés corrigés)
+_G2P_CORRECTIONS_KEYS: set[str] | None = None
+
+
+def _get_g2p_corrections() -> set[str]:
+    """Charge les clefs de la table de corrections G2P (singleton).
+
+    Permet de savoir si un mot compose (avec tiret) a une correction
+    dediee, auquel cas on ne le scinde pas avant le G2P.
+    """
+    global _G2P_CORRECTIONS_KEYS
+    if _G2P_CORRECTIONS_KEYS is not None:
+        return _G2P_CORRECTIONS_KEYS
+    _G2P_CORRECTIONS_KEYS = set()
+    try:
+        import lectura_nlp
+        corr_path = Path(lectura_nlp.__file__).parent / "data" / "g2p_corrections_unifie.json"
+        if corr_path.exists():
+            with open(corr_path, encoding="utf-8") as f:
+                _G2P_CORRECTIONS_KEYS = set(json.load(f).keys())
+    except (ImportError, Exception):
+        pass
+    return _G2P_CORRECTIONS_KEYS
+
 # Ponctuation reconnue par le modele TTS
 _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
               "\u2026": "\u2026", "...": "\u2026"}
@@ -144,16 +168,23 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
         return []
 
     # Collecter uniquement les MOT pour G2P (les FORMULE ont deja leur IPA)
-    # Les mots composes (tirets) sont scindes en sous-mots pour le G2P
+    # Les mots composes (tirets) sont scindes en sous-mots pour le G2P,
+    # SAUF si le mot complet a une correction dediee dans la table G2P.
+    corrections = _get_g2p_corrections()
     all_mot_words: list[str] = []
     mot_counts: list[int] = []
     for sent_tokens in sentences:
         n = 0
         for t in sent_tokens:
             if t.type.name == "MOT":
-                parts = [p for p in t.text.split("-") if p]
-                all_mot_words.extend(parts)
-                n += len(parts)
+                if "-" in t.text and t.text.lower() in corrections:
+                    # Correction dediee : passer le mot entier
+                    all_mot_words.append(t.text)
+                    n += 1
+                else:
+                    parts = [p for p in t.text.split("-") if p]
+                    all_mot_words.extend(parts)
+                    n += len(parts)
         mot_counts.append(n)
 
     # Un seul appel G2P pour tous les mots (pas les formules)
@@ -205,7 +236,7 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
         # Construire la sequence IPA/liaison a partir des tokens
         # Les MOT prennent leur IPA du G2P, les FORMULE de lecture.phone
         word_entries = _build_word_entries(
-            sent_tokens, sent_mot_ipa, sent_mot_liaison,
+            sent_tokens, sent_mot_ipa, sent_mot_liaison, corrections,
         )
 
         if not word_entries:
@@ -226,6 +257,7 @@ def _build_word_entries(
     sent_tokens: list,
     mot_ipa: list[str],
     mot_liaison: list[str],
+    corrections: set[str] | None = None,
 ) -> list[dict]:
     """Construit la liste des entrees mot/formule/ponctuation pour une phrase.
 
@@ -236,21 +268,34 @@ def _build_word_entries(
     entries: list[dict] = []
     pending_punct: str | None = None
     mi = 0  # index dans mot_ipa
+    corr = corrections or set()
 
     for tok in sent_tokens:
         if tok.type.name == "MOT":
-            # Scinder les mots composes (tirets) — chaque partie a son IPA G2P
-            parts = [p for p in tok.text.split("-") if p]
-            for j, _part in enumerate(parts):
+            if "-" in tok.text and tok.text.lower() in corr:
+                # Mot compose avec correction dediee — passe entier au G2P
                 if mi < len(mot_ipa):
                     entries.append({
                         "ipa": mot_ipa[mi],
                         "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
-                        "punct_before": pending_punct if j == 0 else None,
+                        "punct_before": pending_punct,
                         "punct_after": None,
                     })
                     mi += 1
                     pending_punct = None
+            else:
+                # Scinder les mots composes (tirets) — chaque partie a son IPA G2P
+                parts = [p for p in tok.text.split("-") if p]
+                for j, _part in enumerate(parts):
+                    if mi < len(mot_ipa):
+                        entries.append({
+                            "ipa": mot_ipa[mi],
+                            "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
+                            "punct_before": pending_punct if j == 0 else None,
+                            "punct_after": None,
+                        })
+                        mi += 1
+                        pending_punct = None
 
         elif tok.type.name == "FORMULE":
             # Utiliser le phone des formules (construit morceau par morceau)
@@ -540,6 +585,17 @@ class OnnxTTSEngine:
 
         # Convertir IPA → phone IDs
         phones = ipa_to_phones(phonemes_ipa)
+
+        # Reperer les frontieres de mots (espaces dans l'IPA) pour les timings
+        space_after: list[int] = []
+        segments = phonemes_ipa.split(" ")
+        phone_count = 0
+        for seg_idx, segment in enumerate(segments):
+            if segment:
+                phone_count += len(ipa_to_phones(segment))
+            if seg_idx < len(segments) - 1 and phone_count > 0:
+                space_after.append(phone_count - 1)
+
         sil_id = self._phone2id["#"]
         unk_id = self._phone2id.get("<UNK>", 1)
 
@@ -636,8 +692,8 @@ class OnnxTTSEngine:
         max_val = max(abs(audio.max()), abs(audio.min()), 1e-8)
         audio = np.clip(audio / max_val, -1.0, 1.0).astype(np.float32)
 
-        # 9. Construire les timings phonemes
-        timings = self._build_timings(phones, durations, hop_length)
+        # 9. Construire les timings phonemes (avec espaces aux frontieres de mots)
+        timings = self._build_timings(phones, durations, hop_length, space_after)
 
         return TTSResult(
             samples=audio,
@@ -650,10 +706,14 @@ class OnnxTTSEngine:
         phones: list[str],
         durations: np.ndarray,
         hop_length: int,
+        space_after: list[int] | None = None,
     ) -> list[PhonemeTiming]:
-        """Construit les timings phonemes depuis les durees predites."""
+        """Construit les timings phonemes depuis les durees predites.
+
+        Si space_after est fourni, insere des PhonemeTiming(ipa=" ")
+        aux frontieres de mots pour le DTW d'alignement.
+        """
         timings: list[PhonemeTiming] = []
-        sample_pos = 0
 
         # durations correspond a [SIL, ...phones..., SIL]
         # on skip le premier SIL
@@ -666,5 +726,15 @@ class OnnxTTSEngine:
             end_ms = (offset + dur_samples) / self._sample_rate * 1000
             timings.append(PhonemeTiming(ipa=phone, start_ms=start_ms, end_ms=end_ms))
             offset += dur_samples
+
+        # Inserer les espaces aux frontieres de mots (du dernier au premier)
+        if space_after:
+            sa = set(space_after)
+            for idx in sorted(sa, reverse=True):
+                if 0 <= idx < len(timings):
+                    boundary_ms = timings[idx].end_ms
+                    timings.insert(idx + 1, PhonemeTiming(
+                        ipa=" ", start_ms=boundary_ms, end_ms=boundary_ms,
+                    ))
 
         return timings
