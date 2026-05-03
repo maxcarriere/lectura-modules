@@ -143,27 +143,24 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
     if not sentences:
         return []
 
-    # Expandre les formules et collecter tous les mots pour G2P
-    all_words: list[str] = []
-    word_counts: list[int] = []
+    # Collecter uniquement les MOT pour G2P (les FORMULE ont deja leur IPA)
+    all_mot_words: list[str] = []
+    mot_counts: list[int] = []
     for sent_tokens in sentences:
-        words: list[str] = []
-        for tok in sent_tokens:
-            if tok.type.name == "MOT":
-                words.append(tok.text)
-            elif tok.type.name == "FORMULE":
-                display = getattr(tok, "display_fr", "") or tok.text
-                words.extend(display.split())
-        word_counts.append(len(words))
-        all_words.extend(words)
+        n = sum(1 for t in sent_tokens if t.type.name == "MOT")
+        mot_counts.append(n)
+        all_mot_words.extend(
+            t.text for t in sent_tokens if t.type.name == "MOT"
+        )
 
-    if not all_words:
-        return []
-
-    # Un seul appel G2P pour tous les mots
-    g2p_result = g2p.analyser(all_words)
-    all_ipa = g2p_result.get("g2p", [])
-    all_liaison = g2p_result.get("liaison", [])
+    # Un seul appel G2P pour tous les mots (pas les formules)
+    if all_mot_words:
+        g2p_result = g2p.analyser(all_mot_words)
+        all_mot_ipa = g2p_result.get("g2p", [])
+        all_mot_liaison = g2p_result.get("liaison", [])
+    else:
+        all_mot_ipa = []
+        all_mot_liaison = []
 
     # Importer l'aligneur si disponible (pour les liaisons)
     _cg = None
@@ -178,15 +175,16 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
 
     # Construire l'IPA par phrase
     results: list[tuple[str, int]] = []
-    ipa_idx = 0
+    mot_idx = 0
 
-    for sent_tokens, n_words in zip(sentences, word_counts):
-        sent_ipa = all_ipa[ipa_idx:ipa_idx + n_words]
-        sent_liaison = (
-            all_liaison[ipa_idx:ipa_idx + n_words]
-            if all_liaison else ["none"] * n_words
+    for sent_tokens, n_mots in zip(sentences, mot_counts):
+        # Distribuer les resultats G2P pour cette phrase
+        sent_mot_ipa = all_mot_ipa[mot_idx:mot_idx + n_mots]
+        sent_mot_liaison = (
+            all_mot_liaison[mot_idx:mot_idx + n_mots]
+            if all_mot_liaison else ["none"] * n_mots
         )
-        ipa_idx += n_words
+        mot_idx += n_mots
 
         # Detecter phrase_type depuis la ponctuation terminale
         phrase_type = 0
@@ -201,12 +199,19 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
                     phrase_type = 3
                 break
 
-        if _cg is not None and _MA is not None and sent_ipa:
-            ipa = _build_ipa_groupes(
-                sent_tokens, sent_ipa, sent_liaison, _cg, _MA,
-            )
+        # Construire la sequence IPA/liaison a partir des tokens
+        # Les MOT prennent leur IPA du G2P, les FORMULE de lecture.phone
+        word_entries = _build_word_entries(
+            sent_tokens, sent_mot_ipa, sent_mot_liaison,
+        )
+
+        if not word_entries:
+            continue
+
+        if _cg is not None and _MA is not None:
+            ipa = _build_ipa_groupes(word_entries, _cg, _MA)
         else:
-            ipa = _build_ipa_simple(sent_tokens, sent_ipa)
+            ipa = _build_ipa_simple(word_entries)
 
         if ipa:
             results.append((ipa, phrase_type))
@@ -214,86 +219,94 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
     return results
 
 
-def _build_ipa_simple(sent_tokens: list, sent_ipa: list[str]) -> str:
-    """Construit l'IPA sans liaisons (fallback sans aligneur)."""
-    parts: list[str] = []
-    word_idx = 0
+def _build_word_entries(
+    sent_tokens: list,
+    mot_ipa: list[str],
+    mot_liaison: list[str],
+) -> list[dict]:
+    """Construit la liste des entrees mot/formule/ponctuation pour une phrase.
+
+    Chaque entree est un dict avec : type, ipa, liaison, punct_before, punct_after.
+    Les FORMULE utilisent lecture.phone directement (construit composant par
+    composant), les MOT utilisent le G2P.
+    """
+    entries: list[dict] = []
+    pending_punct: str | None = None
+    mi = 0  # index dans mot_ipa
+
     for tok in sent_tokens:
         if tok.type.name == "MOT":
-            if word_idx < len(sent_ipa):
-                parts.append(sent_ipa[word_idx])
-                word_idx += 1
+            if mi < len(mot_ipa):
+                entries.append({
+                    "ipa": mot_ipa[mi],
+                    "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
+                    "punct_before": pending_punct,
+                    "punct_after": None,
+                })
+                mi += 1
+                pending_punct = None
+
         elif tok.type.name == "FORMULE":
-            display = getattr(tok, "display_fr", "") or tok.text
-            n = len(display.split())
-            for _ in range(n):
-                if word_idx < len(sent_ipa):
-                    parts.append(sent_ipa[word_idx])
-                    word_idx += 1
+            # Utiliser le phone des formules (construit morceau par morceau)
+            lecture = getattr(tok, "lecture", None)
+            if lecture and getattr(lecture, "phone", ""):
+                # phone contient des espaces entre composants : "kaʁɑ̃t dø"
+                components = lecture.phone.split()
+            else:
+                # Fallback : texte brut comme un seul mot
+                components = [tok.text]
+
+            for j, comp_ipa in enumerate(components):
+                entries.append({
+                    "ipa": comp_ipa,
+                    "liaison": "none",
+                    "punct_before": pending_punct if j == 0 else None,
+                    "punct_after": None,
+                })
+                pending_punct = None
+
         elif tok.type.name == "PONCTUATION":
-            punct = _PUNCT_MAP.get(tok.text.strip())
-            if punct:
-                parts.append(punct)
+            p = _PUNCT_MAP.get(tok.text.strip())
+            if p:
+                if entries:
+                    entries[-1]["punct_after"] = p
+                pending_punct = p
+
+    return entries
+
+
+def _build_ipa_simple(word_entries: list[dict]) -> str:
+    """Construit l'IPA sans liaisons (fallback sans aligneur)."""
+    parts: list[str] = []
+    for entry in word_entries:
+        parts.append(entry["ipa"])
+        if entry["punct_after"]:
+            parts.append(entry["punct_after"])
     return "".join(parts)
 
 
 def _build_ipa_groupes(
-    sent_tokens: list,
-    sent_ipa: list[str],
-    sent_liaison: list[str],
+    word_entries: list[dict],
     construire_groupes,
     MotAnalyse,
 ) -> str:
     """Construit l'IPA avec liaisons via l'aligneur.
 
-    Cree des MotAnalyse a partir des resultats G2P, applique
-    construire_groupes() pour obtenir phone_groupe avec liaisons,
+    Cree des MotAnalyse a partir des entrees, applique
+    construire_groupes() pour les liaisons et enchainements,
     puis reassemble avec la ponctuation.
     """
-    # Construire la liste de mots avec info ponctuation
-    words_info: list[dict] = []
-    pending_punct: str | None = None
-    word_idx = 0
-
-    for tok in sent_tokens:
-        if tok.type.name in ("MOT", "FORMULE"):
-            if tok.type.name == "FORMULE":
-                display = getattr(tok, "display_fr", "") or tok.text
-                n = len(display.split())
-            else:
-                n = 1
-            for j in range(n):
-                if word_idx < len(sent_ipa):
-                    words_info.append({
-                        "ipa": sent_ipa[word_idx],
-                        "liaison": (
-                            sent_liaison[word_idx]
-                            if word_idx < len(sent_liaison)
-                            else "none"
-                        ),
-                        "punct_before": pending_punct if j == 0 else None,
-                        "punct_after": None,
-                    })
-                    word_idx += 1
-                    pending_punct = None
-        elif tok.type.name == "PONCTUATION":
-            p = _PUNCT_MAP.get(tok.text.strip())
-            if p:
-                if words_info:
-                    words_info[-1]["punct_after"] = p
-                pending_punct = p
-
-    if not words_info:
+    if not word_entries:
         return ""
 
     # Construire les MotAnalyse
     mots = [
         MotAnalyse(
-            phone=wi["ipa"],
-            liaison=wi["liaison"],
-            ponctuation_avant=wi["punct_before"] is not None,
+            phone=e["ipa"],
+            liaison=e["liaison"],
+            ponctuation_avant=e["punct_before"] is not None,
         )
-        for wi in words_info
+        for e in word_entries
     ]
 
     # Construire les groupes de lecture (applique liaisons + enchainements)
@@ -318,8 +331,8 @@ def _build_ipa_groupes(
             parts.append(grp.phone_groupe)
 
         last_idx = wd_offset + len(grp.mots) - 1
-        if last_idx < len(words_info) and words_info[last_idx]["punct_after"]:
-            parts.append(words_info[last_idx]["punct_after"])
+        if last_idx < len(word_entries) and word_entries[last_idx]["punct_after"]:
+            parts.append(word_entries[last_idx]["punct_after"])
         wd_offset += len(grp.mots)
 
     return "".join(parts)
