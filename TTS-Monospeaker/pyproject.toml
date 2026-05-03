@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tts-monospeaker"
-version = "1.0.0"
+version = "1.1.0"
 description = "Synthese vocale neuronale monospeaker francais — FastPitch-Lite + HiFi-GAN (ONNX)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Proprietary"}
+license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
 keywords = ["tts", "french", "speech-synthesis", "onnx", "fastpitch"]
 classifiers = [
@@ -24,7 +24,7 @@ dependencies = []
 
 [project.optional-dependencies]
 onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
-g2p = ["lectura-g2p"]
+g2p = ["lectura-g2p", "lectura-tokeniseur"]
 all = ["lectura-tts-monospeaker[onnx,g2p]"]
 
 [project.urls]

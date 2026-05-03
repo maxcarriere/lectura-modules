@@ -2039,6 +2039,34 @@ class Lexique:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    def rechercher_dans_exemples(
+        self, terme: str, limite: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Recherche les lemmes dont un exemple/citation contient le terme.
+
+        Necessite la table ``sens_exemples`` (v5). Retourne [] si indisponible.
+
+        Args:
+            terme: Texte a chercher (LIKE %terme%)
+            limite: Nombre max de resultats
+
+        Returns:
+            Liste de dicts avec id, lemme, cgram, genre, freq_composite
+        """
+        if self._backend != "sqlite" or not self._has_table("sens_exemples"):
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT DISTINCT l.id, l.lemme, l.cgram, l.genre, l.freq_composite "
+            "FROM sens_exemples se "
+            "JOIN sens s ON se.sens_id = s.id "
+            "JOIN lemmes l ON s.lemme_id = l.id "
+            "WHERE se.texte LIKE ? "
+            "ORDER BY l.freq_composite DESC LIMIT ?",
+            (f"%{terme}%", limite),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
     def exemples_de(self, sens_id: int) -> list[str]:
         """Retourne les exemples d'usage d'un sens.
 

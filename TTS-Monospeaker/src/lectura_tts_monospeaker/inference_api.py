@@ -61,9 +61,28 @@ class ApiTTSEngine:
         self._key = api_key or os.environ.get("LECTURA_API_KEY", "")
         self._sample_rate = 22050
 
-    def synthesize(self, text: str) -> TTSResult:
+    def synthesize(
+        self,
+        text: str,
+        phrase_type: int | None = None,
+        duration_scale: float = 1.0,
+        pitch_shift: float = 0.0,
+        pitch_range: float = 1.3,
+        energy_scale: float = 1.0,
+        pause_scale: float = 1.0,
+    ) -> TTSResult:
         """Synthetise du texte via l'API."""
-        return self._call_api({"text": text})
+        payload: dict = {
+            "text": text,
+            "duration_scale": duration_scale,
+            "pitch_shift": pitch_shift,
+            "pitch_range": pitch_range,
+            "energy_scale": energy_scale,
+            "pause_scale": pause_scale,
+        }
+        if phrase_type is not None:
+            payload["phrase_type"] = phrase_type
+        return self._call_api(payload)
 
     def synthesize_phonemes(
         self,
