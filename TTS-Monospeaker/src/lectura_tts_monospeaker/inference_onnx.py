@@ -28,9 +28,9 @@ _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
 
 
 def _text_to_ipa(text: str, g2p) -> tuple[str, int]:
-    """Convertit du texte en IPA avec ponctuation et frontieres de mots.
+    """Convertit du texte en IPA avec ponctuation.
 
-    Pipeline : Tokeniseur → G2P (mots seulement) → IPA avec | et ponctuation.
+    Pipeline : Tokeniseur → G2P (mots seulement) → IPA avec ponctuation.
 
     Args:
         text: Texte francais.
@@ -47,8 +47,7 @@ def _text_to_ipa(text: str, g2p) -> tuple[str, int]:
         if not tokens:
             return "", 0
         result = g2p.analyser(tokens)
-        ipa = "|".join(result.get("g2p", []))
-        return ipa, 0
+        return "".join(result.get("g2p", [])), 0
 
     tokens = tokenise(text)
 
@@ -64,8 +63,6 @@ def _text_to_ipa(text: str, g2p) -> tuple[str, int]:
     for token in tokens:
         if token.type.name == "MOT":
             if word_idx < len(ipa_list):
-                if ipa_parts and ipa_parts[-1] not in _PUNCT_MAP.values():
-                    ipa_parts.append("|")
                 ipa_parts.append(ipa_list[word_idx])
                 word_idx += 1
         elif token.type.name == "PONCTUATION":
