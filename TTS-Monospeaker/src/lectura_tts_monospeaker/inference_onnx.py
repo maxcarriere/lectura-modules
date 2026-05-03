@@ -26,63 +26,101 @@ SEMITONE = 0.0577622  # log(2) / 12
 _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
               "\u2026": "\u2026", "...": "\u2026"}
 
+# Ponctuation terminale (decoupe en phrases)
+_SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
 
-def _text_to_ipa(text: str, g2p) -> tuple[str, int]:
-    """Convertit du texte en IPA avec ponctuation.
+# Durees minimales en frames pour la ponctuation (1 frame ≈ 11.6 ms)
+_PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 25}
 
-    Pipeline : Tokeniseur → G2P (mots seulement) → IPA avec ponctuation.
+
+def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
+    """Decoupe le texte en phrases, chacune avec IPA + phrase_type.
+
+    Pipeline : Tokeniseur → decoupage aux . ? ! … → G2P → IPA par phrase.
 
     Args:
         text: Texte francais.
         g2p: Engine G2P (lectura_nlp).
 
     Returns:
-        (ipa_string, phrase_type) — phrase_type deduit de la ponctuation finale.
+        Liste de (ipa_string, phrase_type) par phrase.
     """
     try:
         from lectura_tokeniseur import tokenise
     except ImportError:
         log.warning("lectura-tokeniseur non installe — ponctuation ignoree")
-        tokens = text.split()
-        if not tokens:
-            return "", 0
-        result = g2p.analyser(tokens)
-        return "".join(result.get("g2p", [])), 0
+        words = text.split()
+        if not words:
+            return []
+        result = g2p.analyser(words)
+        return [("".join(result.get("g2p", [])), 0)]
 
-    tokens = tokenise(text)
+    all_tokens = tokenise(text)
 
-    words = [t.text for t in tokens if t.type.name == "MOT"]
-    if not words:
-        return "", 0
+    # Grouper les tokens en phrases (decoupage a la ponctuation terminale)
+    sentences: list[list] = []
+    current: list = []
+    for token in all_tokens:
+        current.append(token)
+        if token.type.name == "PONCTUATION" and token.text.strip() in _SENTENCE_PUNCT:
+            sentences.append(current)
+            current = []
+    if current and any(t.type.name == "MOT" for t in current):
+        sentences.append(current)
 
-    g2p_result = g2p.analyser(words)
-    ipa_list = g2p_result.get("g2p", [])
+    if not sentences:
+        return []
 
-    ipa_parts: list[str] = []
-    word_idx = 0
-    for token in tokens:
-        if token.type.name == "MOT":
-            if word_idx < len(ipa_list):
-                ipa_parts.append(ipa_list[word_idx])
-                word_idx += 1
-        elif token.type.name == "PONCTUATION":
-            punct = _PUNCT_MAP.get(token.text.strip())
-            if punct:
-                ipa_parts.append(punct)
+    # Un seul appel G2P pour tous les mots
+    all_words: list[str] = []
+    word_counts: list[int] = []
+    for sent_tokens in sentences:
+        words = [t.text for t in sent_tokens if t.type.name == "MOT"]
+        all_words.extend(words)
+        word_counts.append(len(words))
 
-    ipa = "".join(ipa_parts)
+    if not all_words:
+        return []
 
-    # Deduire phrase_type de la ponctuation finale
-    phrase_type = 0  # declaratif
-    stripped = text.rstrip()
-    if stripped.endswith("?"):
-        phrase_type = 1
-    elif stripped.endswith("!"):
-        phrase_type = 2
-    elif stripped.endswith("\u2026") or stripped.endswith("..."):
-        phrase_type = 3
+    g2p_result = g2p.analyser(all_words)
+    all_ipa = g2p_result.get("g2p", [])
 
-    return ipa, phrase_type
+    # Construire l'IPA par phrase
+    results: list[tuple[str, int]] = []
+    ipa_idx = 0
+
+    for sent_tokens, n_words in zip(sentences, word_counts):
+        sent_ipa = all_ipa[ipa_idx:ipa_idx + n_words]
+        ipa_idx += n_words
+
+        ipa_parts: list[str] = []
+        word_idx = 0
+        phrase_type = 0
+
+        for token in sent_tokens:
+            if token.type.name == "MOT":
+                if word_idx < len(sent_ipa):
+                    ipa_parts.append(sent_ipa[word_idx])
+                    word_idx += 1
+            elif token.type.name == "PONCTUATION":
+                p = token.text.strip()
+                # Detecter phrase_type depuis la ponctuation terminale
+                if p == "?":
+                    phrase_type = 1
+                elif p == "!":
+                    phrase_type = 2
+                elif p in ("\u2026", "..."):
+                    phrase_type = 3
+                # Ajouter la ponctuation a l'IPA si reconnue
+                punct = _PUNCT_MAP.get(p)
+                if punct:
+                    ipa_parts.append(punct)
+
+        ipa = "".join(ipa_parts)
+        if ipa:
+            results.append((ipa, phrase_type))
+
+    return results
 
 
 @dataclass
@@ -175,7 +213,8 @@ class OnnxTTSEngine:
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
-        Pipeline : Tokeniseur → G2P → IPA avec ponctuation → synthesize_phonemes.
+        Pipeline : Tokeniseur → decoupage en phrases → G2P → IPA → synthese
+        par phrase avec phrase_type individuel → concatenation.
 
         Args:
             text: Texte francais a synthetiser.
@@ -197,23 +236,56 @@ class OnnxTTSEngine:
         if self._g2p is None:
             self._g2p = creer_g2p(mode="auto")
 
-        ipa, auto_phrase_type = _text_to_ipa(text, self._g2p)
+        sentences = _text_to_sentences(text, self._g2p)
 
-        if not ipa:
+        if not sentences:
             return TTSResult(
                 samples=np.zeros(0, dtype=np.float32),
                 sample_rate=self._sample_rate,
                 phoneme_timings=[],
             )
 
-        return self.synthesize_phonemes(
-            ipa,
-            phrase_type=phrase_type if phrase_type is not None else auto_phrase_type,
-            duration_scale=duration_scale,
-            pitch_shift=pitch_shift,
-            pitch_range=pitch_range,
-            energy_scale=energy_scale,
-            pause_scale=pause_scale,
+        prosody = dict(duration_scale=duration_scale, pitch_shift=pitch_shift,
+                       pitch_range=pitch_range, energy_scale=energy_scale,
+                       pause_scale=pause_scale)
+
+        # Phrase unique — pas de concatenation
+        if len(sentences) == 1:
+            ipa, auto_pt = sentences[0]
+            return self.synthesize_phonemes(
+                ipa,
+                phrase_type=phrase_type if phrase_type is not None else auto_pt,
+                **prosody,
+            )
+
+        # Multi-phrases : synthetiser chacune et concatener
+        all_samples: list[np.ndarray] = []
+        all_timings: list[PhonemeTiming] = []
+        time_offset_ms = 0.0
+
+        for i, (ipa, auto_pt) in enumerate(sentences):
+            result = self.synthesize_phonemes(
+                ipa,
+                phrase_type=phrase_type if phrase_type is not None else auto_pt,
+                **prosody,
+            )
+
+            # Decaler les timings
+            for t in result.phoneme_timings:
+                all_timings.append(PhonemeTiming(
+                    ipa=t.ipa,
+                    start_ms=t.start_ms + time_offset_ms,
+                    end_ms=t.end_ms + time_offset_ms,
+                ))
+
+            all_samples.append(result.samples)
+            time_offset_ms += len(result.samples) / self._sample_rate * 1000
+
+        combined = np.concatenate(all_samples)
+        return TTSResult(
+            samples=combined,
+            sample_rate=self._sample_rate,
+            phoneme_timings=all_timings,
         )
 
     def synthesize_phonemes(
@@ -263,12 +335,22 @@ class OnnxTTSEngine:
         # 2. Process predictions (numpy glue)
         dur_raw = np.exp(dur_pred[0])
 
-        # Apply pause_scale to SIL tokens
+        # Apply pause_scale aux SIL + ponctuation
+        punct_ids = {self._phone2id.get(p, -1) for p in _PUNCT_MIN_FRAMES}
+        pause_mask = np.zeros(len(phone_ids), dtype=bool)
+        for idx, pid in enumerate(phone_ids):
+            if pid == sil_id or pid in punct_ids:
+                pause_mask[idx] = True
         if pause_scale != 1.0:
-            sil_mask = np.array(phone_ids) == sil_id
-            dur_raw[sil_mask] *= pause_scale
+            dur_raw[pause_mask] *= pause_scale
 
         durations = np.maximum(1, np.round(dur_raw * duration_scale)).astype(np.int64)
+
+        # Durees minimales pour la ponctuation
+        for idx, phone in enumerate(phones):
+            min_frames = _PUNCT_MIN_FRAMES.get(phone)
+            if min_frames is not None:
+                durations[idx + 1] = max(durations[idx + 1], min_frames)  # +1 pour SIL
 
         # Pitch avec shift et range
         pitch_mean = pitch_pred[0].mean()

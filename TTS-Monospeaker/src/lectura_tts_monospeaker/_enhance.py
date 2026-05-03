@@ -94,9 +94,9 @@ def fade_out(
 def waveform_silence_gate(
     audio: np.ndarray,
     sample_rate: int = 22050,
-    window_ms: float = 10.0,
-    threshold_db: float = -40.0,
-    fade_samples: int = 64,
+    window_ms: float = 15.0,
+    threshold_db: float = -35.0,
+    fade_samples: int = 128,
 ) -> np.ndarray:
     """Gate les zones silencieuses de la forme d'onde (post-vocoder).
 
