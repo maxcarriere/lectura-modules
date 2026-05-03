@@ -96,7 +96,12 @@ def _zero_silence_regions(
 def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
     """Decoupe le texte en phrases, chacune avec IPA + phrase_type.
 
-    Pipeline : Tokeniseur → decoupage aux . ? ! … → G2P → IPA par phrase.
+    Pipeline : Tokeniseur → (Formules) → decoupage en phrases → G2P
+               → (Aligneur/liaisons) → IPA par phrase.
+
+    Modules optionnels :
+        - lectura-formules : lecture des nombres/formules (display_fr)
+        - lectura-aligneur : liaisons et groupes de lecture
 
     Args:
         text: Texte francais.
@@ -117,6 +122,13 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
 
     all_tokens = tokenise(text)
 
+    # Enrichir les formules si le module est disponible
+    try:
+        from lectura_formules import enrichir_formules
+        enrichir_formules(all_tokens)
+    except ImportError:
+        pass
+
     # Grouper les tokens en phrases (decoupage a la ponctuation terminale)
     sentences: list[list] = []
     current: list = []
@@ -125,25 +137,44 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
         if token.type.name == "PONCTUATION" and token.text.strip() in _SENTENCE_PUNCT:
             sentences.append(current)
             current = []
-    if current and any(t.type.name == "MOT" for t in current):
+    if current and any(t.type.name in ("MOT", "FORMULE") for t in current):
         sentences.append(current)
 
     if not sentences:
         return []
 
-    # Un seul appel G2P pour tous les mots
+    # Expandre les formules et collecter tous les mots pour G2P
     all_words: list[str] = []
     word_counts: list[int] = []
     for sent_tokens in sentences:
-        words = [t.text for t in sent_tokens if t.type.name == "MOT"]
-        all_words.extend(words)
+        words: list[str] = []
+        for tok in sent_tokens:
+            if tok.type.name == "MOT":
+                words.append(tok.text)
+            elif tok.type.name == "FORMULE":
+                display = getattr(tok, "display_fr", "") or tok.text
+                words.extend(display.split())
         word_counts.append(len(words))
+        all_words.extend(words)
 
     if not all_words:
         return []
 
+    # Un seul appel G2P pour tous les mots
     g2p_result = g2p.analyser(all_words)
     all_ipa = g2p_result.get("g2p", [])
+    all_liaison = g2p_result.get("liaison", [])
+
+    # Importer l'aligneur si disponible (pour les liaisons)
+    _cg = None
+    _MA = None
+    try:
+        from lectura_aligneur import construire_groupes as _cg_fn
+        from lectura_aligneur import MotAnalyse as _MA_cls
+        _cg = _cg_fn
+        _MA = _MA_cls
+    except ImportError:
+        pass
 
     # Construire l'IPA par phrase
     results: list[tuple[str, int]] = []
@@ -151,36 +182,147 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
 
     for sent_tokens, n_words in zip(sentences, word_counts):
         sent_ipa = all_ipa[ipa_idx:ipa_idx + n_words]
+        sent_liaison = (
+            all_liaison[ipa_idx:ipa_idx + n_words]
+            if all_liaison else ["none"] * n_words
+        )
         ipa_idx += n_words
 
-        ipa_parts: list[str] = []
-        word_idx = 0
+        # Detecter phrase_type depuis la ponctuation terminale
         phrase_type = 0
-
-        for token in sent_tokens:
-            if token.type.name == "MOT":
-                if word_idx < len(sent_ipa):
-                    ipa_parts.append(sent_ipa[word_idx])
-                    word_idx += 1
-            elif token.type.name == "PONCTUATION":
-                p = token.text.strip()
-                # Detecter phrase_type depuis la ponctuation terminale
+        for tok in reversed(sent_tokens):
+            if tok.type.name == "PONCTUATION":
+                p = tok.text.strip()
                 if p == "?":
                     phrase_type = 1
                 elif p == "!":
                     phrase_type = 2
                 elif p in ("\u2026", "..."):
                     phrase_type = 3
-                # Ajouter la ponctuation a l'IPA si reconnue
-                punct = _PUNCT_MAP.get(p)
-                if punct:
-                    ipa_parts.append(punct)
+                break
 
-        ipa = "".join(ipa_parts)
+        if _cg is not None and _MA is not None and sent_ipa:
+            ipa = _build_ipa_groupes(
+                sent_tokens, sent_ipa, sent_liaison, _cg, _MA,
+            )
+        else:
+            ipa = _build_ipa_simple(sent_tokens, sent_ipa)
+
         if ipa:
             results.append((ipa, phrase_type))
 
     return results
+
+
+def _build_ipa_simple(sent_tokens: list, sent_ipa: list[str]) -> str:
+    """Construit l'IPA sans liaisons (fallback sans aligneur)."""
+    parts: list[str] = []
+    word_idx = 0
+    for tok in sent_tokens:
+        if tok.type.name == "MOT":
+            if word_idx < len(sent_ipa):
+                parts.append(sent_ipa[word_idx])
+                word_idx += 1
+        elif tok.type.name == "FORMULE":
+            display = getattr(tok, "display_fr", "") or tok.text
+            n = len(display.split())
+            for _ in range(n):
+                if word_idx < len(sent_ipa):
+                    parts.append(sent_ipa[word_idx])
+                    word_idx += 1
+        elif tok.type.name == "PONCTUATION":
+            punct = _PUNCT_MAP.get(tok.text.strip())
+            if punct:
+                parts.append(punct)
+    return "".join(parts)
+
+
+def _build_ipa_groupes(
+    sent_tokens: list,
+    sent_ipa: list[str],
+    sent_liaison: list[str],
+    construire_groupes,
+    MotAnalyse,
+) -> str:
+    """Construit l'IPA avec liaisons via l'aligneur.
+
+    Cree des MotAnalyse a partir des resultats G2P, applique
+    construire_groupes() pour obtenir phone_groupe avec liaisons,
+    puis reassemble avec la ponctuation.
+    """
+    # Construire la liste de mots avec info ponctuation
+    words_info: list[dict] = []
+    pending_punct: str | None = None
+    word_idx = 0
+
+    for tok in sent_tokens:
+        if tok.type.name in ("MOT", "FORMULE"):
+            if tok.type.name == "FORMULE":
+                display = getattr(tok, "display_fr", "") or tok.text
+                n = len(display.split())
+            else:
+                n = 1
+            for j in range(n):
+                if word_idx < len(sent_ipa):
+                    words_info.append({
+                        "ipa": sent_ipa[word_idx],
+                        "liaison": (
+                            sent_liaison[word_idx]
+                            if word_idx < len(sent_liaison)
+                            else "none"
+                        ),
+                        "punct_before": pending_punct if j == 0 else None,
+                        "punct_after": None,
+                    })
+                    word_idx += 1
+                    pending_punct = None
+        elif tok.type.name == "PONCTUATION":
+            p = _PUNCT_MAP.get(tok.text.strip())
+            if p:
+                if words_info:
+                    words_info[-1]["punct_after"] = p
+                pending_punct = p
+
+    if not words_info:
+        return ""
+
+    # Construire les MotAnalyse
+    mots = [
+        MotAnalyse(
+            phone=wi["ipa"],
+            liaison=wi["liaison"],
+            ponctuation_avant=wi["punct_before"] is not None,
+        )
+        for wi in words_info
+    ]
+
+    # Construire les groupes de lecture (applique liaisons + enchainements)
+    groupes = construire_groupes(mots)
+
+    # Assembler l'IPA depuis les groupes + ponctuation inter-groupes
+    # NB: phone_groupe ne contient PAS les consonnes de liaison,
+    # elles sont indiquees dans jonctions ("liaison_z", "liaison_t", etc.)
+    parts: list[str] = []
+    wd_offset = 0
+    for grp in groupes:
+        # Reconstituer l'IPA du groupe avec insertions de liaison
+        grp_phones = [m.phone for m in grp.mots]
+        if grp.jonctions:
+            grp_parts = [grp_phones[0]]
+            for j, jonction in enumerate(grp.jonctions):
+                if jonction.startswith("liaison_"):
+                    grp_parts.append(jonction[len("liaison_"):])
+                grp_parts.append(grp_phones[j + 1])
+            parts.append("".join(grp_parts))
+        else:
+            parts.append(grp.phone_groupe)
+
+        last_idx = wd_offset + len(grp.mots) - 1
+        if last_idx < len(words_info) and words_info[last_idx]["punct_after"]:
+            parts.append(words_info[last_idx]["punct_after"])
+        wd_offset += len(grp.mots)
+
+    return "".join(parts)
 
 
 @dataclass
