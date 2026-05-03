@@ -44,7 +44,6 @@ def db_v4_path():
             lemme TEXT NOT NULL,
             cgram TEXT NOT NULL,
             genre TEXT,
-            contrainte_nombre TEXT,
             sous_type TEXT,
             etymologie TEXT,
             forme_developpee TEXT,

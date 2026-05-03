@@ -52,6 +52,9 @@ def ipa_to_phones(ipa: str) -> list[str]:
         "bɔ̃ʒuʁ" → ["b", "ɔ̃", "ʒ", "u", "ʁ"]
         "tʃ" → ["tʃ"]
     """
+    # Mapper œ̃ → ɛ̃ (voyelle nasale rare, pas dans le vocabulaire du modele)
+    ipa = ipa.replace("œ\u0303", "ɛ\u0303")
+
     phone2id = get_phone2id()
     phones: list[str] = []
     i = 0
