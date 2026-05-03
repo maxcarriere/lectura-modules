@@ -22,6 +22,71 @@ log = logging.getLogger(__name__)
 
 SEMITONE = 0.0577622  # log(2) / 12
 
+# Ponctuation reconnue par le modele TTS
+_PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
+              "\u2026": "\u2026", "...": "\u2026"}
+
+
+def _text_to_ipa(text: str, g2p) -> tuple[str, int]:
+    """Convertit du texte en IPA avec ponctuation et frontieres de mots.
+
+    Pipeline : Tokeniseur → G2P (mots seulement) → IPA avec | et ponctuation.
+
+    Args:
+        text: Texte francais.
+        g2p: Engine G2P (lectura_nlp).
+
+    Returns:
+        (ipa_string, phrase_type) — phrase_type deduit de la ponctuation finale.
+    """
+    try:
+        from lectura_tokeniseur import tokenise
+    except ImportError:
+        log.warning("lectura-tokeniseur non installe — ponctuation ignoree")
+        tokens = text.split()
+        if not tokens:
+            return "", 0
+        result = g2p.analyser(tokens)
+        ipa = "|".join(result.get("g2p", []))
+        return ipa, 0
+
+    tokens = tokenise(text)
+
+    words = [t.text for t in tokens if t.type.name == "MOT"]
+    if not words:
+        return "", 0
+
+    g2p_result = g2p.analyser(words)
+    ipa_list = g2p_result.get("g2p", [])
+
+    ipa_parts: list[str] = []
+    word_idx = 0
+    for token in tokens:
+        if token.type.name == "MOT":
+            if word_idx < len(ipa_list):
+                if ipa_parts and ipa_parts[-1] not in _PUNCT_MAP.values():
+                    ipa_parts.append("|")
+                ipa_parts.append(ipa_list[word_idx])
+                word_idx += 1
+        elif token.type.name == "PONCTUATION":
+            punct = _PUNCT_MAP.get(token.text.strip())
+            if punct:
+                ipa_parts.append(punct)
+
+    ipa = "".join(ipa_parts)
+
+    # Deduire phrase_type de la ponctuation finale
+    phrase_type = 0  # declaratif
+    stripped = text.rstrip()
+    if stripped.endswith("?"):
+        phrase_type = 1
+    elif stripped.endswith("!"):
+        phrase_type = 2
+    elif stripped.endswith("\u2026") or stripped.endswith("..."):
+        phrase_type = 3
+
+    return ipa, phrase_type
+
 
 @dataclass
 class PhonemeTiming:
@@ -56,6 +121,7 @@ class OnnxTTSEngine:
         self._config: dict[str, Any] | None = None
         self._phone2id: dict[str, int] | None = None
         self._sample_rate = 22050
+        self._g2p = None
 
     def _ensure_loaded(self) -> None:
         """Charge les sessions ONNX (lazy)."""
@@ -100,11 +166,28 @@ class OnnxTTSEngine:
         self._sample_rate = self._config.get("audio", {}).get("sample_rate", 22050)
         log.info("OnnxTTSEngine charge depuis %s", self._models_dir)
 
-    def synthesize(self, text: str) -> TTSResult:
+    def synthesize(
+        self,
+        text: str,
+        phrase_type: int | None = None,
+        duration_scale: float = 1.0,
+        pitch_shift: float = 0.0,
+        pitch_range: float = 1.3,
+        energy_scale: float = 1.0,
+        pause_scale: float = 1.0,
+    ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
+
+        Pipeline : Tokeniseur → G2P → IPA avec ponctuation → synthesize_phonemes.
 
         Args:
             text: Texte francais a synthetiser.
+            phrase_type: 0=decl, 1=inter, 2=excl, 3=susp (None=auto-detect).
+            duration_scale: Multiplicateur de duree globale.
+            pitch_shift: Decalage F0 en demi-tons.
+            pitch_range: Echelle de variation F0.
+            energy_scale: Multiplicateur d'energie.
+            pause_scale: Multiplicateur pour les pauses.
         """
         try:
             from lectura_nlp import creer_engine as creer_g2p
@@ -114,15 +197,27 @@ class OnnxTTSEngine:
                 "Installer avec : pip install lectura-tts-monospeaker[g2p]"
             )
 
-        g2p = creer_g2p(mode="auto")
-        tokens = text.split()
-        result = g2p.analyser(tokens)
+        if self._g2p is None:
+            self._g2p = creer_g2p(mode="auto")
 
-        # Concatener les IPA
-        ipa_parts = result.get("g2p", [])
-        ipa = "".join(ipa_parts)
+        ipa, auto_phrase_type = _text_to_ipa(text, self._g2p)
 
-        return self.synthesize_phonemes(ipa)
+        if not ipa:
+            return TTSResult(
+                samples=np.zeros(0, dtype=np.float32),
+                sample_rate=self._sample_rate,
+                phoneme_timings=[],
+            )
+
+        return self.synthesize_phonemes(
+            ipa,
+            phrase_type=phrase_type if phrase_type is not None else auto_phrase_type,
+            duration_scale=duration_scale,
+            pitch_shift=pitch_shift,
+            pitch_range=pitch_range,
+            energy_scale=energy_scale,
+            pause_scale=pause_scale,
+        )
 
     def synthesize_phonemes(
         self,
