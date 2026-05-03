@@ -19,9 +19,7 @@
     "\u2019": ["apostrophe", "apɔstʁɔf"]
   },
   "denasalisation": {
-    "ɔ̃": "ɔ",
-    "ɛ̃": "ɛ",
-    "ɑ̃": "a"
+    "ɔ̃": "ɔ"
   },
   "liaison_consonnes": {
     "Lz": "z",
