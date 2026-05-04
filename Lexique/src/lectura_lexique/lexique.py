@@ -943,8 +943,10 @@ class Lexique:
                     entry: dict[str, Any] = dict(row)
                     entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                     ortho = str(entry.get("ortho", "")).lower()
-                    if ortho not in seen:
-                        seen.add(ortho)
+                    cgram = str(entry.get("cgram", "")).lower()
+                    key = f"{ortho}|{cgram}"
+                    if key not in seen:
+                        seen.add(key)
                         results.append(entry)
                 return results
             else:
@@ -978,8 +980,10 @@ class Lexique:
                         canon = mapping.get(col_name, col_name)
                         entry[canon] = val
                     ortho = str(entry.get("ortho", "")).lower()
-                    if ortho not in seen:
-                        seen.add(ortho)
+                    cgram = str(entry.get("cgram", "")).lower()
+                    key = f"{ortho}|{cgram}"
+                    if key not in seen:
+                        seen.add(key)
                         results.append(entry)
                 return results
 
