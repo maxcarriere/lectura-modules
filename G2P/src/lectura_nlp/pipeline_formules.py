@@ -277,12 +277,18 @@ def analyser_phrase_complete(
         else:
             # Résultat du modèle neural
             if item_idx in compound_ranges:
-                # Mot composé : concaténer les G2P des sous-mots
+                # Mot composé : appliquer les liaisons entre sous-mots
                 c_start, c_end = compound_ranges[item_idx]
-                phone = "".join(
-                    g2p_list[i] if i < len(g2p_list) else ""
-                    for i in range(c_start, c_end)
+                sub_tokens = neural_tokens[c_start:c_end]
+                sub_phones = [g2p_list[i] if i < len(g2p_list) else ""
+                              for i in range(c_start, c_end)]
+                sub_liaisons = [liaison_list[i] if i < len(liaison_list) else "none"
+                                for i in range(c_start, c_end)]
+                from lectura_nlp.posttraitement import appliquer_liaison
+                sub_phones = appliquer_liaison(
+                    sub_tokens, sub_phones, sub_liaisons,
                 )
+                phone = "".join(sub_phones)
                 pos = pos_list[c_start] if c_start < len(pos_list) else ""
                 liaison = ""
                 word_morpho: dict[str, str] = {}

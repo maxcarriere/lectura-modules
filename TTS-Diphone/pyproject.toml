@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-tts-diphone"
+version = "1.0.0"
+description = "Synthese vocale par concatenation de diphones WORLD — francais"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+keywords = ["tts", "french", "speech-synthesis", "diphone", "world"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+local = ["pyworld>=0.3.4", "numpy>=1.24", "scipy>=1.10", "soundfile>=0.12"]
+g2p = ["lectura-g2p"]
+all = ["lectura-tts-diphone[local,g2p]"]
+
+[project.urls]
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lectura_tts_diphone = ["data/*.json", "modeles/*.dpk.gz", "modeles/*.enc"]
