@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [Tokeniseur, G2P, P2G, Aligneur, Formules, Lexique, TTS-Monospeaker]
+        module: [Tokeniseur, G2P, P2G, Aligneur, Formules, Lexique, TTS-Monospeaker, TTS-Diphone]
 
     steps:
       - uses: actions/checkout@v4
