@@ -28,7 +28,7 @@ Exemple avec backend local::
 import os
 from pathlib import Path
 
-__version__ = "3.2.4"
+__version__ = "3.2.5"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
