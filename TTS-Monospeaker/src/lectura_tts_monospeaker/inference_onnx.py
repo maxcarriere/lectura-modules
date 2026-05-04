@@ -270,14 +270,23 @@ def _build_word_entries(
     mi = 0  # index dans mot_ipa
     corr = corrections or set()
 
-    for tok in sent_tokens:
+    for ti, tok in enumerate(sent_tokens):
         if tok.type.name == "MOT":
+            # Elision : si le mot suivant est un SEPARATEUR apostrophe,
+            # forcer la liaison a "none" (la consonne elidee n'/l'/j'/etc.
+            # est deja le lien phonetique, pas besoin de liaison supplementaire).
+            is_elision = (
+                ti + 1 < len(sent_tokens)
+                and sent_tokens[ti + 1].type.name == "SEPARATEUR"
+                and "'" in sent_tokens[ti + 1].text
+            )
+
             if "-" in tok.text and tok.text.lower() in corr:
                 # Mot compose avec correction dediee — passe entier au G2P
                 if mi < len(mot_ipa):
                     entries.append({
                         "ipa": mot_ipa[mi],
-                        "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
+                        "liaison": "none" if is_elision else (mot_liaison[mi] if mi < len(mot_liaison) else "none"),
                         "punct_before": pending_punct,
                         "punct_after": None,
                     })
@@ -288,9 +297,11 @@ def _build_word_entries(
                 parts = [p for p in tok.text.split("-") if p]
                 for j, _part in enumerate(parts):
                     if mi < len(mot_ipa):
+                        # Elision s'applique au dernier sous-mot du compose
+                        force_none = is_elision and j == len(parts) - 1
                         entries.append({
                             "ipa": mot_ipa[mi],
-                            "liaison": mot_liaison[mi] if mi < len(mot_liaison) else "none",
+                            "liaison": "none" if force_none else (mot_liaison[mi] if mi < len(mot_liaison) else "none"),
                             "punct_before": pending_punct if j == 0 else None,
                             "punct_after": None,
                         })
@@ -487,6 +498,7 @@ class OnnxTTSEngine:
         pitch_range: float = 1.3,
         energy_scale: float = 1.0,
         pause_scale: float = 1.0,
+        variability: bool = False,
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
@@ -524,7 +536,7 @@ class OnnxTTSEngine:
 
         prosody = dict(duration_scale=duration_scale, pitch_shift=pitch_shift,
                        pitch_range=pitch_range, energy_scale=energy_scale,
-                       pause_scale=pause_scale)
+                       pause_scale=pause_scale, variability=variability)
 
         # Phrase unique — pas de concatenation
         if len(sentences) == 1:
@@ -574,6 +586,7 @@ class OnnxTTSEngine:
         pitch_range: float = 1.3,
         energy_scale: float = 1.0,
         pause_scale: float = 1.0,
+        variability: bool = False,
     ) -> TTSResult:
         """Synthetise une sequence de phonemes IPA.
 
@@ -634,6 +647,12 @@ class OnnxTTSEngine:
 
         durations = np.maximum(1, np.round(dur_raw * duration_scale)).astype(np.int64)
 
+        if variability:
+            rng = np.random.default_rng()
+            dur_noise = rng.normal(1.0, 0.10, size=durations.shape)
+            dur_noise[pause_mask] = 1.0
+            durations = np.maximum(1, np.round(durations * dur_noise)).astype(np.int64)
+
         # Durees minimales pour la ponctuation
         for idx, phone in enumerate(phones):
             min_frames = _PUNCT_MIN_FRAMES.get(phone)
@@ -648,8 +667,14 @@ class OnnxTTSEngine:
             + pitch_shift * SEMITONE
         )
 
+        if variability:
+            pitch_values *= rng.normal(1.0, 0.03, size=pitch_values.shape)
+
         # Energy
         energy_values = energy_pred[0] * energy_scale
+
+        if variability:
+            energy_values *= rng.normal(1.0, 0.02, size=energy_values.shape)
 
         # 3. Embeddings (matmul simple — poids Conv1d(1, D, 1))
         emb = self._config["embeddings"]

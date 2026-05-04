@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 def creer_engine(
@@ -87,8 +87,12 @@ def synthetiser(
     api_url: str | None = None,
     g2p: Any = None,
     synth_mode: str = "FLUIDE",
-    duration_scale: float = 1.2,
-    pause_scale: float = 1.2,
+    duration_scale: float = 1.0,
+    pause_scale: float = 1.0,
+    macro_expressivity: float = 2.0,
+    micro_expressivity: float = 5.0,
+    seed: int | None = None,
+    prosody_style: str = "auto",
 ) -> Any:
     """Convenience : texte → numpy audio float32 @ 44100 Hz.
 
@@ -104,6 +108,16 @@ def synthetiser(
         Facteur de vitesse (>1 = plus lent)
     pause_scale : float
         Facteur de pauses
+    macro_expressivity : float
+        Gestes prosodiques aux ponctuations (0=neutre, 2=normal, 4=exagere)
+    micro_expressivity : float
+        Micro-variations continues (0=robot, 5=normal, 10=tres expressif)
+    seed : int | None
+        Graine aleatoire pour la micro-prosodie.
+        None = aleatoire, meme seed = meme resultat.
+    prosody_style : str
+        Style prosodique force. "auto" = determine par la ponctuation.
+        Autres : "declaratif", "question", "exclamation", "suspensif", "neutre".
 
     Returns
     -------
@@ -124,6 +138,10 @@ def synthetiser(
         mode=synth_mode,
         duration_scale=duration_scale,
         pause_scale=pause_scale,
+        macro_expressivity=macro_expressivity,
+        micro_expressivity=micro_expressivity,
+        seed=seed,
+        prosody_style=prosody_style,
     )
 
 

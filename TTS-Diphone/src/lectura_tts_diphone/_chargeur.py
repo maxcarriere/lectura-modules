@@ -68,7 +68,9 @@ def _has_models(directory: Path) -> bool:
         plain = directory / filename
         enc = directory / (filename + ".enc")
         if not plain.exists() and not enc.exists():
-            return False
+            # Fallback : pkl brut (dev / non compresse)
+            if not (directory / "diphone_averaged.pkl").exists():
+                return False
 
     return True
 

@@ -23,8 +23,8 @@ from typing import Callable, Protocol, runtime_checkable
 log = logging.getLogger(__name__)
 
 # Ponctuation → boundary type
-_PUNCT_MAP = {",": "comma", ".": "period", "?": "question", "!": "exclamation"}
-_PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation"}
+_PUNCT_MAP = {"...": "suspensive", ",": "comma", ".": "period", "?": "question", "!": "exclamation"}
+_PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation", "suspensive"}
 
 
 @runtime_checkable
