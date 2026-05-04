@@ -100,6 +100,27 @@ from lectura_nlp._chargeur import ponctuation_lecture as _load_ponctuation_lectu
 
 PONCTUATION_LECTURE = _load_ponctuation_lecture()
 
+# Cache des mots avec correction G2P dédiée (évite de décomposer les composés corrigés)
+_COMPOUND_CORRECTIONS: set[str] | None = None
+
+
+def _get_compound_corrections() -> set[str]:
+    """Charge les clefs de la table de corrections contenant un tiret (singleton)."""
+    global _COMPOUND_CORRECTIONS
+    if _COMPOUND_CORRECTIONS is not None:
+        return _COMPOUND_CORRECTIONS
+    _COMPOUND_CORRECTIONS = set()
+    try:
+        import json
+        from pathlib import Path
+        corr_path = Path(__file__).parent / "data" / "g2p_corrections_unifie.json"
+        if corr_path.exists():
+            with open(corr_path, encoding="utf-8") as f:
+                _COMPOUND_CORRECTIONS = {k for k in json.load(f) if "-" in k}
+    except Exception:
+        pass
+    return _COMPOUND_CORRECTIONS
+
 
 def _is_formule(token: Any) -> bool:
     """Teste si un token est de type FORMULE."""
@@ -181,8 +202,10 @@ def analyser_phrase_complete(
             formule_indices[len(neural_tokens) - 1] = item_idx
         else:
             children = getattr(tok, "children", None)
-            if children:
-                # Mot composé (ex: arc-en-ciel) : décomposer en sous-mots
+            text_lower = getattr(tok, "text", str(tok)).lower()
+            corrections = _get_compound_corrections()
+            if children and text_lower not in corrections:
+                # Mot composé sans correction : décomposer en sous-mots
                 start = len(neural_tokens)
                 for child in children:
                     ct = getattr(child, "type", None)
@@ -194,6 +217,7 @@ def analyser_phrase_complete(
                 if end > start:
                     compound_ranges[item_idx] = (start, end)
             else:
+                # Mot simple ou composé avec correction dédiée : passer entier
                 item_to_neural[item_idx] = len(neural_tokens)
                 neural_tokens.append(getattr(tok, "text", str(tok)))
 
