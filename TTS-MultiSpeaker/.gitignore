@@ -1,0 +1,4 @@
+src/lectura_tts_multispeaker/modeles/*.onnx
+src/lectura_tts_multispeaker/modeles/*.enc
+dist/
+*.egg-info
