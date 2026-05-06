@@ -100,9 +100,9 @@ def test_has_models_encrypted(tmp_path):
     from lectura_tts_multispeaker._chargeur import _has_models
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "decoder.onnx.enc").write_bytes(b"FAKE")
-    (tmp_path / "hifigan.onnx.enc").write_bytes(b"FAKE")
-    (tmp_path / "encoder_siwis.onnx.enc").write_bytes(b"FAKE")
+    (tmp_path / "decoder.enc").write_bytes(b"FAKE")
+    (tmp_path / "hifigan.enc").write_bytes(b"FAKE")
+    (tmp_path / "encoder_siwis.enc").write_bytes(b"FAKE")
 
     assert _has_models(tmp_path, "siwis") is True
     assert _has_models(tmp_path, "bernard") is False
@@ -113,9 +113,9 @@ def test_has_models_encrypted_unified(tmp_path):
     from lectura_tts_multispeaker._chargeur import _has_models
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "decoder.onnx.enc").write_bytes(b"FAKE")
-    (tmp_path / "hifigan.onnx.enc").write_bytes(b"FAKE")
-    (tmp_path / "encoder.onnx.enc").write_bytes(b"FAKE")
+    (tmp_path / "decoder.enc").write_bytes(b"FAKE")
+    (tmp_path / "hifigan.enc").write_bytes(b"FAKE")
+    (tmp_path / "encoder.enc").write_bytes(b"FAKE")
 
     assert _has_models(tmp_path, "siwis") is True
     assert _has_models(tmp_path, "bernard") is True
@@ -140,7 +140,7 @@ def test_load_model_bytes_encrypted(tmp_path):
     data = b"REAL ONNX MODEL BYTES" * 100
     onnx_path = tmp_path / "model_temp.onnx"
     onnx_path.write_bytes(data)
-    encrypt_model(onnx_path, tmp_path / "decoder.onnx.enc")
+    encrypt_model(onnx_path, tmp_path / "decoder.enc")
     onnx_path.unlink()
 
     result = load_model_bytes(tmp_path, "decoder.onnx")

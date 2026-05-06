@@ -38,4 +38,4 @@ Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_tts_multispeaker = ["data/*.json", "modeles/*.enc"]
+lectura_tts_multispeaker = ["data/*.json", "modeles/*.enc", "modeles/*.json"]

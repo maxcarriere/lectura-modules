@@ -70,19 +70,18 @@ def _has_models(directory: Path, speaker: str = "siwis") -> bool:
     # Verifier les fichiers partages
     for filename in SHARED_FILES:
         onnx_path = directory / filename
-        enc_path = directory / (filename + ".enc")
+        enc_path = directory / filename.replace(".onnx", ".enc")
         if not onnx_path.exists() and not enc_path.exists():
             return False
 
     # Unified layout : encoder.onnx (single file for all speakers)
-    if (directory / "encoder.onnx").exists() or (directory / "encoder.onnx.enc").exists():
+    if (directory / "encoder.onnx").exists() or (directory / "encoder.enc").exists():
         return True
 
     # Legacy layout : encoder_{speaker}.onnx (per-speaker)
     encoder_name = f"encoder_{speaker}.onnx"
-    enc_path_onnx = directory / encoder_name
-    enc_path_enc = directory / (encoder_name + ".enc")
-    if not enc_path_onnx.exists() and not enc_path_enc.exists():
+    enc_name = encoder_name.replace(".onnx", ".enc")
+    if not (directory / encoder_name).exists() and not (directory / enc_name).exists():
         return False
 
     return True
@@ -95,7 +94,7 @@ def load_model_bytes(models_dir: Path, filename: str) -> bytes | None:
         bytes du modele ONNX ou None si introuvable.
     """
     onnx_path = models_dir / filename
-    enc_path = models_dir / (filename + ".enc")
+    enc_path = models_dir / filename.replace(".onnx", ".enc")
 
     if onnx_path.exists():
         return onnx_path.read_bytes()

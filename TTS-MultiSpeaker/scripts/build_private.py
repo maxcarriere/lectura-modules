@@ -32,12 +32,9 @@ ONNX_FILES = [
     "hifigan.onnx",
 ]
 
-# Fichiers de config a embarquer dans data/
-CONFIG_FILES = [
-    "config.json",
-    "phoneme_vocab.json",
-    "speakers.json",
-]
+# config.json va dans modeles/ (utilise par l'engine a cote des ONNX)
+# phoneme_vocab.json et speakers.json sont deja dans data/ (permanents)
+MODEL_CONFIG = "config.json"
 
 
 def find_models_dir() -> Path:
@@ -88,9 +85,8 @@ def main() -> None:
         src_name = source_files[name]
         if not (models_dir / src_name).exists():
             missing.append(src_name)
-    for name in CONFIG_FILES:
-        if not (models_dir / name).exists():
-            missing.append(name)
+    if not (models_dir / MODEL_CONFIG).exists():
+        missing.append(MODEL_CONFIG)
 
     if missing:
         print(f"ERREUR: fichiers manquants dans {models_dir}:")
@@ -116,16 +112,15 @@ def main() -> None:
         print(f"  Chiffrement: {src_name} -> {dst.name} ({src.stat().st_size / 1024 / 1024:.1f} Mo)")
         encrypt_model(src, dst)
 
-    # Copier les fichiers de config dans data/
-    for name in CONFIG_FILES:
-        config_src = models_dir / name
-        config_dst = DATA_DIR / name
-        shutil.copy2(config_src, config_dst)
-        print(f"  Copie: {name} -> data/{name}")
+    # Copier config.json dans modeles/ (l'engine le charge depuis models_dir)
+    config_src = models_dir / MODEL_CONFIG
+    config_dst = MODELES_DIR / MODEL_CONFIG
+    shutil.copy2(config_src, config_dst)
+    print(f"  Copie: {MODEL_CONFIG} -> modeles/{MODEL_CONFIG}")
 
     # Verifier la taille totale
     total = sum(f.stat().st_size for f in MODELES_DIR.glob("*.enc"))
-    total += sum((DATA_DIR / name).stat().st_size for name in CONFIG_FILES)
+    total += config_dst.stat().st_size
     print(f"\n  Taille totale embarquee: {total / 1024 / 1024:.1f} Mo")
 
     # Build le wheel
@@ -151,14 +146,12 @@ def main() -> None:
         print(f"  Taille: {wheel.stat().st_size / 1024 / 1024:.1f} Mo")
 
     # Nettoyer les .enc du src (ne pas les garder dans le repo)
-    print("\nNettoyage des .enc du repertoire source...")
+    print("\nNettoyage des fichiers temporaires...")
     for enc in MODELES_DIR.glob("*.enc"):
         enc.unlink()
-    # Supprimer les config copies (garder seulement dans le wheel)
-    for name in CONFIG_FILES:
-        config_dst = DATA_DIR / name
-        if config_dst.exists():
-            config_dst.unlink()
+    # Supprimer config.json copie (deja present dans modeles/ du repo en permanence)
+    # On ne le supprime pas s'il existait deja avant le build
+    # Les .enc sont les seuls fichiers temporaires
 
     print("\nBuild prive termine avec succes.")
 
