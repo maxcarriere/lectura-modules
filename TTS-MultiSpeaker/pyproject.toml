@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-tts-multispeaker"
+version = "1.1.0"
+description = "Synthese vocale neuronale multi-speaker francais — FastPitch-Lite + HiFi-GAN (ONNX)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+keywords = ["tts", "french", "speech-synthesis", "onnx", "fastpitch", "multi-speaker"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
+g2p = ["lectura-g2p", "lectura-tokeniseur"]
+formules = ["lectura-formules"]
+aligneur = ["lectura-aligneur"]
+all = ["lectura-tts-multispeaker[onnx,g2p,formules,aligneur]"]
+
+[project.urls]
+Homepage = "https://www.lec-tu-ra.com/solutions/modules/tts-multispeaker/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/TTS-MultiSpeaker"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lectura_tts_multispeaker = ["data/*.json", "modeles/*.enc"]
