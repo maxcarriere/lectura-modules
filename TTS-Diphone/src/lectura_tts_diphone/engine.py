@@ -151,7 +151,7 @@ class DiphoneEngine:
             elif mode == SynthMode.MOT_A_MOT:
                 durations.append(200.0 if is_vowel else 60.0)
             else:  # FLUIDE
-                durations.append(120.0 if is_vowel else 50.0)
+                durations.append(144.0 if is_vowel else 60.0)
 
         # Final lengthening
         if durations and mode != SynthMode.SYLLABES:
@@ -280,8 +280,13 @@ class DiphoneEngine:
                 # Suspensif : declination douce (macro n'amplifie que peu)
                 offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
             elif is_last:
-                # Declaratif : chute finale
-                offset = -20.0 * macro_k * pos
+                # Declaratif : chute finale avec acceleration sur le dernier quart
+                if pos < 0.75:
+                    offset = -15.0 * macro_k * pos
+                else:
+                    base = -15.0 * macro_k * 0.75
+                    extra = -25.0 * macro_k * ((pos - 0.75) / 0.25)
+                    offset = base + extra
             else:
                 # Groupe non-final : continuation (legere montee)
                 offset = -3.0 + 12.0 * macro_k * pos
@@ -371,6 +376,7 @@ class DiphoneEngine:
         micro_expressivity: float = 5.0,
         seed: int | None = None,
         prosody_style: str = "auto",
+        spectral_contrast: float = 1.5,
     ) -> np.ndarray:
         """Synthesize multiple prosodic groups with inter-group pauses.
 
@@ -391,6 +397,9 @@ class DiphoneEngine:
             prosody_style: style prosodique force. "auto" = determine par la
                 ponctuation. Autres valeurs : "declaratif", "question",
                 "exclamation", "suspensif", "neutre".
+            spectral_contrast: compensation de variance spectrale (GV).
+                1.0=pas de changement, 1.5=naturel, 2.0=fort. Restaure le
+                detail spectral perdu par le moyennage des diphones.
 
         Returns:
             np.float32 audio array at 44100 Hz
@@ -455,6 +464,7 @@ class DiphoneEngine:
                 group_info=group_info,
                 duration_scale=duration_scale,
                 word_boundaries=word_boundaries,
+                spectral_contrast=spectral_contrast,
             )
             audio_parts.append(audio)
 
@@ -483,6 +493,7 @@ class DiphoneEngine:
         group_info: dict | None = None,
         duration_scale: float = 1.0,
         word_boundaries: list[int] | None = None,
+        spectral_contrast: float = 1.0,
     ) -> np.ndarray:
         """Synthesize from a phone list using diphone chain.
 
@@ -494,6 +505,7 @@ class DiphoneEngine:
             group_info: group position for phrase-level F0 contour
             duration_scale: speed factor (>1 = slower)
             word_boundaries: phone indices for word starts (micro-pauses)
+            spectral_contrast: GV compensation factor (1.0=off, 1.5=default)
 
         Returns:
             np.float32 audio array at 44100 Hz
@@ -658,6 +670,13 @@ class DiphoneEngine:
             return np.array([], dtype=np.float32)
 
         f0_cat, sp_cat, ap_cat = concat_diphones(diphone_segments)
+
+        # GV compensation : restaurer le contraste spectral
+        if spectral_contrast > 1.0:
+            log_sp = np.log(np.maximum(sp_cat, 1e-10))
+            mean_log = np.mean(log_sp, axis=0, keepdims=True)
+            sp_cat = np.exp(mean_log + (log_sp - mean_log) * spectral_contrast)
+
         audio = synthesize(f0_cat, sp_cat, ap_cat, SIWIS_SR, FRAME_PERIOD)
 
         peak = np.max(np.abs(audio))
