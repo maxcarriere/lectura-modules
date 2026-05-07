@@ -29,6 +29,11 @@ _PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation", "suspensive"}
 # Ponctuation terminale de phrase
 _SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
 
+# Liaisons francaises : label G2P → consonne IPA
+_LIAISON_MAP = {"Lz": "z", "Lt": "t", "Ln": "n", "Lr": "\u0281", "Lp": "p"}
+# Phones IPA vocaliques (debut de mot suivant)
+_VOWEL_INITIALS = set("aeiouy\u00f8\u0153\u0251\u0254\u0259\u025b")
+
 
 @runtime_checkable
 class G2PBackend(Protocol):
@@ -209,8 +214,12 @@ class LecturaNlpG2P:
         if mot_words:
             result = self._g2p.analyser(mot_words)
             ipas = result.get("g2p", [])
-            for idx, ipa in zip(mot_indices, ipas):
-                entries[idx]["ipa"] = ipa
+            liaisons = result.get("liaison", [])
+            for j, idx in enumerate(mot_indices):
+                if j < len(ipas):
+                    entries[idx]["ipa"] = ipas[j]
+                if j < len(liaisons):
+                    entries[idx]["liaison"] = liaisons[j]
 
         # Construire groupes prosodiques
         groups: list[dict] = []
@@ -224,6 +233,27 @@ class LecturaNlpG2P:
             phones = ipa_to_phones(ipa)
             if not phones:
                 continue
+
+            # Inserer la liaison du mot precedent si applicable
+            # La liaison est portee par le mot *precedent* et s'active si
+            # le mot courant commence par une voyelle et qu'il n'y a pas
+            # de ponctuation entre les deux.
+            if current_phones and i > 0:
+                prev_entry_idx = i - 1
+                # Trouver l'entree precedente qui avait du contenu
+                while prev_entry_idx >= 0 and not entries[prev_entry_idx].get("ipa"):
+                    prev_entry_idx -= 1
+                if prev_entry_idx >= 0:
+                    prev_liaison = entries[prev_entry_idx].get("liaison", "")
+                    liaison_phone = _LIAISON_MAP.get(prev_liaison)
+                    if liaison_phone and phones[0][0] in _VOWEL_INITIALS:
+                        # Pas de ponctuation entre les deux mots
+                        has_punct = any(
+                            j in punct_after
+                            for j in range(prev_entry_idx, i)
+                        )
+                        if not has_punct:
+                            current_phones.append(liaison_phone)
 
             # Marquer la frontiere de mot pour micro-pauses
             if current_phones:
