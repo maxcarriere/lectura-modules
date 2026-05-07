@@ -1,6 +1,7 @@
 """Dechiffrement des modeles ONNX chiffres (.enc) au runtime.
 
-Les constantes de derivation sont specifiques au module TTS multi-speaker.
+Pattern identique a lectura-g2p/_crypto.py.
+Les constantes de derivation sont specifiques au module VC.
 """
 
 from __future__ import annotations
@@ -8,11 +9,11 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-# Fragments de sel — specifiques TTS multi-speaker
-_P1 = "Lectura-TTS-MultiSpeaker"
-_P2 = 0x4D53
-_P3 = "2025-FastPitch-HiFiGAN-6voices"
-_P4 = "ONNX-PerSpeaker-Encoder"
+# Fragments de sel --- specifiques VC
+_P1 = "Lectura-VC"
+_P2 = 0x5643
+_P3 = "2025-RVC-OpenVoice"
+_P4 = "ONNX-HuBERT-RMVPE-Synth"
 
 
 def _derive_key() -> bytes:

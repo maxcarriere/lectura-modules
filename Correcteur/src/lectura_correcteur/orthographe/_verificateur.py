@@ -11,7 +11,9 @@ from typing import Any
 from lectura_correcteur._types import MotAnalyse, TypeCorrection
 from lectura_correcteur._utils import PUNCT_RE
 from lectura_correcteur.orthographe._suggestions import (
+    _MAX_D1_EXPAND,
     _edit_distance_rapide,
+    _edits_distance_1,
     _est_doublement_consonne,
     _est_variante_accent,
     _meilleure_variante_accent,
@@ -159,14 +161,12 @@ class VerificateurOrthographe:
     def __init__(
         self, lexique: Any, *, max_suggestions: int = 5, distance: int = 2,
         g2p: Any = None, scoring_actif: bool = False,
-        symspell: Any = None,
     ) -> None:
         self._lexique = lexique
         self._max_suggestions = max_suggestions
         self._distance = distance
         self._g2p = g2p
         self._scoring_actif = scoring_actif
-        self._symspell = symspell
 
     def _chercher_candidats_pos_coherents(
         self,
@@ -175,17 +175,11 @@ class VerificateurOrthographe:
         ed_max: int = 2,
     ) -> list[str]:
         """Cherche des candidats ed<=ed_max dont le cgram lexique correspond a pos_cible."""
-        if self._symspell is None:
-            return []
         low = mot.lower()
-        candidats_raw = self._symspell.suggestions(low)
         compatibles: list[tuple[str, float]] = []
-        for cand in candidats_raw:
-            if cand == low:
-                continue
-            ed = _edit_distance_rapide(low, cand)
-            if ed > ed_max:
-                continue
+
+        # Generation a la volee : d=1
+        for cand in _edits_distance_1(low):
             if not self._lexique.existe(cand):
                 continue
             infos = self._lexique.info(cand) if hasattr(self._lexique, "info") else []
@@ -198,7 +192,31 @@ class VerificateurOrthographe:
                     if hasattr(self._lexique, "frequence") else 0.0
                 )
                 compatibles.append((cand, freq))
-        # Trier par frequence decroissante
+
+        # d=2 si ed_max >= 2 et aucun candidat d=1
+        if ed_max >= 2 and not compatibles:
+            d1 = _edits_distance_1(low)
+            count = 0
+            for c in d1:
+                if self._lexique.existe(c):
+                    continue
+                count += 1
+                if count > _MAX_D1_EXPAND:
+                    break
+                for c2 in _edits_distance_1(c):
+                    if not self._lexique.existe(c2):
+                        continue
+                    infos = self._lexique.info(c2) if hasattr(self._lexique, "info") else []
+                    if not infos:
+                        continue
+                    cand_cgrams = {e.get("cgram", "") for e in infos}
+                    if pos_cible in cand_cgrams:
+                        freq = (
+                            self._lexique.frequence(c2)
+                            if hasattr(self._lexique, "frequence") else 0.0
+                        )
+                        compatibles.append((c2, freq))
+
         compatibles.sort(key=lambda x: -x[1])
         return [c for c, _ in compatibles[:5]]
 
@@ -368,7 +386,6 @@ class VerificateurOrthographe:
                 dans_lexique
                 and corrige == mot                  # accent n'a pas fire
                 and not PUNCT_RE.match(mot)
-                and self._symspell is not None
             ):
                 freq_actuelle = (
                     self._lexique.frequence(mot)
@@ -437,14 +454,11 @@ class VerificateurOrthographe:
                             _is_base_nom = True
 
                     if not _is_proper and not _is_foreign and not _in_foreign_ctx and not _only_np and not _is_inflected and not _is_base_nom:
-                        _sym_candidates = self._symspell.suggestions(low)
                         _best_form = None
                         _best_freq = 0.0
 
-                        for _cand in _sym_candidates:
+                        for _cand in _edits_distance_1(low):
                             if _cand == low:
-                                continue
-                            if _edit_distance_rapide(low, _cand) != 1:
                                 continue
                             if not self._lexique.existe(_cand):
                                 continue
@@ -511,7 +525,6 @@ class VerificateurOrthographe:
                 and corrige == mot
                 and not PUNCT_RE.match(mot)
                 and hasattr(self._lexique, "info")
-                and self._symspell is not None
             ):
                 _morpho_pi = morpho_list[i] if i < len(morpho_list) else {}
                 _pos_predit = _morpho_pi.get("pos", "")
@@ -590,7 +603,6 @@ class VerificateurOrthographe:
                     max_n=self._max_suggestions,
                     distance=self._distance,
                     g2p=self._g2p,
-                    symspell=self._symspell,
                 )
                 # Re-rank by POS CRF compatibility
                 if suggestions_list and pos:

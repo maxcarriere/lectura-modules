@@ -72,6 +72,7 @@ class Lexique:
         # Schema version (3 or 4) — detected at first SQLite access
         self._schema_version: int = 3
         self._table_cache: dict[str, bool] = {}
+        self._has_fts: bool = False
 
         # Detecter la version du schema AVANT de charger les formes
         if self._backend == "sqlite":
@@ -145,6 +146,7 @@ class Lexique:
                 self._schema_version = 4
             except sqlite3.OperationalError:
                 self._schema_version = 3
+        self._has_fts = self._has_table("fts_formes_ortho")
 
     @property
     def schema_version(self) -> int:
@@ -166,6 +168,11 @@ class Lexique:
         exists = cur.fetchone() is not None
         self._table_cache[name] = exists
         return exists
+
+    @staticmethod
+    def _fts5_escape(term: str) -> str:
+        """Echappe un terme pour une requete FTS5 MATCH (phrase entre guillemets)."""
+        return '"' + term.replace('"', '""') + '"'
 
     def _charger_index(self) -> None:
         """Niveaux 2-4 : construit les index phone, ortho et lemme (CSV/TSV)."""
@@ -607,7 +614,8 @@ class Lexique:
                     cur = conn.execute(
                         "SELECT f.ortho, f.phone, f.phone_reversed, f.multext, "
                         "f.nb_syllabes, f.freq_opensubs, f.freq_composite, "
-                        "l.lemme, l.cgram, l.genre "
+                        "f.syllabes, f.orthocode, "
+                        "l.lemme, l.cgram, l.genre, l.age "
                         "FROM formes f "
                         "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                         "WHERE f.phone_reversed LIKE ? "
@@ -617,6 +625,11 @@ class Lexique:
                     results = []
                     seen: set[str] = set()
                     for row in cur.fetchall():
+                        # Post-filtrage Unicode : LIKE est byte-prefix et confond
+                        # ɔ avec ɔ̃ (le combining tilde suit les mêmes octets).
+                        pr = row["phone_reversed"]
+                        if pr and not pr.startswith(suffixe_rev):
+                            continue
                         ortho = row["ortho"].lower()
                         if ortho in seen:
                             continue
@@ -651,20 +664,79 @@ class Lexique:
         phone_index = self._get_index_phone()
         return _phonetique.rimes(phone_index, phone, nb_phonemes, limite)
 
+    def rimes_par_suffixe(self, suffixe: str, limite: int = 50) -> list[dict[str, Any]]:
+        """Mots dont la phonetique se termine par le suffixe donne.
+
+        Utilise phone_reversed + LIKE avec post-filtrage Unicode.
+        """
+        if not suffixe:
+            return []
+        if self._backend == "sqlite":
+            from lectura_lexique._utils import _tokenize_ipa
+            segments = _tokenize_ipa(suffixe)
+            suffixe_rev = "".join(reversed(segments))
+            conn = self._get_conn()
+            try:
+                if self._schema_version >= 4:
+                    cur = conn.execute(
+                        "SELECT f.ortho, f.phone, f.phone_reversed, f.multext, "
+                        "f.nb_syllabes, f.freq_opensubs, f.freq_composite, "
+                        "f.syllabes, f.orthocode, "
+                        "l.lemme, l.cgram, l.genre, l.age "
+                        "FROM formes f "
+                        "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                        "WHERE f.phone_reversed LIKE ? "
+                        "ORDER BY f.freq_composite DESC",
+                        (f"{suffixe_rev}%",),
+                    )
+                    results: list[dict[str, Any]] = []
+                    seen: set[str] = set()
+                    for row in cur.fetchall():
+                        pr = row["phone_reversed"]
+                        if pr and not pr.startswith(suffixe_rev):
+                            continue
+                        ortho = row["ortho"].lower()
+                        if ortho in seen:
+                            continue
+                        seen.add(ortho)
+                        entry: dict[str, Any] = dict(row)
+                        entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
+                        results.append(entry)
+                        if len(results) >= limite:
+                            break
+                    return results
+            except Exception:
+                pass
+        return []
+
     def contient_son(self, son: str, limite: int = 50) -> list[dict[str, Any]]:
         """Mots contenant une sequence phonetique."""
         if self._backend == "sqlite":
             conn = self._get_conn()
             if self._schema_version >= 4:
-                cur = conn.execute(
-                    "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
-                    "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
-                    "FROM formes f "
-                    "LEFT JOIN lemmes l ON f.lemme_id = l.id "
-                    "WHERE f.phone LIKE ? "
-                    "ORDER BY f.freq_composite DESC LIMIT ?",
-                    (f"%{son}%", limite),
-                )
+                if self._has_fts:
+                    cur = conn.execute(
+                        "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
+                        "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
+                        "FROM formes f "
+                        "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                        "WHERE f.id IN ("
+                        "  SELECT rowid FROM fts_formes_phone "
+                        "  WHERE fts_formes_phone MATCH ?"
+                        ") "
+                        "ORDER BY f.freq_composite DESC LIMIT ?",
+                        (self._fts5_escape(son), limite),
+                    )
+                else:
+                    cur = conn.execute(
+                        "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
+                        "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
+                        "FROM formes f "
+                        "LEFT JOIN lemmes l ON f.lemme_id = l.id "
+                        "WHERE f.phone LIKE ? "
+                        "ORDER BY f.freq_composite DESC LIMIT ?",
+                        (f"%{son}%", limite),
+                    )
                 results = []
                 for row in cur.fetchall():
                     entry: dict[str, Any] = dict(row)
@@ -914,13 +986,34 @@ class Lexique:
 
             if self._schema_version >= 4:
                 col_qualified = f"f.{col}"
-                if sql_opt is not None:
+                # FTS5 : uniquement pour les patterns "contient" (pas d'ancre)
+                fts_table = (
+                    "fts_formes_phone" if col == "phone" else "fts_formes_ortho"
+                )
+                use_fts = (
+                    self._has_fts
+                    and sql_opt is not None
+                    and sql_opt[0] == "LIKE"
+                    and sql_opt[1].startswith("%")
+                    and sql_opt[1].endswith("%")
+                )
+                if use_fts:
+                    _, val = sql_opt  # type: ignore[misc]
+                    # val est "%terme%", extraire le terme brut
+                    fts_term = val[1:-1].replace("\\%", "%").replace("\\_", "_").replace("\\\\", "\\")
+                    where = (
+                        f"f.id IN ("
+                        f"SELECT rowid FROM {fts_table} "
+                        f"WHERE {fts_table} MATCH ?)"
+                    )
+                    params: tuple = (self._fts5_escape(fts_term), limite)
+                elif sql_opt is not None:
                     op, val = sql_opt
                     if op == "=":
                         where = f"{col_qualified} = ? COLLATE NOCASE"
                     else:
                         where = f"{col_qualified} LIKE ? COLLATE NOCASE ESCAPE '\\'"
-                    params: tuple = (val, limite)
+                    params = (val, limite)
                 else:
                     conn.create_function(
                         "REGEXP", 2,
@@ -930,7 +1023,9 @@ class Lexique:
                     params = (pattern, limite)
                 cur = conn.execute(
                     "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
-                    "f.freq_opensubs, f.freq_composite, l.lemme, l.cgram "
+                    "f.freq_opensubs, f.freq_composite, f.syllabes, f.orthocode, "
+                    "f.consonne_latente, "
+                    "l.lemme, l.cgram, l.age "
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     f"WHERE {where} "
@@ -1700,12 +1795,22 @@ class Lexique:
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
-        cur = conn.execute(
-            "SELECT id, lemme, cgram, genre, freq_composite "
-            "FROM lemmes WHERE lemme LIKE ? COLLATE NOCASE "
-            "ORDER BY freq_composite DESC LIMIT ?",
-            (f"%{pattern}%", limite),
-        )
+        if self._has_fts:
+            cur = conn.execute(
+                "SELECT id, lemme, cgram, genre, freq_composite "
+                "FROM lemmes WHERE id IN ("
+                "  SELECT rowid FROM fts_lemmes WHERE fts_lemmes MATCH ?"
+                ") "
+                "ORDER BY freq_composite DESC LIMIT ?",
+                (self._fts5_escape(pattern), limite),
+            )
+        else:
+            cur = conn.execute(
+                "SELECT id, lemme, cgram, genre, freq_composite "
+                "FROM lemmes WHERE lemme LIKE ? COLLATE NOCASE "
+                "ORDER BY freq_composite DESC LIMIT ?",
+                (f"%{pattern}%", limite),
+            )
         return [dict(row) for row in cur.fetchall()]
 
     def sens_de(self, lemme: str, cgram: str | None = None) -> list[dict[str, Any]]:
@@ -2034,13 +2139,24 @@ class Lexique:
         if self._backend != "sqlite" or not self._has_table("sens"):
             return []
         conn = self._get_conn()
-        cur = conn.execute(
-            "SELECT DISTINCT l.id, l.lemme, l.cgram, l.genre, l.freq_composite "
-            "FROM sens s JOIN lemmes l ON s.lemme_id = l.id "
-            "WHERE s.definition LIKE ? "
-            "ORDER BY l.freq_composite DESC LIMIT ?",
-            (f"%{terme}%", limite),
-        )
+        if self._has_fts:
+            cur = conn.execute(
+                "SELECT DISTINCT l.id, l.lemme, l.cgram, l.genre, l.freq_composite "
+                "FROM sens s JOIN lemmes l ON s.lemme_id = l.id "
+                "WHERE s.id IN ("
+                "  SELECT rowid FROM fts_sens WHERE fts_sens MATCH ?"
+                ") "
+                "ORDER BY l.freq_composite DESC LIMIT ?",
+                (self._fts5_escape(terme), limite),
+            )
+        else:
+            cur = conn.execute(
+                "SELECT DISTINCT l.id, l.lemme, l.cgram, l.genre, l.freq_composite "
+                "FROM sens s JOIN lemmes l ON s.lemme_id = l.id "
+                "WHERE s.definition LIKE ? "
+                "ORDER BY l.freq_composite DESC LIMIT ?",
+                (f"%{terme}%", limite),
+            )
         return [dict(row) for row in cur.fetchall()]
 
     def rechercher_dans_exemples(
@@ -2347,6 +2463,59 @@ class Lexique:
         self, conn: sqlite3.Connection, words: list[str], limite: int,
     ) -> list[dict[str, Any]]:
         """Recherche d'entites dans le schema v5."""
+        if self._has_fts:
+            return self._rechercher_entites_v5_fts(conn, words, limite)
+        return self._rechercher_entites_v5_like(conn, words, limite)
+
+    def _rechercher_entites_v5_fts(
+        self, conn: sqlite3.Connection, words: list[str], limite: int,
+    ) -> list[dict[str, Any]]:
+        """Recherche d'entites v5 via FTS5."""
+        # FTS5 : tous les mots sont implicitement ANDes
+        fts_query = " ".join(self._fts5_escape(w) for w in words)
+        cur = conn.execute(
+            "SELECT DISTINCT e.* "
+            "FROM entites e "
+            "WHERE e.id IN ("
+            "  SELECT rowid FROM fts_entites WHERE fts_entites MATCH ?"
+            ") "
+            "ORDER BY e.label LIMIT ?",
+            (fts_query, limite),
+        )
+        results = [dict(row) for row in cur.fetchall()]
+
+        # Completer via entite_lemmes + fts_lemmes
+        if len(results) < limite:
+            seen_ids = {r["id"] for r in results}
+            remaining = limite - len(results)
+            fts_lemme_query = " ".join(self._fts5_escape(w) for w in words)
+            try:
+                cur2 = conn.execute(
+                    "SELECT DISTINCT e.* "
+                    "FROM entites e "
+                    "WHERE e.id IN ("
+                    "  SELECT el.entite_id FROM entite_lemmes el "
+                    "  WHERE el.lemme_id IN ("
+                    "    SELECT rowid FROM fts_lemmes WHERE fts_lemmes MATCH ?"
+                    "  )"
+                    ") "
+                    "ORDER BY e.label LIMIT ?",
+                    (fts_lemme_query, remaining),
+                )
+                for row in cur2.fetchall():
+                    d = dict(row)
+                    if d["id"] not in seen_ids:
+                        results.append(d)
+                        seen_ids.add(d["id"])
+            except Exception:
+                pass
+
+        return results
+
+    def _rechercher_entites_v5_like(
+        self, conn: sqlite3.Connection, words: list[str], limite: int,
+    ) -> list[dict[str, Any]]:
+        """Recherche d'entites v5 via LIKE (fallback)."""
         # Recherche dans label et description
         conditions = []
         params: list[str] = []

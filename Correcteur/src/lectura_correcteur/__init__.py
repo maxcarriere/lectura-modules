@@ -23,7 +23,7 @@ Deux modes de fonctionnement :
     result = correcteur.corriger("Les enfant mange des pomme.")
 """
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._types import (
@@ -70,7 +70,7 @@ def creer_correcteur(
     import os
     from pathlib import Path
 
-    # Chercher le lexique local
+    # 1. Chercher le lexique SQLite local
     if lexique_path is None:
         candidates = [
             os.environ.get("LECTURA_LEXIQUE_DB", ""),
@@ -82,15 +82,30 @@ def creer_correcteur(
                 lexique_path = p
                 break
 
-    # Mode local si lexique disponible
-    if lexique_path is not None:
-        from pathlib import Path as _Path
-        if _Path(lexique_path).exists():
+    # Mode SQLite si lexique disponible
+    if lexique_path is not None and Path(lexique_path).exists():
+        try:
             from lectura_lexique import Lexique
             lex = Lexique(lexique_path)
             return Correcteur(lex, config=config)
+        except Exception:
+            pass  # fallback to CSV
 
-    # Mode API
+    # 2. SQLite leger integre (wheel prive)
+    lite_path = Path(__file__).parent / "data" / "lexique_correcteur.db"
+    if lite_path.exists():
+        from lectura_correcteur._lexique_lite import LexiqueLite
+        lex = LexiqueLite(lite_path)
+        return Correcteur(lex, config=config)
+
+    # 3. CSV integre (fallback)
+    csv_path = Path(__file__).parent / "data" / "lexique_correcteur.csv.gz"
+    if csv_path.exists():
+        from lectura_correcteur._lexique_csv import LexiqueCSV
+        lex = LexiqueCSV(csv_path)
+        return Correcteur(lex, config=config)
+
+    # 4. Mode API
     from lectura_correcteur._api_client import CorrecteurAPI
     return CorrecteurAPI(api_url=api_url, api_key=api_key)
 
