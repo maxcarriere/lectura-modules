@@ -29,6 +29,11 @@ _BASE_RATE = 1.2  # facteur interne : vitesse naturelle (applique avant duration
 
 _VOWELS = set("aeiouyøœɑɔəɛɛ̃ɑ̃ɔ̃")
 
+# Chute F0 declarative — parametres absolus (en nombre de phones)
+_DECL_FALL_PHONES = 7      # derniers phones avec chute acceleree
+_DECL_SLOPE_HZ = 1.5       # pente douce par phone avant la zone de chute
+_DECL_MAX_FALL_HZ = 45.0   # chute max dans la zone finale (avant macro_k)
+
 
 def _smooth_noise(n: int, amplitude: float, sigma: float = 3.5) -> np.ndarray:
     """Bruit continu lisse pour micro-prosodie."""
@@ -281,13 +286,19 @@ class DiphoneEngine:
                 # Suspensif : declination douce (macro n'amplifie que peu)
                 offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
             elif is_last:
-                # Declaratif : chute finale avec acceleration sur le dernier quart
-                if pos < 0.75:
-                    offset = -15.0 * macro_k * pos
+                # Declaratif : chute en absolu (nombre de phones depuis la fin)
+                phones_from_end = n - 1 - i
+                if phones_from_end >= _DECL_FALL_PHONES:
+                    # Zone douce : declination lineaire par phone
+                    offset = -_DECL_SLOPE_HZ * macro_k * i
+                    # Plafonner la partie douce
+                    max_gentle = -_DECL_SLOPE_HZ * macro_k * max(0, n - 1 - _DECL_FALL_PHONES)
+                    offset = max(offset, max_gentle)
                 else:
-                    base = -15.0 * macro_k * 0.75
-                    extra = -25.0 * macro_k * ((pos - 0.75) / 0.25)
-                    offset = base + extra
+                    # Zone de chute finale : acceleration
+                    gentle_offset = -_DECL_SLOPE_HZ * macro_k * max(0, n - 1 - _DECL_FALL_PHONES)
+                    fall_pos = 1.0 - phones_from_end / _DECL_FALL_PHONES  # 0→1
+                    offset = gentle_offset - _DECL_MAX_FALL_HZ * macro_k * (fall_pos ** 1.5)
             else:
                 # Groupe non-final : continuation (legere montee)
                 offset = -3.0 + 12.0 * macro_k * pos
