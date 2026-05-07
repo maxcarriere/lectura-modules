@@ -172,6 +172,14 @@ class LecturaNlpG2P:
         if not input_text:
             return []
 
+        # Garantir un espace avant la ponctuation de phrase pour que le
+        # tokeniseur ne colle pas "mot!" en une seule formule (factorielle).
+        # Exception pour "!" : garder colle apres chiffre ou lettre-variable
+        # isolee (p,k,n,x,y,z) qui signifie factorielle.
+        import re
+        input_text = re.sub(r'(?<!\d)(?<!\b[pknxyz])(?<!\s)!', ' !', input_text)
+        input_text = re.sub(r'(?<!\s)([?;:])', r' \1', input_text)
+
         tokens_raw = tokenise(input_text)
 
         # Enrichir les formules si le module est disponible
