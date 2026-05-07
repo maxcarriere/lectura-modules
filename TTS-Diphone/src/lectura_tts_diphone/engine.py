@@ -25,6 +25,7 @@ from lectura_tts_diphone._world import (
 log = logging.getLogger(__name__)
 
 MIN_STATS_N = 5  # minimum observations for corpus stats
+_BASE_RATE = 1.2  # facteur interne : vitesse naturelle (applique avant duration_scale)
 
 _VOWELS = set("aeiouyøœɑɔəɛɛ̃ɑ̃ɔ̃")
 
@@ -538,8 +539,10 @@ class DiphoneEngine:
                                    for d, j in zip(phone_durations, dur_jitter)]
             diphone_durations = self._phone_durs_to_diphone_durs(chain, phone_durations)
 
-        if duration_scale != 1.0:
-            diphone_durations = [d * duration_scale for d in diphone_durations]
+        # Facteur de base pour vitesse naturelle + facteur utilisateur
+        rate = _BASE_RATE * duration_scale
+        if rate != 1.0:
+            diphone_durations = [d * rate for d in diphone_durations]
 
         # Pre-boundary lengthening
         if group_info is not None and len(diphone_durations) > 2:
