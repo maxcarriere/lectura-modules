@@ -8,7 +8,13 @@ Correcteur orthographique et grammatical du français. Pipeline à base de règl
 pip install lectura-correcteur
 ```
 
-Dépendance : `lectura-lexique` (installée automatiquement).
+Trois modes de fonctionnement :
+
+1. **Lexique complet** (`lectura-lexique`) — meilleure couverture, ~900 Mo
+2. **Lexique léger** (SQLite intégré) — autonome, ~50 Mo, inclus dans le wheel privé
+3. **API** — aucune dépendance locale, requiert un serveur Lectura
+
+La factory `creer_correcteur()` détecte automatiquement le mode disponible.
 
 ## Utilisation rapide
 
@@ -49,14 +55,14 @@ result = correcteur.corriger("Les enfant mange des pomme.")
 
 ## Benchmark comparatif
 
-Évaluation sur 800 phrases issues de Wicopaco (erreurs réelles Wikipedia français).
+Évaluation GEC débiaisée sur 180 phrases (158 erronées, 22 correctes).
 
-| Correcteur | Précision | Rappel | F1 | F0.5 | Vitesse |
-|------------|-----------|--------|----|------|---------|
-| **Lectura** (règles + modèles) | **0.94** | **0.73** | **0.82** | **0.89** | ~55 ms/phrase |
-| **Lectura** (règles seules) | **0.93** | **0.65** | **0.77** | **0.86** | ~15 ms/phrase |
-| Grammalecte | 0.54 | 0.26 | 0.35 | 0.44 | ~40 ms/phrase |
-| LanguageTool | 0.30 | 0.37 | 0.33 | 0.31 | ~12 600 ms/phrase |
+| Correcteur | Précision | Rappel | F0.5 | F1 |
+|------------|-----------|--------|------|-----|
+| **Lectura** (règles) | **0.805** | 0.612 | **0.757** | 0.695 |
+| **Lectura** (règles + scoring) | 0.782 | **0.633** | 0.747 | **0.700** |
+| Grammalecte | 0.465 | 0.388 | 0.447 | 0.423 |
+| Baseline (ne rien faire) | 1.000 | 0.000 | 0.000 | 0.000 |
 
 ## Configuration
 
@@ -89,7 +95,8 @@ Le correcteur fonctionne avec n'importe quelle base lexicale chargée via `lectu
 
 ## Dépendances
 
-- `lectura-lexique` : accès au lexique français (formes, fréquences, POS, morphologie)
+- `lectura-lexique` (optionnel) : lexique complet (~900 Mo) — `pip install lectura-correcteur[sqlite]`
+- Sans dépendance : le correcteur utilise le lexique léger intégré ou l'API Lectura
 
 ## Licence
 

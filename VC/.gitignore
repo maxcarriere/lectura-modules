@@ -1,0 +1,5 @@
+src/lectura_vc/modeles/*.onnx
+src/lectura_vc/modeles/*.enc
+dist/
+build/
+*.egg-info

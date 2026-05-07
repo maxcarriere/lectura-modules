@@ -121,7 +121,7 @@ def generer_candidats(
         else:
             candidats.extend(_tier2_edit_distance(low, lexique, g2p, seen))
         # Toujours tenter le canal G2P en complement (les suggestions
-        # SymSpell ne couvrent pas forcement les candidats phonetiques)
+        # d=1/d=2 ne couvrent pas forcement les candidats phonetiques)
         if g2p is not None and suggestions is not None:
             candidats.extend(_tier2_g2p(low, lexique, g2p, seen))
         # Candidats par substitution AZERTY (typos clavier)

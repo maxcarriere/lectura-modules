@@ -26,7 +26,6 @@ from lectura_correcteur._scoring import (
     extraire_contexte,
     scorer_candidats,
 )
-from lectura_correcteur._symspell import SymSpellIndex, _obtenir_formes
 from lectura_correcteur._types import (
     Candidat,
     Correction,
@@ -104,14 +103,11 @@ class Correcteur:
         self._lex_tagger = (
             LexiqueTagger(self._lexique) if tagger is not None else None
         )
-        formes = _obtenir_formes(self._lexique)
-        self._symspell = SymSpellIndex(formes) if formes is not None else None
         self._verificateur = VerificateurOrthographe(
             self._lexique, max_suggestions=self._config.max_suggestions,
             distance=self._config.distance_suggestions,
             g2p=self._g2p,
             scoring_actif=self._config.activer_scoring,
-            symspell=self._symspell,
         )
         # Charger matrice de transition Viterbi si disponible
         self._transition_matrix = None
