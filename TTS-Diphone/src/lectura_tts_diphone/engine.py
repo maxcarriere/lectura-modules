@@ -261,7 +261,11 @@ class DiphoneEngine:
         boundary = info.get("boundary", "none")
         base_f0 = info.get("base_f0", 195.0)
 
-        is_last = (gi == n_groups - 1)
+        # Un groupe est "final" s'il est le dernier OU s'il se termine
+        # par une ponctuation de fin de phrase (chaque phrase a sa propre chute)
+        is_sentence_final = (gi == n_groups - 1) or boundary in (
+            "period", "question", "exclamation", "suspensive",
+        )
         is_question = boundary == "question"
         is_exclamation = boundary == "exclamation"
         is_suspensive = boundary == "suspensive"
@@ -271,13 +275,13 @@ class DiphoneEngine:
         for i in range(n):
             pos = i / max(1, n - 1)
 
-            if is_last and is_question:
+            if is_sentence_final and is_question:
                 # Interrogatif : montee finale
                 if pos < 0.65:
                     offset = -5.0 * pos
                 else:
                     offset = -3.0 + 30.0 * macro_k * ((pos - 0.65) / 0.35)
-            elif is_last and is_exclamation:
+            elif is_sentence_final and is_exclamation:
                 # Exclamatif : explosion puis chute brusque sur la fin
                 if pos < 0.75:
                     offset = -5.0 * pos
@@ -285,10 +289,10 @@ class DiphoneEngine:
                     offset = 25.0 * macro_k * ((pos - 0.75) / 0.15)
                 else:
                     offset = 25.0 * macro_k - 50.0 * macro_k * ((pos - 0.90) / 0.10)
-            elif is_last and is_suspensive:
+            elif is_sentence_final and is_suspensive:
                 # Suspensif : declination douce (macro n'amplifie que peu)
                 offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
-            elif is_last:
+            elif is_sentence_final:
                 # Declaratif : chute en absolu (nombre de phones depuis la fin)
                 phones_from_end = n - 1 - i
                 if phones_from_end >= _DECL_FALL_PHONES:
