@@ -29,6 +29,9 @@ _BASE_RATE = 1.2  # facteur interne : vitesse naturelle (applique avant duration
 
 _VOWELS = set("aeiouyøœɑɔəɛɛ̃ɑ̃ɔ̃")
 
+# Normalisation des phones en entree (banque sans certains phones rares)
+_PHONE_NORMALIZE = {"\u0153\u0303": "\u025b\u0303"}  # œ̃ → ɛ̃
+
 # Chute F0 declarative — parametres absolus (en nombre de phones)
 _DECL_FALL_PHONES = 7      # derniers phones avec chute acceleree
 _DECL_SLOPE_HZ = 1.5       # pente douce par phone avant la zone de chute
@@ -527,6 +530,10 @@ class DiphoneEngine:
 
         if isinstance(mode, str):
             mode = SynthMode(mode)
+
+        # Normaliser les phones (ex: œ̃ → ɛ̃)
+        if _PHONE_NORMALIZE:
+            phones = [_PHONE_NORMALIZE.get(p, p) for p in phones]
 
         chain = self.build_diphone_chain(phones)
         n = len(phones)
