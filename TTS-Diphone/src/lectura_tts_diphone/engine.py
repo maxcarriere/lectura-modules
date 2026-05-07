@@ -233,7 +233,7 @@ class DiphoneEngine:
             return []
 
         if mode == SynthMode.SYLLABES:
-            return [190.0] * n
+            return [175.0] * n
 
         if group_info is not None:
             return self._group_f0_contour(phones, mode, group_info)
@@ -243,9 +243,9 @@ class DiphoneEngine:
         for i in range(n):
             pos = i / max(1, n - 1)
             if mode == SynthMode.MOT_A_MOT:
-                f0s.append(195.0 - 20.0 * pos)
+                f0s.append(175.0 - 15.0 * pos)
             else:
-                f0 = 200.0 - 35.0 * pos
+                f0 = 175.0 - 30.0 * pos
                 if i == n - 1:
                     f0 = 160.0
                 f0s.append(f0)
@@ -259,7 +259,7 @@ class DiphoneEngine:
         gi = info.get("group_idx", 0)
         n_groups = info.get("n_groups", 1)
         boundary = info.get("boundary", "none")
-        base_f0 = info.get("base_f0", 195.0)
+        base_f0 = info.get("base_f0", 175.0)
 
         # Un groupe est "final" s'il est le dernier OU s'il se termine
         # par une ponctuation de fin de phrase (chaque phrase a sa propre chute)
@@ -451,7 +451,7 @@ class DiphoneEngine:
             return np.array([], dtype=np.float32)
 
         n_groups = len(groups)
-        base_f0_start = 200.0
+        base_f0_start = 175.0
 
         audio_parts = []
         for gi, group in enumerate(groups):

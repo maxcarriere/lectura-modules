@@ -58,7 +58,7 @@ def test_f0_targets_syllabes():
     from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
     engine = DiphoneEngine()
     f0s = engine.compute_f0_targets(["b", "a", "l"], SynthMode.SYLLABES)
-    assert f0s == [190.0, 190.0, 190.0]
+    assert f0s == [175.0, 175.0, 175.0]
 
 
 def test_f0_targets_fluide():
