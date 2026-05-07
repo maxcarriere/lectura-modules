@@ -158,7 +158,7 @@ class LecturaNlpG2P:
         self._g2p = creer_engine(mode="auto")
 
     def phonemize(self, text: str) -> list[dict]:
-        """Texte → groupes prosodiques via tokeniseur + G2P."""
+        """Texte → groupes prosodiques via tokeniseur + G2P + formules."""
         self._ensure_loaded()
         from lectura_tokeniseur import tokenise
         from lectura_tts_diphone.phonemes import ipa_to_phones
@@ -169,33 +169,58 @@ class LecturaNlpG2P:
 
         tokens_raw = tokenise(input_text)
 
-        # Extraire mots et ponctuation dans l'ordre
-        words: list[str] = []
-        # (word_index, boundary_type) — ponctuation apres le mot
+        # Enrichir les formules si le module est disponible
+        try:
+            from lectura_formules import enrichir_formules
+            enrichir_formules(tokens_raw)
+        except ImportError:
+            pass
+
+        # Extraire mots, formules et ponctuation dans l'ordre
+        # entries : liste ordonnee de {"type": "mot"/"formule", ...}
+        entries: list[dict] = []
         punct_after: dict[int, str] = {}
 
         for tok in tokens_raw:
             ttype = tok.type.value if hasattr(tok.type, "value") else tok.type.name
             if ttype in ("mot", "MOT"):
-                words.append(tok.text)
+                entries.append({"type": "mot", "text": tok.text})
+            elif ttype in ("formule", "FORMULE"):
+                lecture = getattr(tok, "lecture", None)
+                if lecture and getattr(lecture, "phone", ""):
+                    # IPA pre-calculee par lectura_formules
+                    for comp_ipa in lecture.phone.split():
+                        entries.append({"type": "formule", "ipa": comp_ipa})
+                else:
+                    # Pas de lecture dispo — traiter comme mot
+                    entries.append({"type": "mot", "text": tok.text})
             elif ttype in ("ponctuation", "PONCTUATION"):
                 bnd = _PUNCT_MAP.get(tok.text.strip())
-                if bnd and words:
-                    punct_after[len(words) - 1] = bnd
+                if bnd and entries:
+                    punct_after[len(entries) - 1] = bnd
 
-        if not words:
+        if not entries:
             return []
 
-        # Un seul appel G2P batch
-        result = self._g2p.analyser(words)
-        ipas = result.get("g2p", [])
+        # G2P batch pour les mots uniquement
+        mot_indices = [i for i, e in enumerate(entries) if e["type"] == "mot"]
+        mot_words = [entries[i]["text"] for i in mot_indices]
 
-        # Construire groupes prosodiques (split sur ponctuation forte)
+        if mot_words:
+            result = self._g2p.analyser(mot_words)
+            ipas = result.get("g2p", [])
+            for idx, ipa in zip(mot_indices, ipas):
+                entries[idx]["ipa"] = ipa
+
+        # Construire groupes prosodiques
         groups: list[dict] = []
         current_phones: list[str] = []
         current_word_boundaries: list[int] = []
 
-        for i, ipa in enumerate(ipas):
+        for i, entry in enumerate(entries):
+            ipa = entry.get("ipa", "")
+            if not ipa:
+                continue
             phones = ipa_to_phones(ipa)
             if not phones:
                 continue
