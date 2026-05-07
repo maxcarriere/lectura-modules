@@ -25,6 +25,26 @@ from lectura_tts_diphone._world import (
 log = logging.getLogger(__name__)
 
 MIN_STATS_N = 5  # minimum observations for corpus stats
+_BASE_RATE = 1.2  # facteur interne : vitesse naturelle (applique avant duration_scale)
+
+_VOWELS = set("aeiouyøœɑɔəɛɛ̃ɑ̃ɔ̃")
+
+# Chute F0 declarative — parametres absolus (en nombre de phones)
+_DECL_FALL_PHONES = 7      # derniers phones avec chute acceleree
+_DECL_SLOPE_HZ = 1.5       # pente douce par phone avant la zone de chute
+_DECL_MAX_FALL_HZ = 45.0   # chute max dans la zone finale (avant macro_k)
+
+
+def _smooth_noise(n: int, amplitude: float, sigma: float = 3.5) -> np.ndarray:
+    """Bruit continu lisse pour micro-prosodie."""
+    from scipy.ndimage import gaussian_filter1d
+
+    if n <= 0:
+        return np.array([], dtype=np.float64)
+    if n == 1:
+        return np.array([np.random.randn() * amplitude * 0.3])
+    raw = np.random.randn(n) * amplitude
+    return gaussian_filter1d(raw, sigma=min(sigma, max(1.0, n / 2)))
 
 
 class SynthMode(str, Enum):
@@ -137,7 +157,7 @@ class DiphoneEngine:
             elif mode == SynthMode.MOT_A_MOT:
                 durations.append(200.0 if is_vowel else 60.0)
             else:  # FLUIDE
-                durations.append(120.0 if is_vowel else 50.0)
+                durations.append(144.0 if is_vowel else 60.0)
 
         # Final lengthening
         if durations and mode != SynthMode.SYLLABES:
@@ -241,22 +261,47 @@ class DiphoneEngine:
         is_last = (gi == n_groups - 1)
         is_question = boundary == "question"
         is_exclamation = boundary == "exclamation"
+        is_suspensive = boundary == "suspensive"
+        macro_k = info.get("macro_expressivity", 1.0)
 
         f0s = []
         for i in range(n):
             pos = i / max(1, n - 1)
 
             if is_last and is_question:
+                # Interrogatif : montee finale
                 if pos < 0.65:
                     offset = -5.0 * pos
                 else:
-                    offset = -3.0 + 30.0 * ((pos - 0.65) / 0.35)
+                    offset = -3.0 + 30.0 * macro_k * ((pos - 0.65) / 0.35)
             elif is_last and is_exclamation:
-                offset = 10.0 - 30.0 * pos
+                # Exclamatif : explosion puis chute brusque sur la fin
+                if pos < 0.75:
+                    offset = -5.0 * pos
+                elif pos < 0.90:
+                    offset = 25.0 * macro_k * ((pos - 0.75) / 0.15)
+                else:
+                    offset = 25.0 * macro_k - 50.0 * macro_k * ((pos - 0.90) / 0.10)
+            elif is_last and is_suspensive:
+                # Suspensif : declination douce (macro n'amplifie que peu)
+                offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
             elif is_last:
-                offset = -20.0 * pos
+                # Declaratif : chute en absolu (nombre de phones depuis la fin)
+                phones_from_end = n - 1 - i
+                if phones_from_end >= _DECL_FALL_PHONES:
+                    # Zone douce : declination lineaire par phone
+                    offset = -_DECL_SLOPE_HZ * macro_k * i
+                    # Plafonner la partie douce
+                    max_gentle = -_DECL_SLOPE_HZ * macro_k * max(0, n - 1 - _DECL_FALL_PHONES)
+                    offset = max(offset, max_gentle)
+                else:
+                    # Zone de chute finale : acceleration
+                    gentle_offset = -_DECL_SLOPE_HZ * macro_k * max(0, n - 1 - _DECL_FALL_PHONES)
+                    fall_pos = 1.0 - phones_from_end / _DECL_FALL_PHONES  # 0→1
+                    offset = gentle_offset - _DECL_MAX_FALL_HZ * macro_k * (fall_pos ** 1.5)
             else:
-                offset = -3.0 + 12.0 * pos
+                # Groupe non-final : continuation (legere montee)
+                offset = -3.0 + 12.0 * macro_k * pos
 
             f0s.append(base_f0 + offset)
 
@@ -322,18 +367,28 @@ class DiphoneEngine:
         if self.pause_stats and boundary in self.pause_stats:
             return self.pause_stats[boundary]["pause_ms"]
         defaults = {"comma": 50.0, "period": 550.0, "question": 550.0,
-                     "exclamation": 450.0, "word": 80.0, "none": 60.0}
+                     "exclamation": 450.0, "suspensive": 600.0,
+                     "word": 80.0, "none": 60.0}
         return defaults.get(boundary, 60.0)
 
     # ── Main synthesis ─────────────────────────────────────────────────
+
+    # Styles prosodiques valides pour prosody_style
+    _PROSODY_STYLES = {"auto", "declaratif", "question", "exclamation",
+                       "suspensif", "neutre"}
 
     def synthesize_groups(
         self,
         groups: list[dict],
         mode: str | SynthMode = SynthMode.FLUIDE,
         prosody: dict | None = None,
-        duration_scale: float = 1.2,
-        pause_scale: float = 1.2,
+        duration_scale: float = 1.0,
+        pause_scale: float = 1.0,
+        macro_expressivity: float = 2.0,
+        micro_expressivity: float = 5.0,
+        seed: int | None = None,
+        prosody_style: str = "auto",
+        spectral_contrast: float = 1.5,
     ) -> np.ndarray:
         """Synthesize multiple prosodic groups with inter-group pauses.
 
@@ -345,15 +400,45 @@ class DiphoneEngine:
             prosody: optional global prosody dict
             duration_scale: speed factor (>1 = slower)
             pause_scale: scale factor for inter-group pauses
+            macro_expressivity: amplification des gestes prosodiques aux
+                ponctuations (F0 + allongement). 0=neutre, 2=normal, 4=exagere.
+            micro_expressivity: amplification des micro-variations continues
+                (F0, duree, energie). 0=robot, 5=normal, 10=tres expressif.
+            seed: graine aleatoire pour la micro-prosodie. None = aleatoire
+                a chaque appel. Meme seed = meme resultat reproductible.
+            prosody_style: style prosodique force. "auto" = determine par la
+                ponctuation. Autres valeurs : "declaratif", "question",
+                "exclamation", "suspensif", "neutre".
+            spectral_contrast: compensation de variance spectrale (GV).
+                1.0=pas de changement, 1.5=naturel, 2.0=fort. Restaure le
+                detail spectral perdu par le moyennage des diphones.
 
         Returns:
             np.float32 audio array at 44100 Hz
         """
+        if seed is not None:
+            np.random.seed(seed)
+
         if not self.loaded:
             self.load()
 
         if isinstance(mode, str):
             mode = SynthMode(mode)
+
+        if prosody_style not in self._PROSODY_STYLES:
+            raise ValueError(
+                f"prosody_style invalide: {prosody_style!r}. "
+                f"Valeurs possibles: {sorted(self._PROSODY_STYLES)}"
+            )
+
+        # Mapping prosody_style → boundary override
+        _STYLE_TO_BOUNDARY = {
+            "declaratif": "period",
+            "question": "question",
+            "exclamation": "exclamation",
+            "suspensif": "suspensive",
+            "neutre": "none",
+        }
 
         if not groups:
             return np.array([], dtype=np.float32)
@@ -367,7 +452,11 @@ class DiphoneEngine:
             if not phones:
                 continue
 
-            boundary = group.get("boundary", "none")
+            if prosody_style == "auto":
+                boundary = group.get("boundary", "none")
+            else:
+                boundary = _STYLE_TO_BOUNDARY[prosody_style]
+
             group_pos = gi / max(1, n_groups - 1)
             base_f0 = base_f0_start - 20.0 * group_pos
 
@@ -376,6 +465,8 @@ class DiphoneEngine:
                 "n_groups": n_groups,
                 "boundary": boundary,
                 "base_f0": base_f0,
+                "macro_expressivity": macro_expressivity,
+                "micro_expressivity": micro_expressivity,
             }
 
             word_boundaries = group.get("word_boundaries", [])
@@ -385,6 +476,7 @@ class DiphoneEngine:
                 group_info=group_info,
                 duration_scale=duration_scale,
                 word_boundaries=word_boundaries,
+                spectral_contrast=spectral_contrast,
             )
             audio_parts.append(audio)
 
@@ -413,6 +505,7 @@ class DiphoneEngine:
         group_info: dict | None = None,
         duration_scale: float = 1.0,
         word_boundaries: list[int] | None = None,
+        spectral_contrast: float = 1.0,
     ) -> np.ndarray:
         """Synthesize from a phone list using diphone chain.
 
@@ -424,6 +517,7 @@ class DiphoneEngine:
             group_info: group position for phrase-level F0 contour
             duration_scale: speed factor (>1 = slower)
             word_boundaries: phone indices for word starts (micro-pauses)
+            spectral_contrast: GV compensation factor (1.0=off, 1.5=default)
 
         Returns:
             np.float32 audio array at 44100 Hz
@@ -435,34 +529,72 @@ class DiphoneEngine:
             mode = SynthMode(mode)
 
         chain = self.build_diphone_chain(phones)
+        n = len(phones)
 
-        # Duration computation
+        # Expressivity from group_info
+        micro_k = 0.0
+        macro_k = 1.0
+        if group_info is not None:
+            micro_k = group_info.get("micro_expressivity", 0.0)
+            macro_k = group_info.get("macro_expressivity", 1.0)
+
+        # ── Durations ──
         if use_corpus_stats and self.diphone_stats and mode != SynthMode.SYLLABES:
             diphone_durations = self.compute_durations_from_stats(chain, phones, mode)
         else:
             phone_durations = self.compute_phone_durations(phones, mode)
+            # Micro jitter duree
+            if mode == SynthMode.FLUIDE and n > 1 and micro_k > 0:
+                dur_jitter = _smooth_noise(n, 0.20 * micro_k, sigma=2.0)
+                phone_durations = [max(20.0, d * (1.0 + j))
+                                   for d, j in zip(phone_durations, dur_jitter)]
             diphone_durations = self._phone_durs_to_diphone_durs(chain, phone_durations)
 
-        if duration_scale != 1.0:
-            diphone_durations = [d * duration_scale for d in diphone_durations]
+        # Facteur de base pour vitesse naturelle + facteur utilisateur
+        rate = _BASE_RATE * duration_scale
+        if rate != 1.0:
+            diphone_durations = [d * rate for d in diphone_durations]
 
         # Pre-boundary lengthening
         if group_info is not None and len(diphone_durations) > 2:
             n_di = len(diphone_durations)
             boundary = group_info.get("boundary", "none")
-            if boundary in ("period", "question", "exclamation"):
-                lengthen_factor = 1.4
+            if boundary == "suspensive":
+                lengthen_base = 1.4
+                start_frac = 0.6
+            elif boundary in ("period", "question", "exclamation"):
+                lengthen_base = 1.15
+                start_frac = 0.75
             elif boundary == "comma":
-                lengthen_factor = 1.25
+                lengthen_base = 1.25
+                start_frac = 0.7
             else:
-                lengthen_factor = 1.1
-            start_idx = max(1, int(n_di * 0.7))
+                lengthen_base = 1.1
+                start_frac = 0.7
+            lengthen_factor = 1.0 + (lengthen_base - 1.0) * macro_k
+            start_idx = max(1, int(n_di * start_frac))
             for di in range(start_idx, n_di):
                 progress = (di - start_idx) / max(1, n_di - 1 - start_idx)
                 factor = 1.0 + (lengthen_factor - 1.0) * progress
                 diphone_durations[di] *= factor
 
+        # ── F0 targets ──
         f0_targets = self.compute_f0_targets(phones, mode, group_info=group_info)
+
+        # Micro F0 variation
+        if mode == SynthMode.FLUIDE and n > 1 and micro_k > 0:
+            f0_noise = _smooth_noise(n, 10.0 * micro_k, sigma=2.5)
+            f0_targets = [max(80.0, f + noise)
+                          for f, noise in zip(f0_targets, f0_noise)]
+
+        # Accent francais (derniere voyelle avant frontiere de mot)
+        if mode == SynthMode.FLUIDE and word_boundaries and micro_k > 0:
+            for wb in word_boundaries:
+                for i in range(min(wb, n) - 1, -1, -1):
+                    base = phones[i][0] if phones[i] else ""
+                    if base in _VOWELS:
+                        f0_targets[i] += 10.0 * micro_k
+                        break
 
         # Apply global prosody scaling
         if prosody is not None:
@@ -475,7 +607,14 @@ class DiphoneEngine:
                 dur_s = prosody["duration_scale"]
                 diphone_durations = [d * dur_s for d in diphone_durations]
 
-        # Build diphone segments
+        # ── Micro energy ──
+        if mode == SynthMode.FLUIDE and n > 1 and micro_k > 0:
+            energy_noise = _smooth_noise(n, 0.10 * micro_k, sigma=2.5)
+            energy_factors = [max(0.6, min(1.4, 1.0 + e)) for e in energy_noise]
+        else:
+            energy_factors = [1.0] * n
+
+        # ── Build diphone segments ──
         import pyworld as pw
         diphone_segments = []
 
@@ -506,14 +645,19 @@ class DiphoneEngine:
 
             if di_key.startswith("#-"):
                 target_f0 = f0_targets[0]
+                e_factor = energy_factors[0]
             elif di_key.endswith("-#"):
                 target_f0 = f0_targets[-1]
+                e_factor = energy_factors[-1]
             else:
                 a_idx = di_idx - 1
                 b_idx = di_idx
                 f0_a = f0_targets[a_idx] if a_idx < len(f0_targets) else 190.0
                 f0_b = f0_targets[b_idx] if b_idx < len(f0_targets) else 190.0
                 target_f0 = (f0_a + f0_b) / 2
+                e_a = energy_factors[a_idx] if a_idx < len(energy_factors) else 1.0
+                e_b = energy_factors[b_idx] if b_idx < len(energy_factors) else 1.0
+                e_factor = (e_a + e_b) / 2
 
             n_target = max(4, int(target_ms / FRAME_PERIOD))
             f0_s, sp_s, ap_s = stretch_params(f0, sp, ap, n_target)
@@ -524,6 +668,10 @@ class DiphoneEngine:
                 current_mean = np.mean(f0_s[voiced])
                 if current_mean > 0:
                     f0_s[voiced] *= target_f0 / current_mean
+
+            # Energy scaling
+            if abs(e_factor - 1.0) > 0.001:
+                sp_s = sp_s * e_factor
 
             diphone_segments.append({
                 "f0": f0_s,
@@ -536,6 +684,13 @@ class DiphoneEngine:
             return np.array([], dtype=np.float32)
 
         f0_cat, sp_cat, ap_cat = concat_diphones(diphone_segments)
+
+        # GV compensation : restaurer le contraste spectral
+        if spectral_contrast > 1.0:
+            log_sp = np.log(np.maximum(sp_cat, 1e-10))
+            mean_log = np.mean(log_sp, axis=0, keepdims=True)
+            sp_cat = np.exp(mean_log + (log_sp - mean_log) * spectral_contrast)
+
         audio = synthesize(f0_cat, sp_cat, ap_cat, SIWIS_SR, FRAME_PERIOD)
 
         peak = np.max(np.abs(audio))

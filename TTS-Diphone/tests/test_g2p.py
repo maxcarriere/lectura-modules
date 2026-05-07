@@ -49,7 +49,7 @@ def test_api_g2p_default_url():
     from lectura_tts_diphone.g2p import LecturaApiG2P
 
     backend = LecturaApiG2P()
-    assert "localhost" in backend._api_url
+    assert "api.lec-tu-ra.com" in backend._api_url
 
 
 def test_auto_detect_api_preference():

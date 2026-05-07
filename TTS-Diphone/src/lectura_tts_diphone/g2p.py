@@ -1,12 +1,12 @@
-"""G2P flexible — Protocol + backends Local/Api/Custom.
+"""G2P flexible — Protocol + backends Local/Nlp/Api/Custom.
 
 Convertit du texte en groupes prosodiques avec phones IPA.
 
-Backends :
-  - LecturaLocalG2P : import lecteur_syllabique.Pipeline (lectura-g2p)
-  - LecturaApiG2P : POST /g2p/phonemize (urllib, zero deps)
-  - CallableG2P : wraps any callable(text) → list[dict]
-  - auto_detect_g2p() : local si disponible, sinon API
+Backends (ordre de detection) :
+  1. LecturaLocalG2P : lecteur_syllabique.Pipeline (Lectura Edition)
+  2. LecturaNlpG2P : lectura_nlp + lectura_tokeniseur (pip install)
+  3. LecturaApiG2P : POST /g2p/analyser (urllib, zero deps)
+  4. CallableG2P : wraps any callable(text) → list[dict]
 
 Chaque backend retourne une liste de groupes prosodiques :
   [{"phones": ["b", "ɔ̃"], "boundary": "comma"}, ...]
@@ -23,8 +23,16 @@ from typing import Callable, Protocol, runtime_checkable
 log = logging.getLogger(__name__)
 
 # Ponctuation → boundary type
-_PUNCT_MAP = {",": "comma", ".": "period", "?": "question", "!": "exclamation"}
-_PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation"}
+_PUNCT_MAP = {"...": "suspensive", ",": "comma", ".": "period", "?": "question", "!": "exclamation"}
+_PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation", "suspensive"}
+
+# Ponctuation terminale de phrase
+_SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
+
+# Liaisons francaises : label G2P → consonne IPA
+_LIAISON_MAP = {"Lz": "z", "Lt": "t", "Ln": "n", "Lr": "\u0281", "Lp": "p"}
+# Phones IPA vocaliques (debut de mot suivant)
+_VOWEL_INITIALS = set("aeiouy\u00f8\u0153\u0251\u0254\u0259\u025b")
 
 
 @runtime_checkable
@@ -44,7 +52,7 @@ class G2PBackend(Protocol):
 
 
 class LecturaLocalG2P:
-    """G2P via lecteur_syllabique.Pipeline (import local)."""
+    """G2P via lecteur_syllabique.Pipeline (Lectura Edition complet)."""
 
     def __init__(self) -> None:
         self._pipeline = None
@@ -142,10 +150,141 @@ class LecturaLocalG2P:
         return prosodic_groups
 
 
+class LecturaNlpG2P:
+    """G2P via lectura_nlp + lectura_tokeniseur (modules PyPI standards)."""
+
+    def __init__(self) -> None:
+        self._g2p = None
+
+    def _ensure_loaded(self) -> None:
+        if self._g2p is not None:
+            return
+        from lectura_nlp import creer_engine
+        self._g2p = creer_engine(mode="auto")
+
+    def phonemize(self, text: str) -> list[dict]:
+        """Texte → groupes prosodiques via tokeniseur + G2P + formules."""
+        self._ensure_loaded()
+        from lectura_tokeniseur import tokenise
+        from lectura_tts_diphone.phonemes import ipa_to_phones
+
+        input_text = text.strip()
+        if not input_text:
+            return []
+
+        tokens_raw = tokenise(input_text)
+
+        # Enrichir les formules si le module est disponible
+        try:
+            from lectura_formules import enrichir_formules
+            enrichir_formules(tokens_raw)
+        except ImportError:
+            pass
+
+        # Extraire mots, formules et ponctuation dans l'ordre
+        # entries : liste ordonnee de {"type": "mot"/"formule", ...}
+        entries: list[dict] = []
+        punct_after: dict[int, str] = {}
+
+        for tok in tokens_raw:
+            ttype = tok.type.value if hasattr(tok.type, "value") else tok.type.name
+            if ttype in ("mot", "MOT"):
+                entries.append({"type": "mot", "text": tok.text})
+            elif ttype in ("formule", "FORMULE"):
+                lecture = getattr(tok, "lecture", None)
+                if lecture and getattr(lecture, "phone", ""):
+                    # IPA pre-calculee par lectura_formules
+                    for comp_ipa in lecture.phone.split():
+                        entries.append({"type": "formule", "ipa": comp_ipa})
+                else:
+                    # Pas de lecture dispo — traiter comme mot
+                    entries.append({"type": "mot", "text": tok.text})
+            elif ttype in ("ponctuation", "PONCTUATION"):
+                bnd = _PUNCT_MAP.get(tok.text.strip())
+                if bnd and entries:
+                    punct_after[len(entries) - 1] = bnd
+
+        if not entries:
+            return []
+
+        # G2P batch pour les mots uniquement
+        mot_indices = [i for i, e in enumerate(entries) if e["type"] == "mot"]
+        mot_words = [entries[i]["text"] for i in mot_indices]
+
+        if mot_words:
+            result = self._g2p.analyser(mot_words)
+            ipas = result.get("g2p", [])
+            liaisons = result.get("liaison", [])
+            for j, idx in enumerate(mot_indices):
+                if j < len(ipas):
+                    entries[idx]["ipa"] = ipas[j]
+                if j < len(liaisons):
+                    entries[idx]["liaison"] = liaisons[j]
+
+        # Construire groupes prosodiques
+        groups: list[dict] = []
+        current_phones: list[str] = []
+        current_word_boundaries: list[int] = []
+
+        for i, entry in enumerate(entries):
+            ipa = entry.get("ipa", "")
+            if not ipa:
+                continue
+            phones = ipa_to_phones(ipa)
+            if not phones:
+                continue
+
+            # Inserer la liaison du mot precedent si applicable
+            # La liaison est portee par le mot *precedent* et s'active si
+            # le mot courant commence par une voyelle et qu'il n'y a pas
+            # de ponctuation entre les deux.
+            if current_phones and i > 0:
+                prev_entry_idx = i - 1
+                # Trouver l'entree precedente qui avait du contenu
+                while prev_entry_idx >= 0 and not entries[prev_entry_idx].get("ipa"):
+                    prev_entry_idx -= 1
+                if prev_entry_idx >= 0:
+                    prev_liaison = entries[prev_entry_idx].get("liaison", "")
+                    liaison_phone = _LIAISON_MAP.get(prev_liaison)
+                    if liaison_phone and phones[0][0] in _VOWEL_INITIALS:
+                        # Pas de ponctuation entre les deux mots
+                        has_punct = any(
+                            j in punct_after
+                            for j in range(prev_entry_idx, i)
+                        )
+                        if not has_punct:
+                            current_phones.append(liaison_phone)
+
+            # Marquer la frontiere de mot pour micro-pauses
+            if current_phones:
+                current_word_boundaries.append(len(current_phones))
+            current_phones.extend(phones)
+
+            bnd = punct_after.get(i)
+            if bnd:
+                groups.append({
+                    "phones": current_phones,
+                    "boundary": bnd,
+                    "word_boundaries": current_word_boundaries,
+                })
+                current_phones = []
+                current_word_boundaries = []
+
+        # Dernier groupe sans ponctuation finale
+        if current_phones:
+            groups.append({
+                "phones": current_phones,
+                "boundary": "period",
+                "word_boundaries": current_word_boundaries,
+            })
+
+        return groups
+
+
 class LecturaApiG2P:
     """G2P via API Lectura (urllib seul, zero deps)."""
 
-    DEFAULT_URL = "http://localhost:8000"
+    DEFAULT_URL = "https://api.lec-tu-ra.com"
 
     def __init__(self, api_url: str | None = None) -> None:
         self._api_url = (api_url or self.DEFAULT_URL).rstrip("/")
@@ -154,8 +293,34 @@ class LecturaApiG2P:
         """Texte → groupes prosodiques via API."""
         from lectura_tts_diphone.phonemes import ipa_to_phones
 
-        url = f"{self._api_url}/g2p/phonemize"
-        payload = json.dumps({"text": text}).encode("utf-8")
+        # Tokeniser le texte cote client (split basique)
+        input_text = text.strip()
+        if not input_text:
+            return []
+
+        # Split en mots + ponctuation
+        import re
+        parts = re.split(r'(\s+|[.,?!]+|\.\.\.)', input_text)
+        words = []
+        punct_after: dict[int, str] = {}
+
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            bnd = _PUNCT_MAP.get(part)
+            if bnd:
+                if words:
+                    punct_after[len(words) - 1] = bnd
+            elif not part.isspace():
+                words.append(part)
+
+        if not words:
+            return []
+
+        # Appel API G2P
+        url = f"{self._api_url}/g2p/analyser"
+        payload = json.dumps({"tokens": words}).encode("utf-8")
         req = urllib.request.Request(
             url, data=payload,
             headers={"Content-Type": "application/json"},
@@ -168,30 +333,27 @@ class LecturaApiG2P:
             log.error("G2P API error: %s", e)
             return []
 
-        # L'API retourne des syllabes + boundaries
-        syllables = data.get("syllables", [])
-        boundaries = data.get("boundaries", [])
+        ipas = data.get("g2p", [])
 
-        # Regrouper en groupes prosodiques
-        prosodic_groups: list[dict] = []
+        # Construire groupes prosodiques
+        groups: list[dict] = []
         current_phones: list[str] = []
 
-        for si, syl in enumerate(syllables):
-            current_phones.extend(ipa_to_phones(syl))
-            bnd = boundaries[si] if si < len(boundaries) else "none"
+        for i, ipa in enumerate(ipas):
+            phones = ipa_to_phones(ipa)
+            if not phones:
+                continue
+            current_phones.extend(phones)
 
-            is_punct = bnd in _PUNCT_BOUNDARIES
-            is_last = si == len(syllables) - 1
+            bnd = punct_after.get(i)
+            if bnd:
+                groups.append({"phones": current_phones, "boundary": bnd})
+                current_phones = []
 
-            if is_punct or is_last:
-                if current_phones:
-                    prosodic_groups.append({
-                        "phones": current_phones,
-                        "boundary": bnd,
-                    })
-                    current_phones = []
+        if current_phones:
+            groups.append({"phones": current_phones, "boundary": "period"})
 
-        return prosodic_groups
+        return groups
 
 
 class CallableG2P:
@@ -210,6 +372,11 @@ def auto_detect_g2p(
 ) -> G2PBackend:
     """Auto-detecte le meilleur backend G2P disponible.
 
+    Cascade :
+      1. lecteur_syllabique (Lectura Edition complet)
+      2. lectura_nlp + lectura_tokeniseur (modules PyPI)
+      3. API Lectura (zero deps)
+
     Args:
         preference: "local", "api", ou None (auto)
         api_url: URL pour le backend API
@@ -221,15 +388,25 @@ def auto_detect_g2p(
         return LecturaApiG2P(api_url=api_url)
 
     if preference == "local" or preference is None:
+        # 1. lecteur_syllabique (pipeline complet Lectura Edition)
         try:
             import lecteur_syllabique  # noqa: F401
             log.debug("G2P local disponible (lecteur_syllabique)")
             return LecturaLocalG2P()
         except ImportError:
+            pass
+
+        # 2. lectura_nlp + lectura_tokeniseur (modules PyPI)
+        try:
+            import lectura_nlp  # noqa: F401
+            import lectura_tokeniseur  # noqa: F401
+            log.debug("G2P disponible (lectura_nlp + lectura_tokeniseur)")
+            return LecturaNlpG2P()
+        except ImportError:
             if preference == "local":
                 raise ImportError(
-                    "lecteur_syllabique non installe. "
-                    "Installez lectura-g2p ou utilisez preference='api'."
+                    "G2P local non disponible. Installez avec : "
+                    "pip install 'lectura-tts-diphone[g2p]'"
                 )
             log.debug("G2P local non disponible, fallback vers API")
 
