@@ -15,6 +15,7 @@ Installez tout d'un coup avec `pip install lectura` ou chaque module independamm
 | **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 2.0.0 | `pip install lectura-formules` |
 | **[Correcteur](Correcteur/)** | Correcteur orthographique et grammatical du francais | 1.0.0 | `pip install lectura-correcteur` |
 | **[TTS-Monospeaker](TTS-Monospeaker/)** | Synthese vocale neuronale monospeaker francais (FastPitch + HiFi-GAN) | 1.0.0 | `pip install lectura-tts-monospeaker` |
+| **[TTS-Diphone](TTS-Diphone/)** | Synthese vocale par concatenation de diphones WORLD (prosodie reglee) | 1.2.0 | `pip install lectura-tts-diphone` |
 
 ## Caracteristiques
 
