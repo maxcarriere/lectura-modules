@@ -34,8 +34,8 @@ _PHONE_NORMALIZE = {"\u0153\u0303": "\u025b\u0303"}  # œ̃ → ɛ̃
 
 # Chute F0 declarative — parametres absolus (en nombre de phones)
 _DECL_FALL_PHONES = 7      # derniers phones avec chute acceleree
-_DECL_SLOPE_HZ = 1.5       # pente douce par phone avant la zone de chute
-_DECL_MAX_FALL_HZ = 45.0   # chute max dans la zone finale (avant macro_k)
+_DECL_SLOPE_HZ = 0.8       # pente douce par phone avant la zone de chute
+_DECL_MAX_FALL_HZ = 28.0   # chute max dans la zone finale (avant macro_k)
 
 
 def _smooth_noise(n: int, amplitude: float, sigma: float = 3.5) -> np.ndarray:
@@ -280,15 +280,15 @@ class DiphoneEngine:
                 if pos < 0.65:
                     offset = -5.0 * pos
                 else:
-                    offset = -3.0 + 30.0 * macro_k * ((pos - 0.65) / 0.35)
+                    offset = -3.0 + 20.0 * macro_k * ((pos - 0.65) / 0.35)
             elif is_sentence_final and is_exclamation:
                 # Exclamatif : explosion puis chute brusque sur la fin
                 if pos < 0.75:
                     offset = -5.0 * pos
                 elif pos < 0.90:
-                    offset = 25.0 * macro_k * ((pos - 0.75) / 0.15)
+                    offset = 18.0 * macro_k * ((pos - 0.75) / 0.15)
                 else:
-                    offset = 25.0 * macro_k - 50.0 * macro_k * ((pos - 0.90) / 0.10)
+                    offset = 18.0 * macro_k - 40.0 * macro_k * ((pos - 0.90) / 0.10)
             elif is_sentence_final and is_suspensive:
                 # Suspensif : declination douce (macro n'amplifie que peu)
                 offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
@@ -308,7 +308,7 @@ class DiphoneEngine:
                     offset = gentle_offset - _DECL_MAX_FALL_HZ * macro_k * (fall_pos ** 1.5)
             else:
                 # Groupe non-final : continuation (legere montee)
-                offset = -3.0 + 12.0 * macro_k * pos
+                offset = -2.0 + 8.0 * macro_k * pos
 
             f0s.append(base_f0 + offset)
 
