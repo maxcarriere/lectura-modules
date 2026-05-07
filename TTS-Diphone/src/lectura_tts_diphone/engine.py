@@ -282,13 +282,16 @@ class DiphoneEngine:
                 else:
                     offset = -3.0 + 20.0 * macro_k * ((pos - 0.65) / 0.35)
             elif is_sentence_final and is_exclamation:
-                # Exclamatif : explosion puis chute brusque sur la fin
-                if pos < 0.70:
-                    offset = -3.0 * pos
-                elif pos < 0.88:
-                    offset = 35.0 * macro_k * ((pos - 0.70) / 0.18)
+                # Exclamatif : attaque haute, maintien, puis chute rapide
+                # (base_f0 deja relevee de +20% dans synthesize_groups)
+                if pos < 0.65:
+                    # Plateau haut avec legere declination
+                    offset = -4.0 * macro_k * pos
                 else:
-                    offset = 35.0 * macro_k - 60.0 * macro_k * ((pos - 0.88) / 0.12)
+                    # Chute rapide sur le dernier tiers
+                    gentle = -4.0 * macro_k * 0.65
+                    fall_pos = (pos - 0.65) / 0.35  # 0→1
+                    offset = gentle - 45.0 * macro_k * (fall_pos ** 1.3)
             elif is_sentence_final and is_suspensive:
                 # Suspensif : declination douce (macro n'amplifie que peu)
                 offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
@@ -467,8 +470,12 @@ class DiphoneEngine:
             group_pos = gi / max(1, n_groups - 1)
             base_f0 = base_f0_start - 20.0 * group_pos
 
-            # Boost micro-expressivite pour les exclamatives (+50%)
-            group_micro = micro_expressivity * 1.5 if boundary == "exclamation" else micro_expressivity
+            # Exclamatives : base F0 relevee (+20%) + boost micro (+50%)
+            if boundary == "exclamation":
+                base_f0 *= 1.20
+                group_micro = micro_expressivity * 1.5
+            else:
+                group_micro = micro_expressivity
 
             group_info = {
                 "group_idx": gi,
