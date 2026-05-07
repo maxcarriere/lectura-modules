@@ -283,12 +283,12 @@ class DiphoneEngine:
                     offset = -3.0 + 20.0 * macro_k * ((pos - 0.65) / 0.35)
             elif is_sentence_final and is_exclamation:
                 # Exclamatif : explosion puis chute brusque sur la fin
-                if pos < 0.75:
-                    offset = -5.0 * pos
-                elif pos < 0.90:
-                    offset = 18.0 * macro_k * ((pos - 0.75) / 0.15)
+                if pos < 0.70:
+                    offset = -3.0 * pos
+                elif pos < 0.88:
+                    offset = 35.0 * macro_k * ((pos - 0.70) / 0.18)
                 else:
-                    offset = 18.0 * macro_k - 40.0 * macro_k * ((pos - 0.90) / 0.10)
+                    offset = 35.0 * macro_k - 60.0 * macro_k * ((pos - 0.88) / 0.12)
             elif is_sentence_final and is_suspensive:
                 # Suspensif : declination douce (macro n'amplifie que peu)
                 offset = -12.0 * (1.0 + 0.3 * (macro_k - 1.0)) * pos
@@ -467,13 +467,16 @@ class DiphoneEngine:
             group_pos = gi / max(1, n_groups - 1)
             base_f0 = base_f0_start - 20.0 * group_pos
 
+            # Boost micro-expressivite pour les exclamatives (+50%)
+            group_micro = micro_expressivity * 1.5 if boundary == "exclamation" else micro_expressivity
+
             group_info = {
                 "group_idx": gi,
                 "n_groups": n_groups,
                 "boundary": boundary,
                 "base_f0": base_f0,
                 "macro_expressivity": macro_expressivity,
-                "micro_expressivity": micro_expressivity,
+                "micro_expressivity": group_micro,
             }
 
             word_boundaries = group.get("word_boundaries", [])

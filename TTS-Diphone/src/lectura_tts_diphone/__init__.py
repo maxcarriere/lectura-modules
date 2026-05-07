@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
-__version__ = "1.3.5"
+__version__ = "1.3.6"
 
 
 def creer_engine(
