@@ -11,7 +11,9 @@ from typing import Any
 from lectura_correcteur._types import MotAnalyse, TypeCorrection
 from lectura_correcteur._utils import PUNCT_RE
 from lectura_correcteur.orthographe._suggestions import (
+    _MAX_D1_EXPAND,
     _edit_distance_rapide,
+    _edits_distance_1,
     _est_doublement_consonne,
     _est_variante_accent,
     _meilleure_variante_accent,
@@ -159,14 +161,64 @@ class VerificateurOrthographe:
     def __init__(
         self, lexique: Any, *, max_suggestions: int = 5, distance: int = 2,
         g2p: Any = None, scoring_actif: bool = False,
-        symspell: Any = None,
     ) -> None:
         self._lexique = lexique
         self._max_suggestions = max_suggestions
         self._distance = distance
         self._g2p = g2p
         self._scoring_actif = scoring_actif
-        self._symspell = symspell
+
+    def _chercher_candidats_pos_coherents(
+        self,
+        mot: str,
+        pos_cible: str,
+        ed_max: int = 2,
+    ) -> list[str]:
+        """Cherche des candidats ed<=ed_max dont le cgram lexique correspond a pos_cible."""
+        low = mot.lower()
+        compatibles: list[tuple[str, float]] = []
+
+        # Generation a la volee : d=1
+        for cand in _edits_distance_1(low):
+            if not self._lexique.existe(cand):
+                continue
+            infos = self._lexique.info(cand) if hasattr(self._lexique, "info") else []
+            if not infos:
+                continue
+            cand_cgrams = {e.get("cgram", "") for e in infos}
+            if pos_cible in cand_cgrams:
+                freq = (
+                    self._lexique.frequence(cand)
+                    if hasattr(self._lexique, "frequence") else 0.0
+                )
+                compatibles.append((cand, freq))
+
+        # d=2 si ed_max >= 2 et aucun candidat d=1
+        if ed_max >= 2 and not compatibles:
+            d1 = _edits_distance_1(low)
+            count = 0
+            for c in d1:
+                if self._lexique.existe(c):
+                    continue
+                count += 1
+                if count > _MAX_D1_EXPAND:
+                    break
+                for c2 in _edits_distance_1(c):
+                    if not self._lexique.existe(c2):
+                        continue
+                    infos = self._lexique.info(c2) if hasattr(self._lexique, "info") else []
+                    if not infos:
+                        continue
+                    cand_cgrams = {e.get("cgram", "") for e in infos}
+                    if pos_cible in cand_cgrams:
+                        freq = (
+                            self._lexique.frequence(c2)
+                            if hasattr(self._lexique, "frequence") else 0.0
+                        )
+                        compatibles.append((c2, freq))
+
+        compatibles.sort(key=lambda x: -x[1])
+        return [c for c, _ in compatibles[:5]]
 
     def verifier_phrase(
         self,
@@ -334,7 +386,6 @@ class VerificateurOrthographe:
                 dans_lexique
                 and corrige == mot                  # accent n'a pas fire
                 and not PUNCT_RE.match(mot)
-                and self._symspell is not None
             ):
                 freq_actuelle = (
                     self._lexique.frequence(mot)
@@ -403,14 +454,11 @@ class VerificateurOrthographe:
                             _is_base_nom = True
 
                     if not _is_proper and not _is_foreign and not _in_foreign_ctx and not _only_np and not _is_inflected and not _is_base_nom:
-                        _sym_candidates = self._symspell.suggestions(low)
                         _best_form = None
                         _best_freq = 0.0
 
-                        for _cand in _sym_candidates:
+                        for _cand in _edits_distance_1(low):
                             if _cand == low:
-                                continue
-                            if _edit_distance_rapide(low, _cand) != 1:
                                 continue
                             if not self._lexique.existe(_cand):
                                 continue
@@ -425,6 +473,8 @@ class VerificateurOrthographe:
                                 _best_form = _cand
 
                         if _best_form is not None:
+                            # Toujours suggerer meme si ratio insuffisant
+                            suggestions_list.append(_best_form)
                             _ratio_min = 500 if _len > 3 else 1000
                             _freq_abs_min = 500.0 if _len > 3 else 2000.0
 
@@ -467,6 +517,51 @@ class VerificateurOrthographe:
                             corrige = mot[0].upper() + mot[1:]
                             type_corr = TypeCorrection.HORS_LEXIQUE
 
+            # POS-incoherence: mot in-lexique mais POS G2P absent des cgrams
+            # Ex: "vai" in-lexique comme NOM PROPRE (freq~0), G2P predit VER
+            # → chercher un candidat VER a ed<=2 : "vais" (freq=2322)
+            if (
+                dans_lexique
+                and corrige == mot
+                and not PUNCT_RE.match(mot)
+                and hasattr(self._lexique, "info")
+            ):
+                _morpho_pi = morpho_list[i] if i < len(morpho_list) else {}
+                _pos_predit = _morpho_pi.get("pos", "")
+                _divergence = _morpho_pi.get("divergence_pos", False)
+
+                if _pos_predit and _pos_predit not in ("?", ""):
+                    _infos_pi = self._lexique.info(mot)
+                    _cgrams_pi = {
+                        e.get("cgram", "") for e in _infos_pi
+                    } if _infos_pi else set()
+
+                    if _cgrams_pi and _pos_predit not in _cgrams_pi:
+                        # Guard: skip if mot is a known NOM PROPRE
+                        # (noms propres etrangers = cgram NOM PROPRE,
+                        # G2P predit souvent VER/NOM par erreur)
+                        _only_np_pi = _infos_pi and all(
+                            "PROPRE" in (e.get("cgram") or "")
+                            for e in _infos_pi
+                        )
+                        # Guard: skip short words (trop de faux positifs)
+                        if not _only_np_pi and len(mot) > 2:
+                            _candidats_pi = self._chercher_candidats_pos_coherents(
+                                mot, _pos_predit, ed_max=2,
+                            )
+                            if _candidats_pi:
+                                _top_pi = _candidats_pi[0]
+                                _top_freq_pi = (
+                                    self._lexique.frequence(_top_pi)
+                                    if hasattr(self._lexique, "frequence") else 0.0
+                                )
+                                # Seuil adaptatif : plus strict si pas de divergence blind/lex
+                                _seuil_pi = 50.0 if _divergence else 200.0
+                                if _top_freq_pi >= _seuil_pi:
+                                    corrige = _top_pi
+                                    type_corr = TypeCorrection.HORS_LEXIQUE
+                                    suggestions_list = _candidats_pi
+
             if not dans_lexique and not PUNCT_RE.match(mot):
                 type_corr = TypeCorrection.HORS_LEXIQUE
                 # Skip auto-correction for capitalized words not at start
@@ -508,7 +603,6 @@ class VerificateurOrthographe:
                     max_n=self._max_suggestions,
                     distance=self._distance,
                     g2p=self._g2p,
-                    symspell=self._symspell,
                 )
                 # Re-rank by POS CRF compatibility
                 if suggestions_list and pos:
@@ -649,13 +743,23 @@ class VerificateurOrthographe:
                         if top_freq >= 1.0:
                             corrige = top
                     elif len(low) <= 3:
-                        # Very short words (<=3 chars): skip auto-correction
-                        # (often abbreviations/foreign words)
-                        pass
+                        # Very short words: only auto-correct ed=1 + very high freq
+                        # + correction must not be shorter (avoids auf→au, hau→au)
+                        top_freq = (
+                            self._lexique.frequence(top)
+                            if hasattr(self._lexique, "frequence") else 0.0
+                        )
+                        ed = _edit_distance_rapide(low, top_low)
+                        if (
+                            ed == 1
+                            and top_freq >= 2000.0
+                            and len(top_low) >= len(low)
+                        ):
+                            corrige = top
                     elif len(low) == 4:
                         # 4-char words: high FP rate (proper names,
                         # foreign words, abbreviations) — higher thresholds
-                        ed = sum(1 for a, b in zip(low, top_low) if a != b) + abs(len(low) - len(top_low))
+                        ed = _edit_distance_rapide(low, top_low)
                         if ed >= 3:
                             pass
                         else:
@@ -668,7 +772,7 @@ class VerificateurOrthographe:
                                 corrige = top
                     elif len(low) == 5:
                         # 5-char words: moderate threshold
-                        ed = sum(1 for a, b in zip(low, top_low) if a != b) + abs(len(low) - len(top_low))
+                        ed = _edit_distance_rapide(low, top_low)
                         if ed >= 3:
                             pass
                         else:
@@ -685,11 +789,14 @@ class VerificateurOrthographe:
                             if hasattr(self._lexique, "frequence") else 0.0
                         )
                         # Higher threshold for edit distance >= 2, skip for >= 3
-                        ed = sum(1 for a, b in zip(low, top_low) if a != b) + abs(len(low) - len(top_low))
+                        ed = _edit_distance_rapide(low, top_low)
                         if ed >= 3:
                             pass  # Too distant, skip auto-correction
                         elif ed == 2:
-                            if top_freq >= 20.0:
+                            # Mots longs (7+) : seuil plus permissif
+                            if len(low) >= 7 and top_freq >= 8.0:
+                                corrige = top
+                            elif top_freq >= 20.0:
                                 corrige = top
                         else:
                             if top_freq >= 5.0:

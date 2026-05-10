@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "benchmark"))
 
 LEXIQUE_PATH = Path(
-    "/data/work/projets/lectura/workspace/lectura-main/correcteur/donnees/lexique.db"
+    "/data/work/projets/lectura/workspace/Lexique/lexique_lectura.db"
 )
 
 from corpus_benchmark import CATEGORIES, CORPUS, CasBenchmark  # noqa: E402

@@ -30,7 +30,11 @@ _ACCENT_MAP: dict[str, tuple[str, ...]] = {
 
 
 def _edit_distance_rapide(a: str, b: str) -> int:
-    """Distance d'edition Levenshtein (optimisee pour seuil bas)."""
+    """Distance d'edition Damerau-Levenshtein (OSA).
+
+    Comme Levenshtein, mais les transpositions de caracteres adjacents
+    comptent pour 1 operation (au lieu de 2 substitutions).
+    """
     la, lb = len(a), len(b)
     if abs(la - lb) > 2:
         return abs(la - lb)
@@ -38,12 +42,21 @@ def _edit_distance_rapide(a: str, b: str) -> int:
         return lb
     if lb == 0:
         return la
+    prev_prev = None
     prev = list(range(lb + 1))
     for i in range(la):
         curr = [i + 1] + [0] * lb
         for j in range(lb):
             cost = 0 if a[i] == b[j] else 1
             curr[j + 1] = min(curr[j] + 1, prev[j + 1] + 1, prev[j] + cost)
+            # Transposition adjacente
+            if (
+                i > 0 and j > 0
+                and a[i] == b[j - 1] and a[i - 1] == b[j]
+                and prev_prev is not None
+            ):
+                curr[j + 1] = min(curr[j + 1], prev_prev[j - 1] + 1)
+        prev_prev = prev
         prev = curr
     return prev[lb]
 
@@ -267,16 +280,13 @@ def suggerer(
     4. G2P phonetique (si disponible, prioritaire)
     5. Distance <= 2 en dernier recours (si aucun candidat)
 
-    Si un index SymSpell est fourni, la phase 1 utilise l'index au lieu de
-    la generation brute-force. La phase 5 reste brute-force en fallback.
-
     Args:
         mot: Mot a corriger.
         lexique: Lexique (existe, frequence, phone_de, homophones).
         max_n: Nombre max de suggestions.
         distance: Distance d'edition max (conserve pour compatibilite).
         g2p: Objet optionnel avec methode prononcer(mot) -> str | None.
-        symspell: Index SymSpell optionnel pour generation rapide.
+        symspell: Ignore (conserve pour compatibilite d'appel).
     """
     low = mot.lower()
     seen: set[str] = set()
@@ -284,28 +294,13 @@ def suggerer(
     def _freq(c: str) -> float:
         return lexique.frequence(c) if hasattr(lexique, "frequence") else 0.0
 
-    # --- Phase 1 : distance 1 ---
-    if symspell is not None:
-        # SymSpell : lookup rapide, mais filtrer pour ne garder que d<=1
-        sym_candidates = symspell.suggestions(low)
-        d1 = set()  # pas besoin du brute-force d1
-        valides_d1: list[tuple[str, float]] = []
-        sym_d2: list[tuple[str, float]] = []  # candidats d=2 pour phase 5
-        for c in sym_candidates:
-            if c not in seen and lexique.existe(c):
-                if _edit_distance_rapide(low, c) <= 1:
-                    valides_d1.append((c, _freq(c)))
-                else:
-                    sym_d2.append((c, _freq(c)))
-                seen.add(c)
-    else:
-        sym_d2 = []
-        d1 = _edits_distance_1(low)
-        valides_d1: list[tuple[str, float]] = []
-        for c in d1:
-            if c not in seen and lexique.existe(c):
-                valides_d1.append((c, _freq(c)))
-                seen.add(c)
+    # --- Phase 1 : distance 1 (generation a la volee) ---
+    d1 = _edits_distance_1(low)
+    valides_d1: list[tuple[str, float]] = []
+    for c in d1:
+        if c not in seen and lexique.existe(c):
+            valides_d1.append((c, _freq(c)))
+            seen.add(c)
 
     # Filtrer les noms propres quand le mot source est en minuscule :
     # un nom propre (ex: "Pomès") ne devrait pas corriger un mot commun.
@@ -345,7 +340,7 @@ def suggerer(
     # Cherche d'abord le match exact, puis les variantes phone d=1
     # (deletions + substitutions vocaliques).
     phase4_g2p: list[tuple[str, float]] = []
-    if g2p is not None and len(combined_123) < 3 and hasattr(lexique, "homophones"):
+    if g2p is not None and hasattr(lexique, "homophones"):
         phone = g2p.prononcer(low) if hasattr(g2p, "prononcer") else None
         if phone:
             from lectura_correcteur._phones import generer_phones_d1
@@ -368,30 +363,41 @@ def suggerer(
                         seen.add(ortho_low)
             phase4_g2p.sort(key=lambda x: -x[1])
 
+    # Marquer les candidats G2P phonetiques (pour le re-tri)
+    _g2p_set: set[str] = {c for c, _ in phase4_g2p}
+
     combined_1234 = combined_123 + phase4_g2p
 
-    # --- Phase 5 : distance 2 en dernier recours ---
+    # --- Phase 5 : distance 2 (dernier recours si aucun candidat) ---
     valides_d2: list[tuple[str, float]] = []
-    if not combined_1234 and distance >= 2:
-        if sym_d2:
-            # SymSpell a deja les candidats d=2 pre-filtres
-            sym_d2.sort(key=lambda x: -x[1])
-            valides_d2 = sym_d2
-        else:
-            # Brute-force d=2 classique
-            count = 0
-            for c in d1:
-                if lexique.existe(c):
-                    continue
-                count += 1
-                if count > _MAX_D1_EXPAND:
-                    break
-                for c2 in _edits_distance_1(c):
-                    if c2 not in seen and c2 != low and lexique.existe(c2):
-                        valides_d2.append((c2, _freq(c2)))
-                        seen.add(c2)
-            valides_d2.sort(key=lambda x: -x[1])
+    if distance >= 2 and not combined_1234:
+        count = 0
+        for c in d1:
+            if lexique.existe(c):
+                continue
+            count += 1
+            if count > _MAX_D1_EXPAND:
+                break
+            for c2 in _edits_distance_1(c):
+                if c2 not in seen and c2 != low and lexique.existe(c2):
+                    valides_d2.append((c2, _freq(c2)))
+                    seen.add(c2)
+        valides_d2.sort(key=lambda x: -x[1])
 
     combined = combined_1234 + valides_d2
+
+    # Assembler par priorite :
+    #   1. Variantes accent (toujours fiables)
+    #   2. d=1 edit hors homophones (other_d1, tries par freq)
+    #   3. G2P phonetiques (tries par freq, signal fort)
+    #   4. Homophones des d=1 (phase 3)
+    #   5. d=2 brute-force (tries par freq)
+    combined = (
+        accent_sweep + accent_d1     # 1. accents
+        + other_d1                   # 2. d=1 edit
+        + phase4_g2p                 # 3. G2P phonetiques
+        + phase3                     # 4. homophones
+        + valides_d2                 # 5. d=2
+    )
 
     return [c for c, _ in combined[:max_n]]

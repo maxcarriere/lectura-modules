@@ -15,7 +15,10 @@ from __future__ import annotations
 from typing import Any
 
 from lectura_correcteur._candidats import generer_candidats
-from lectura_correcteur._coherence import appliquer_coherence
+from lectura_correcteur._coherence import (
+    appliquer_coherence,
+    verifier_coherence_post_corrections,
+)
 from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._phones import _RuleBasedG2P
 from lectura_correcteur._tagger_lexique import LexiqueTagger
@@ -23,7 +26,6 @@ from lectura_correcteur._scoring import (
     extraire_contexte,
     scorer_candidats,
 )
-from lectura_correcteur._symspell import SymSpellIndex, _obtenir_formes
 from lectura_correcteur._types import (
     Candidat,
     Correction,
@@ -101,18 +103,24 @@ class Correcteur:
         self._lex_tagger = (
             LexiqueTagger(self._lexique) if tagger is not None else None
         )
-        formes = _obtenir_formes(self._lexique)
-        self._symspell = SymSpellIndex(formes) if formes is not None else None
         self._verificateur = VerificateurOrthographe(
             self._lexique, max_suggestions=self._config.max_suggestions,
             distance=self._config.distance_suggestions,
+            g2p=self._g2p,
             scoring_actif=self._config.activer_scoring,
-            symspell=self._symspell,
         )
         # Charger matrice de transition Viterbi si disponible
         self._transition_matrix = None
         if hasattr(self._tagger, "tag_words_rich"):
             self._init_viterbi()
+        # Charger le BiLSTM edit tagger pour homophones si active
+        self._editeur = None
+        if self._config.activer_editeur_homophones:
+            self._init_editeur()
+        # Charger le modele de langue n-gram si active
+        self._lm = None
+        if self._config.activer_lm:
+            self._init_lm()
 
     def _init_viterbi(self) -> None:
         """Charge la matrice de transition si le fichier existe."""
@@ -123,9 +131,26 @@ class Correcteur:
         if matrix_path.exists():
             from lectura_correcteur._viterbi import charger_matrice_transition
             self._transition_matrix = charger_matrice_transition(matrix_path)
-            # Activer Viterbi par defaut si matrice presente
-            if not self._config.activer_viterbi:
-                self._config.activer_viterbi = True
+
+    def _init_editeur(self) -> None:
+        """Charge le BiLSTM edit tagger si les poids sont disponibles."""
+        from pathlib import Path
+        data_dir = Path(__file__).parent / "data"
+        weights = data_dir / "editeur_weights.json.gz"
+        vocab = data_dir / "editeur_vocab.json"
+        if weights.exists() and vocab.exists():
+            from lectura_correcteur._editeur_numpy import EditeurNumpy
+            self._editeur = EditeurNumpy(str(weights), str(vocab))
+
+    def _init_lm(self) -> None:
+        """Charge le modele de langue n-gram si le fichier existe."""
+        from pathlib import Path
+        from lectura_correcteur._language_model import ScorerNgram
+        chemin = self._config.chemin_lm
+        if not chemin:
+            chemin = str(Path(__file__).parent / "data" / "ngram.db")
+        if Path(chemin).exists():
+            self._lm = ScorerNgram(chemin)
 
     @property
     def lexique(self):
@@ -166,6 +191,9 @@ class Correcteur:
 
         all_corrections: list[Correction] = []
 
+        # Save pre-syntaxe tokens for grammar originaux (before majuscule)
+        tokens_pre_syntaxe = list(tokens)
+
         # 2. Syntaxe
         if self._config.activer_syntaxe:
             tokens, corr_syntaxe = appliquer_syntaxe(tokens)
@@ -182,6 +210,7 @@ class Correcteur:
         # 4. Separer ponctuation des mots
         is_punct = [bool(PUNCT_RE.match(t)) for t in tokens]
         word_tokens = [t for t, p in zip(tokens, is_punct) if not p]
+        word_tokens_orig = [t for t, p in zip(tokens_pre_syntaxe, is_punct) if not p]
         word_indices = [i for i, p in enumerate(is_punct) if not p]
 
         if not word_tokens:
@@ -192,7 +221,13 @@ class Correcteur:
 
         # 4b. Analyse morpho (CRF ou G2P unifie)
         _rich_tagger = hasattr(self._tagger, "tag_words_rich")
-        if _rich_tagger:
+        _dual_tagger = (
+            self._config.activer_double_tagging
+            and hasattr(self._tagger, "tag_words_dual")
+        )
+        if _dual_tagger:
+            morpho_results = self._tagger.tag_words_dual(word_tokens)
+        elif _rich_tagger:
             morpho_results = self._tagger.tag_words_rich(word_tokens)
         else:
             morpho_results = self._tagger.tag_words(word_tokens)
@@ -231,6 +266,11 @@ class Correcteur:
                     analysis.pos_scores = mr["pos_scores"]
                 if "confiance_pos" in mr:
                     analysis.confiance_pos = mr["confiance_pos"]
+                # Double tagging : pos_blind + divergence
+                if "pos_blind" in mr:
+                    analysis.pos_blind = mr["pos_blind"]
+                if "divergence_pos" in mr:
+                    analysis.divergence_pos = mr["divergence_pos"]
 
         # 4c. Viterbi POS disambiguation (si matrice presente + rich tagger)
         if (
@@ -263,6 +303,7 @@ class Correcteur:
         # 5b-6. Pipeline de correction (regles)
         after_rules, corrs = self._pipeline_regles(
             analyses, word_tokens, morpho_results, all_corrections,
+            word_tokens_orig=word_tokens_orig,
         )
         all_corrections = corrs
 
@@ -300,6 +341,7 @@ class Correcteur:
         word_tokens: list[str],
         morpho_results: list[dict],
         corrections: list[Correction],
+        word_tokens_orig: list[str] | None = None,
     ) -> tuple[list[str], list[Correction]]:
         """Pipeline : scoring heuristique 8 facteurs + regles grammaticales.
 
@@ -378,6 +420,15 @@ class Correcteur:
             _lex_tags = _retagger.tag_words(decided_words)
             _lex_morpho_results = _lex_tags
             pos_list = [t.get("pos", "") for t in _lex_tags]
+            # Restreindre AUX aux seules formes d'etre/avoir
+            from lectura_correcteur.grammaire._donnees import AUXILIAIRES as _AUX_FORMES
+            for j in range(len(pos_list)):
+                if (
+                    pos_list[j] == "AUX"
+                    and decided_words[j].lower() not in _AUX_FORMES
+                ):
+                    pos_list[j] = "VER"
+                    _lex_tags[j]["pos"] = "VER"
             for j, tag in enumerate(_lex_tags):
                 if j < len(analyses) and tag.get("pos"):
                     analyses[j].pos = tag["pos"]
@@ -403,7 +454,7 @@ class Correcteur:
 
             after_rules, corr_gram = appliquer_grammaire(
                 decided_words, pos_list, morpho_dict_lists, self._lexique,
-                originaux=word_tokens,
+                originaux=word_tokens_orig if word_tokens_orig else word_tokens,
                 activer_negation=self._config.activer_negation,
                 pos_confiance=_pos_conf,
             )
@@ -472,7 +523,274 @@ class Correcteur:
         else:
             after_rules = decided_words
 
+        # 6c. Detection confusions phonetiques par LM (si active)
+        # Place apres les regles de grammaire pour ne pas interferer
+        if self._lm is not None:
+            corr_lm = self._verifier_homophones_lm(analyses)
+            all_corrections.extend(corr_lm)
+            for j in range(min(len(analyses), len(after_rules))):
+                after_rules[j] = analyses[j].corrige
+
+        # 6d. BiLSTM editeur homophones (si active)
+        if self._editeur is not None:
+            after_rules, corr_editeur = self._appliquer_editeur_homophones(
+                after_rules, analyses, morpho_results, word_tokens,
+            )
+            all_corrections.extend(corr_editeur)
+            for j in range(min(len(analyses), len(after_rules))):
+                after_rules[j] = analyses[j].corrige
+
+        # Couche coherence : re-verification post-corrections
+        if self._config.activer_coherence:
+            _retagger_coh = self._lex_tagger if self._lex_tagger is not None else self._tagger
+            corr_coherence_post = verifier_coherence_post_corrections(
+                analyses, self._lexique, _retagger_coh,
+            )
+            all_corrections.extend(corr_coherence_post)
+            # Synchroniser after_rules avec les analyses mises a jour
+            for j in range(min(len(analyses), len(after_rules))):
+                after_rules[j] = analyses[j].corrige
+
         return after_rules, all_corrections
+
+
+    # Paires d'homophones deja traitees par les regles de grammaire.
+    # Le LM ne doit pas toucher ces mots (les regles sont plus precises).
+    _GRAMMAR_HOMOPHONES = frozenset({
+        "et", "est",
+        "son", "sont",
+        "a", "à",
+        "ou", "où",
+        "on", "ont",
+        "ce", "se",
+        "la", "là",
+        "leur", "leurs",
+        "ça", "sa",
+        "ces", "ses",
+        "peu", "peut", "peux",
+        "ma", "m'a",
+        "ta", "t'a",
+        "dans", "d'en",
+        "sans", "s'en",
+        "si", "s'y",
+        "ni", "n'y",
+        "mais", "mes",
+    })
+
+    # Mots-outils courts que le LM n'a pas le droit de changer
+    # (trop de faux positifs sur pronoms/determinants).
+    _MOTS_OUTILS = frozenset({
+        "il", "ils", "elle", "elles", "on", "nous", "vous",
+        "le", "la", "les", "de", "des", "du", "un", "une",
+        "je", "tu", "me", "te", "ne", "se", "ce",
+        "en", "y", "au", "aux", "que", "qui", "dont",
+    })
+
+    def _verifier_homophones_lm(
+        self,
+        analyses: list[MotAnalyse],
+    ) -> list[Correction]:
+        """Detecte les confusions phonetiques in-lexique via le LM.
+
+        Pour chaque mot in-lexique NON deja corrige par les regles de
+        grammaire, cherche les homophones et utilise le LM pour
+        determiner si un homophone serait plus adapte au contexte.
+
+        Ne touche pas aux homophones grammaticaux (geres par les regles)
+        ni aux mots-outils (trop de FP).
+        """
+        corrections: list[Correction] = []
+
+        for j, analysis in enumerate(analyses):
+            # Ne traiter que les mots non deja corriges
+            if analysis.type_correction != TypeCorrection.AUCUNE:
+                continue
+            if not analysis.dans_lexique:
+                continue
+
+            mot = analysis.corrige.lower()
+
+            # Ne pas toucher aux homophones grammaticaux ni mots-outils
+            if mot in self._GRAMMAR_HOMOPHONES:
+                continue
+            if mot in self._MOTS_OUTILS:
+                continue
+
+            # Obtenir la prononciation
+            phone = self._lexique.phone_de(mot)
+            if not phone:
+                continue
+
+            # Trouver les homophones
+            homos = self._lexique.homophones(phone)
+            if not homos:
+                continue
+
+            # Filtrer : garder seulement les formes frequentes, distinctes,
+            # et qui ne sont pas des homophones grammaticaux/mots-outils
+            candidats = [mot]
+            for h in homos:
+                forme = h.get("ortho", "").lower()
+                freq = h.get("freq", 0.0) or 0.0
+                if forme == mot:
+                    continue
+                if freq < 1.0:
+                    continue
+                if forme in self._GRAMMAR_HOMOPHONES:
+                    continue
+                if forme in self._MOTS_OUTILS:
+                    continue
+                if forme not in candidats:
+                    candidats.append(forme)
+
+            if len(candidats) < 2:
+                continue
+
+            # Construire le contexte
+            ctx_gauche = [
+                analyses[k].corrige.lower()
+                for k in range(max(0, j - 3), j)
+            ]
+            ctx_droite = [
+                analyses[k].corrige.lower()
+                for k in range(j + 1, min(len(analyses), j + 2))
+            ]
+
+            scored = self._lm.scorer_candidats(candidats, ctx_gauche, ctx_droite)
+            if not scored:
+                continue
+
+            best_form, best_score = scored[0]
+            if best_form == mot:
+                continue  # LM confirme le mot actuel
+
+            # Score du mot actuel
+            current_score = next(
+                (s for f, s in scored if f == mot), -999.0,
+            )
+            # Marge requise : le LM doit etre nettement meilleur (log10)
+            # 4.0 = conservative (haute precision), baisser pour plus de recall
+            delta = best_score - current_score
+            if delta < 4.0:
+                continue
+
+            # Verification supplementaire : l'homophone choisi doit etre
+            # au moins aussi frequent que le mot actuel
+            freq_actuel = (
+                self._lexique.frequence(mot)
+                if hasattr(self._lexique, "frequence") else 0.0
+            )
+            freq_best = (
+                self._lexique.frequence(best_form)
+                if hasattr(self._lexique, "frequence") else 0.0
+            )
+            if freq_best < freq_actuel * 0.1:
+                continue
+
+            # Appliquer
+            analysis.corrige = best_form
+            analysis.type_correction = TypeCorrection.GRAMMAIRE
+            corrections.append(Correction(
+                index=j,
+                original=analysis.original,
+                corrige=best_form,
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle="lm.homophone",
+                explication=(
+                    f"Homophone LM : '{mot}' -> '{best_form}' "
+                    f"(delta={delta:+.2f})"
+                ),
+            ))
+
+        return corrections
+
+    def _appliquer_editeur_homophones(
+        self,
+        after_rules: list[str],
+        analyses: list[MotAnalyse],
+        morpho_results: list[dict],
+        word_tokens: list[str],
+    ) -> tuple[list[str], list[Correction]]:
+        """Applique le BiLSTM editeur pour les homophones.
+
+        Strategie :
+          - On execute le BiLSTM sur les tokens originaux (avant regles).
+          - Pour chaque position ou le BiLSTM predit un HOMO_* avec
+            confiance >= seuil, on applique la correction, sauf si les
+            regles ont deja corrige vers la meme cible.
+          - Si les regles et le BiLSTM sont en desaccord, le BiLSTM gagne
+            uniquement si sa confiance est elevee (>= seuil).
+        """
+        from lectura_correcteur._tags import (
+            KEEP,
+            TAG2IDX,
+            _TAG_TO_HOMO,
+            _preserve_case,
+        )
+
+        corrections: list[Correction] = []
+        seuil = self._config.seuil_editeur
+
+        # Predire sur les tokens originaux avec leur morpho
+        tags_scores = self._editeur.predire_tags_avec_scores(
+            word_tokens, morpho_results,
+        )
+
+        for j, (model_tag, score) in enumerate(tags_scores):
+            if j >= len(analyses):
+                break
+
+            canon_tag = model_tag if model_tag in TAG2IDX else KEEP
+
+            # Ne garder que les HOMO_* avec confiance suffisante
+            if not canon_tag.startswith("HOMO_") or canon_tag == KEEP:
+                continue
+            if score < seuil:
+                continue
+
+            forme_cible = _TAG_TO_HOMO.get(canon_tag)
+            if forme_cible is None:
+                continue
+
+            mot_original = word_tokens[j]
+            mot_apres_regles = after_rules[j].lower()
+
+            if forme_cible.lower() == mot_apres_regles:
+                continue  # Les regles ont deja produit la bonne forme
+
+            if forme_cible.lower() == mot_original.lower():
+                continue  # Le BiLSTM dit de garder la forme originale
+
+            # Guard: apres apostrophe, "est" est toujours correct
+            # (c'est, l'est, n'est, s'est, qu'est → jamais "et")
+            if (
+                forme_cible == "et"
+                and mot_original.lower() == "est"
+                and j > 0
+                and word_tokens[j - 1].endswith("'")
+            ):
+                continue
+
+            # Appliquer la correction avec preservation de la casse
+            forme_finale = _preserve_case(mot_original, forme_cible)
+            after_rules[j] = forme_finale
+            analyses[j].corrige = forme_finale
+            if analyses[j].type_correction == TypeCorrection.AUCUNE:
+                analyses[j].type_correction = TypeCorrection.GRAMMAIRE
+
+            corrections.append(Correction(
+                index=j,
+                original=analyses[j].original,
+                corrige=forme_finale,
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle="editeur.homophone",
+                explication=(
+                    f"Homophone BiLSTM : '{mot_original.lower()}' "
+                    f"-> '{forme_cible}' ({score:.0%})"
+                ),
+            ))
+
+        return after_rules, corrections
 
 
 def _reconstruire_avec_insertions(

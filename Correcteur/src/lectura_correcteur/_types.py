@@ -67,6 +67,8 @@ class MotAnalyse:
     type_correction: TypeCorrection = TypeCorrection.AUCUNE
     confiance: float = 1.0
     confiance_pos: float = 1.0
+    pos_blind: str = ""
+    divergence_pos: bool = False
     pos_scores: list[tuple[str, float]] = field(default_factory=list)
     suggestions: list[str] = field(default_factory=list)
     suggestions_scored: list[tuple[str, float]] = field(default_factory=list)

@@ -552,14 +552,14 @@ def trouver_sujet_genre_nombre(
     genre: "Masc" ou "Fem", nombre: "Sing" ou "Plur".
     ``pos_nominaux`` permet d'elargir la recherche (e.g. inclure ADJ).
     """
-    for j in range(idx_verbe - 1, max(-1, idx_verbe - 5), -1):
+    for j in range(idx_verbe - 1, max(-1, idx_verbe - 8), -1):
         w = mots[j].lower()
         if w in _TRANSPARENTS:
             continue
         # Pronom sujet
         if w in PRONOM_GENRE:
             return PRONOM_GENRE[w]
-        # NOM → utiliser lexique
+        # NOM/ADJ → utiliser lexique
         pos_j = pos_tags[j] if j < len(pos_tags) else ""
         if pos_j in pos_nominaux and lexique is not None:
             infos = lexique.info(mots[j])
@@ -567,10 +567,14 @@ def trouver_sujet_genre_nombre(
                 best = max(infos, key=lambda e: float(e.get("freq") or 0))
                 genre = best.get("genre", "")
                 nombre = best.get("nombre", "")
-                # Ambiguite : si les entrees ont les deux genres, skip
+                # Ambiguite : si les entrees ont les deux genres,
+                # skip ADJ epicenes (moderne, linéaire) et continuer
+                # vers le NOM noyau du GN
                 _genres = {e.get("genre") for e in infos if e.get("genre")}
                 if len(_genres) > 1:
-                    break  # genre ambigu, pas de detection fiable
+                    if pos_j == "ADJ":
+                        continue  # ADJ epicene, chercher le NOM derriere
+                    break  # NOM ambigu, pas de detection fiable
                 g = "Fem" if genre == "f" else "Masc"
                 n = "Plur" if nombre == "p" else "Sing"
                 return (g, n)
@@ -583,6 +587,25 @@ def trouver_sujet_genre_nombre(
                 n_crf = nombre_list[j] if j < len(nombre_list) else "Sing"
                 if g_crf in ("Fem", "Masc"):
                     return (g_crf, n_crf if n_crf in ("Sing", "Plur") else "Sing")
+        # DET/ART before the group → stop scanning (subject boundary)
+        if pos_j.startswith(("ART", "DET")) or w in (
+            "le", "la", "l", "les", "un", "une", "des", "du",
+            "ce", "cet", "cette", "ces", "son", "sa", "ses",
+            "mon", "ma", "mes", "ton", "ta", "tes", "leur", "leurs",
+        ):
+            # Use DET genre as fallback
+            if lexique is not None:
+                _det_infos = lexique.info(w)
+                if _det_infos:
+                    _det_best = max(_det_infos, key=lambda e: float(e.get("freq") or 0))
+                    _dg = _det_best.get("genre", "")
+                    _dn = _det_best.get("nombre", "")
+                    if _dg:
+                        return (
+                            "Fem" if _dg == "f" else "Masc",
+                            "Plur" if _dn == "p" else "Sing",
+                        )
+            break
         break
     return None
 

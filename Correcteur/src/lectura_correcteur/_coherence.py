@@ -124,10 +124,92 @@ def _chercher_homophone_valide(
             nouveau_bigram = (pos_voisin, cgram)
 
         if nouveau_bigram in _BIGRAMS_VALIDES:
-            freq = float(entry.get("freq", 0))
+            freq = float(entry.get("freq") or 0)
             if meilleur is None or freq > meilleur[2]:
                 meilleur = (ortho, cgram, freq)
 
     if meilleur:
         return (meilleur[0], meilleur[1])
     return None
+
+
+def verifier_coherence_post_corrections(
+    analyses: list[MotAnalyse],
+    lexique: Any,
+    tagger: Any,
+) -> list[Correction]:
+    """Re-verification post-corrections : accords et sujet-verbe.
+
+    Apres les couches ortho+grammaire, re-tagger les formes corrigees
+    et verifier la coherence genre/nombre dans les groupes nominaux.
+    """
+    corrections: list[Correction] = []
+    if not analyses or tagger is None:
+        return corrections
+
+    # Re-tagger les formes corrigees
+    decided_words = [a.corrige for a in analyses]
+    retags = tagger.tag_words(decided_words)
+
+    # Mettre a jour les POS des analyses
+    for j, tag in enumerate(retags):
+        if j < len(analyses) and tag.get("pos"):
+            analyses[j].pos = tag["pos"]
+
+    # Re-verification accords DET→NOM genre/nombre
+    n = len(analyses)
+    for i in range(n - 1):
+        pos_i = analyses[i].pos
+        pos_j = analyses[i + 1].pos
+
+        # DET + NOM : verifier coherence nombre
+        if pos_i.startswith(("ART", "DET")) and pos_j in ("NOM", "ADJ"):
+            mot_det = analyses[i].corrige.lower()
+            mot_nom = analyses[i + 1].corrige.lower()
+            # Determinant pluriel + nom sans marque plurielle
+            _PLUR_DETS = frozenset({
+                "les", "des", "ces", "ses", "mes", "tes",
+                "nos", "vos", "leurs",
+            })
+            _SING_DETS = frozenset({
+                "le", "la", "un", "une", "ce", "cette", "cet",
+                "son", "sa", "mon", "ma", "ton", "ta",
+            })
+            if mot_det in _PLUR_DETS:
+                # NOM devrait etre au pluriel
+                if not mot_nom.endswith(("s", "x", "z")):
+                    # Chercher la forme plurielle dans le lexique
+                    if hasattr(lexique, "info"):
+                        cand_pl = mot_nom + "s"
+                        if lexique.existe(cand_pl):
+                            orig = analyses[i + 1].corrige
+                            analyses[i + 1].corrige = cand_pl
+                            if analyses[i + 1].type_correction == TypeCorrection.AUCUNE:
+                                analyses[i + 1].type_correction = TypeCorrection.GRAMMAIRE
+                            corrections.append(Correction(
+                                index=i + 1,
+                                original=orig,
+                                corrige=cand_pl,
+                                type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="coherence.accord_nombre",
+                                explication="Accord nombre DET pluriel + NOM",
+                            ))
+            elif mot_det in _SING_DETS:
+                # NOM devrait etre au singulier
+                if mot_nom.endswith("s") and len(mot_nom) > 2:
+                    cand_sg = mot_nom[:-1]
+                    if hasattr(lexique, "existe") and lexique.existe(cand_sg):
+                        orig = analyses[i + 1].corrige
+                        analyses[i + 1].corrige = cand_sg
+                        if analyses[i + 1].type_correction == TypeCorrection.AUCUNE:
+                            analyses[i + 1].type_correction = TypeCorrection.GRAMMAIRE
+                        corrections.append(Correction(
+                            index=i + 1,
+                            original=orig,
+                            corrige=cand_sg,
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="coherence.accord_nombre",
+                            explication="Accord nombre DET singulier + NOM",
+                        ))
+
+    return corrections

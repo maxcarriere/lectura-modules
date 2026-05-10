@@ -20,12 +20,12 @@ from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._types import Candidat, MotAnalyse
 
 # Poids par defaut (tunables)
-W_IDENTITE = 0.20
+W_IDENTITE = 0.15
 W_FREQ = 0.08
 W_EDIT = 0.08
 W_POS = 0.14
 W_MORPHO = 0.10
-W_PHONE = 0.05
+W_PHONE = 0.10
 W_CTX = 0.30
 W_AZERTY = 0.05
 
@@ -153,8 +153,17 @@ def _a_entree_verbe(forme: str, lexique: Any) -> bool:
     return False
 
 
-def _s_identite(candidat: Candidat, contexte: dict[str, Any], lexique: Any) -> float:
-    """Bonus identite, reduit quand le contexte suggere une autre forme.
+def _s_identite(
+    candidat: Candidat,
+    contexte: dict[str, Any],
+    lexique: Any,
+    *,
+    freq_mot: float = -1.0,
+) -> float:
+    """Bonus identite, module par frequence et contexte.
+
+    Un mot rare (freq basse) merite moins de confiance identite qu'un mot courant.
+    Courbe : freq=1→0.30, freq=100→0.50, freq=1000→0.75, freq=10000→1.0.
 
     Apres un auxiliaire "avoir", si le mot n'est pas un PP, le bonus est annule.
     Apres "être", seuls les mots CRF-VER/AUX sont penalises (pas les ADJ/NOM
@@ -175,6 +184,11 @@ def _s_identite(candidat: Candidat, contexte: dict[str, Any], lexique: Any) -> f
             est_verbe = candidat.pos in ("VER", "AUX")
         if est_verbe:
             return 0.0  # pas de bonus identite apres AUX si pas PP
+    # Modulation par frequence du mot original
+    if freq_mot >= 0.0:
+        factor = min(1.0, math.log10(freq_mot + 1) / 4.0)
+        factor = max(0.3, factor)
+        return factor
     return 1.0
 
 
@@ -352,8 +366,10 @@ def scorer_candidats(
     # n'existe pas, donc un candidat frequent est probablement le bon).
     w_freq = W_FREQ if dans_lexique else 0.15
 
+    freq_mot = lexique.frequence(mot_original) if hasattr(lexique, "frequence") else -1.0
+
     for c in candidats:
-        s_id = _s_identite(c, contexte, lexique) if dans_lexique else 0.0
+        s_id = _s_identite(c, contexte, lexique, freq_mot=freq_mot) if dans_lexique else 0.0
         s_fr = _s_freq(c)
         s_ed = _s_edit(c)
         # OOV identity: "being close to a non-existent word" has no value.

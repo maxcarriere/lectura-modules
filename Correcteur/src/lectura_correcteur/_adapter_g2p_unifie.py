@@ -71,11 +71,19 @@ class G2PUnifieAdapter:
         self._engine = engine
         self._cache: dict[tuple[str, ...], dict[str, Any]] = {}
 
-    def _analyser_cached(self, words: list[str]) -> dict[str, Any]:
+    def _analyser_cached(
+        self, words: list[str], *, use_lex: bool = True,
+    ) -> dict[str, Any]:
         """Appelle analyser_v2 avec cache par tuple de mots."""
-        key = tuple(words)
+        key = (tuple(words), use_lex)
         if key not in self._cache:
-            self._cache[key] = self._engine.analyser_v2(list(words))
+            try:
+                self._cache[key] = self._engine.analyser_v2(
+                    list(words), use_lex=use_lex,
+                )
+            except TypeError:
+                # Engine doesn't support use_lex kwarg (older version)
+                self._cache[key] = self._engine.analyser_v2(list(words))
         return self._cache[key]
 
     def _extraire_morpho_fr(self, result: dict, i: int) -> dict[str, str]:
@@ -169,6 +177,66 @@ class G2PUnifieAdapter:
 
         return tags
 
+    def tag_words_dual(self, words: list[str]) -> list[dict]:
+        """Double tagging : blind (use_lex=False) + lex-attention (use_lex=True).
+
+        Retourne list[dict] avec les champs habituels plus :
+        - pos_blind: POS predit sans features lexicales
+        - pos_scores_blind: top-K POS scores du mode blind
+        - divergence_pos: True si pos_blind != pos (lex)
+        """
+        if not words:
+            return []
+
+        result_lex = self._analyser_cached(words, use_lex=True)
+        result_blind = self._analyser_cached(words, use_lex=False)
+        n = len(words)
+        tags: list[dict] = []
+
+        raw_pos_scores_lex = result_lex.get("pos_scores", [])
+        raw_confiance_lex = result_lex.get("confiance_pos", [])
+        raw_g2p = result_lex.get("g2p", [])
+        raw_pos_scores_blind = result_blind.get("pos_scores", [])
+
+        for i in range(n):
+            d: dict[str, Any] = {}
+
+            # POS from lex mode (primary)
+            pos_lex = result_lex["pos"][i] if i < len(result_lex.get("pos", [])) else ""
+            pos_blind = result_blind["pos"][i] if i < len(result_blind.get("pos", [])) else ""
+
+            d["pos"] = pos_lex
+            d["pos_blind"] = pos_blind
+            d["divergence_pos"] = (pos_blind != pos_lex)
+
+            # Morpho from lex mode
+            d.update(self._extraire_morpho_fr(result_lex, i))
+
+            # POS scores
+            if i < len(raw_pos_scores_lex):
+                d["pos_scores"] = raw_pos_scores_lex[i] or []
+            else:
+                d["pos_scores"] = []
+
+            if i < len(raw_pos_scores_blind):
+                d["pos_scores_blind"] = raw_pos_scores_blind[i] or []
+            else:
+                d["pos_scores_blind"] = []
+
+            # Confiance POS
+            if i < len(raw_confiance_lex):
+                d["confiance_pos"] = raw_confiance_lex[i]
+            else:
+                d["confiance_pos"] = 1.0
+
+            # G2P (IPA)
+            if i < len(raw_g2p):
+                d["g2p"] = raw_g2p[i]
+
+            tags.append(d)
+
+        return tags
+
     # -- G2PProtocol --
 
     def g2p(self, word: str) -> str:
@@ -188,12 +256,16 @@ def creer_adapter_g2p_unifie(
 ) -> G2PUnifieAdapter | None:
     """Factory : cree un G2PUnifieAdapter si les fichiers sont disponibles.
 
+    Tente d'abord d'utiliser le module lectura_nlp installe (qui a
+    use_lex pour le double tagging). Si absent, fallback sur la copie
+    locale dans Correcteur/data/g2p_v2/.
+
     Retourne None si onnxruntime n'est pas installe ou si les fichiers
     modele sont absents (degradation gracieuse).
 
     Args:
         model_dir: Repertoire contenant les fichiers G2P V2.
-            Par defaut : Correcteur/data/g2p_v2/ (copie locale).
+            Si None, essaie lectura_nlp puis Correcteur/data/g2p_v2/.
     """
     try:
         import onnxruntime  # noqa: F401
@@ -201,8 +273,18 @@ def creer_adapter_g2p_unifie(
         logger.info("onnxruntime non installe — G2P Unifie V2 indisponible")
         return None
 
+    # 1. Essayer lectura_nlp installe (supporte use_lex)
     if model_dir is None:
-        # Copie locale : data/g2p_v2/ a cote de ce module
+        try:
+            from lectura_nlp import creer_engine
+            engine = creer_engine(mode="onnx")
+            logger.info("G2P Unifie V2 charge via lectura_nlp")
+            return G2PUnifieAdapter(engine)
+        except Exception:
+            logger.debug("lectura_nlp indisponible, fallback copie locale")
+
+    # 2. Fallback : copie locale dans data/g2p_v2/
+    if model_dir is None:
         model_dir = Path(__file__).resolve().parent / "data" / "g2p_v2"
 
     model_dir = Path(model_dir)
@@ -241,5 +323,5 @@ def creer_adapter_g2p_unifie(
         lexicon_path=lexicon_arg,
     )
 
-    logger.info("G2P Unifie V2 charge avec succes")
+    logger.info("G2P Unifie V2 charge via copie locale")
     return G2PUnifieAdapter(engine)

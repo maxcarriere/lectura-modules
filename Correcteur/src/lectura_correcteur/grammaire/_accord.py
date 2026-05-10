@@ -52,13 +52,13 @@ _ACCORD_EXCLUS = frozenset({
     # Participes presents / gerondifs (invariables)
     "étant", "ayant",
     # Adverbes invariables parfois tagues ADJ
-    "même",
+    # "même" retire : s'accorde comme ADJ ("les mêmes règles")
 })
 
 # Articles definis : ne pas corriger le→la ou la→le par accord genre
 # (ces erreurs sont quasi inexistantes dans les corpus reels, et la regle
 # produit beaucoup de FP quand le NOM est ambigu en genre)
-_DET_GENRE_EXCLUS = frozenset({"le", "la", "l'", "un", "une"})
+_DET_GENRE_EXCLUS = frozenset({"le", "la", "l'"})
 
 
 def verifier_accords(
@@ -201,6 +201,23 @@ def verifier_accords(
                             curr = result[i]
                             curr_low = curr.lower()
 
+                    elif curr_low in SING_FEM_DET and "m" in nom_genres and "f" not in nom_genres:
+                        # DET fem + NOM masc → corriger le DET
+                        new_det = DET_GENRE_MAP.get(curr_low)
+                        if new_det:
+                            ancien = result[i]
+                            result[i] = transferer_casse(curr, new_det)
+                            corrections.append(Correction(
+                                index=i,
+                                original=ancien,
+                                corrige=result[i],
+                                type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord.genre_det",
+                                explication=f"DET fem→masc (NOM '{result[nom_idx]}' est masculin)",
+                            ))
+                            curr = result[i]
+                            curr_low = curr.lower()
+
                     elif curr_low in SING_MASC_DET and "m" in nom_genres and adj_idx is not None:
                         # DET masc + ADJ fem + NOM masc → de-feminiser l'ADJ
                         adj_infos = lexique.info(result[adj_idx])
@@ -227,13 +244,23 @@ def verifier_accords(
                                     break
 
         # Regle 1 : Det. pluriel -> NOM/ADJ doit avoir -s/-x
+        # Extension : chiffre >= 2 traite comme declencheur pluriel
         # Extension : VER tague par erreur mais ayant des entrees NOM dans le lexique
         _is_nom_or_adj = pos in ("NOM", "ADJ")
+        # Detecter si le mot precedent est un chiffre >= 2
+        _prev_is_digit_plur = False
+        if i > 0:
+            _prev_raw = result[i - 1]
+            if _prev_raw.isdigit():
+                try:
+                    _prev_is_digit_plur = int(_prev_raw) >= 2
+                except ValueError:
+                    pass
         if (
             not _is_nom_or_adj
             and pos in ("VER", "AUX")
             and i > 0
-            and result[i - 1].lower() in PLUR_DET
+            and (result[i - 1].lower() in PLUR_DET or _prev_is_digit_plur)
             and lexique is not None
         ):
             _r1_infos = lexique.info(curr)
@@ -254,12 +281,18 @@ def verifier_accords(
                      if e.get("cgram") in ("VER", "AUX")),
                     default=0,
                 )
-                if _r1_ver_freq <= 5 * _r1_nom_freq:
+                # Guard: if VER freq is substantial (>=50),
+                # the tagger is likely right → keep as VER
+                # (e.g. "les appelle" = verb, VER freq=144)
+                if (
+                    _r1_ver_freq <= 5 * _r1_nom_freq
+                    and _r1_ver_freq < 50
+                ):
                     _is_nom_or_adj = True
         if i > 0 and _is_nom_or_adj:
             prev_low = result[i - 1].lower()
             if (
-                prev_low in PLUR_DET
+                (prev_low in PLUR_DET or _prev_is_digit_plur)
                 and not curr_low.endswith(("s", "x", "z"))
                 and len(curr) > 1
                 and curr_low not in INVARIABLES
@@ -356,6 +389,36 @@ def verifier_accords(
                             if (_r1_has_np and _r1_nom_freq_max < 5.0) \
                                     or _r1_all_sigle:
                                 _has_propre_r1 = True
+                            # Capitalized mid-sentence + NOM PROPRE
+                            # → proper noun (les Guise, les Bonaparte)
+                            if (
+                                not _has_propre_r1
+                                and _r1_has_np
+                                and i > 0
+                                and curr[0].isupper()
+                            ):
+                                _has_propre_r1 = True
+                    # Guard: NOM/VER-ambiguous word followed by NOM
+                    # → likely a verb with direct object
+                    # "les appelle pierres" = verb, not NOM
+                    _ver_direct_obj = False
+                    if (
+                        lexique is not None
+                        and i + 1 < n
+                        and not _has_propre_r1
+                    ):
+                        _r1v_infos = lexique.info(curr_low)
+                        if _r1v_infos and any(
+                            e.get("cgram") in ("VER", "AUX")
+                            and float(e.get("freq") or 0) > 30
+                            for e in _r1v_infos
+                        ):
+                            _r1v_next_pos = (
+                                pos_tags[i + 1]
+                                if i + 1 < len(pos_tags) else ""
+                            )
+                            if _r1v_next_pos in ("NOM", "NOM PROPRE"):
+                                _ver_direct_obj = True
                     if (
                         not curr_low.endswith(("s", "x", "z"))
                         and len(curr) > 1
@@ -364,6 +427,7 @@ def verifier_accords(
                         and not _is_compound_r1
                         and not _oov_r1
                         and not _has_propre_r1
+                        and not _ver_direct_obj
                     ):
                         for candidate in generer_candidats_pluriel(curr):
                             if lexique is None or lexique.existe(candidate):
@@ -386,11 +450,18 @@ def verifier_accords(
             and (pos_tags[i - 1] if i - 1 < len(pos_tags) else "") == "ADJ"
         ):
             prev2_low = result[i - 2].lower()
+            # Guard R2: low-freq loanwords (gimmick freq=0.11)
+            _r2_low_freq = False
+            if lexique is not None:
+                _r2_freq = lexique.frequence(result[i].lower())
+                if _r2_freq < 1.0:
+                    _r2_low_freq = True
             if (
                 prev2_low in PLUR_DET
                 and not result[i].lower().endswith(("s", "x", "z"))
                 and len(result[i]) > 1
                 and result[i].lower() not in INVARIABLES
+                and not _r2_low_freq
             ):
                 for candidate in generer_candidats_pluriel(result[i]):
                     if lexique is None or lexique.existe(candidate):
@@ -437,16 +508,17 @@ def verifier_accords(
                 # (ex: "le journaliste sportif")
                 if nom_est_fem and i >= 2:
                     _MASC_DET = frozenset({
-                        "le", "l'", "un", "ce", "cet",
+                        "le", "l'", "l\u2019", "un", "ce", "cet",
                         "mon", "ton", "son", "notre", "votre",
+                        "du",
                     })
-                    for _k in range(i - 2, max(-1, i - 5), -1):
+                    for _k in range(i - 2, max(-1, i - 7), -1):
                         _pk = pos_tags[_k] if _k < len(pos_tags) else ""
                         if _pk.startswith(("ART", "DET")) or _pk == "ADJ:dem":
                             if mots[_k].lower() in _MASC_DET:
                                 nom_est_fem = False
                             break
-                        if _pk not in ("NOM", "ADJ"):
+                        if _pk not in ("NOM", "NOM PROPRE", "ADJ", "CON"):
                             break
                 # Guard: ADJ pre-nominal — si le mot suivant est NOM masculin,
                 # l'ADJ modifie probablement le NOM suivant, pas le precedent
@@ -482,6 +554,11 @@ def verifier_accords(
                     "ministre", "juge", "arbitre", "capitaine",
                     "propriétaire", "locataire", "partenaire",
                     "comptable", "responsable",
+                    # Job titles often used with masc DET for both genders
+                    "essayiste", "bassiste", "saxophoniste",
+                    "biologiste", "économiste", "linguiste",
+                    "écrivain", "auteur", "professeur", "médecin",
+                    "ingénieur", "maire", "architecte",
                 })
                 if (
                     nom_est_fem
@@ -501,6 +578,23 @@ def verifier_accords(
                         if _k7e_pos in ("VER", "AUX", "CON"):
                             break
                     if not _has_fem_det_r7:
+                        nom_est_fem = False
+                # Guard: skip if ADJ word has NOM PROPRE entries
+                # (proper nouns: François, Besson, etc.)
+                if nom_est_fem:
+                    _adj_has_np = any(
+                        (e.get("cgram") or "") == "NOM PROPRE"
+                        for e in (lexique.info(result[i]) or [])
+                    )
+                    if _adj_has_np:
+                        nom_est_fem = False
+                # Guard: NOM inside PP → ADJ modifies subject, not PP NOM
+                # "metteur en scène français" → scène in PP, français=metteur
+                if nom_est_fem and i >= 2:
+                    _pre_nom_pos = (
+                        pos_tags[i - 2] if i - 2 < len(pos_tags) else ""
+                    )
+                    if _pre_nom_pos == "PRE":
                         nom_est_fem = False
                 if nom_est_fem:
                     adj_infos = lexique.info(result[i])
@@ -675,6 +769,41 @@ def verifier_accords(
                                     regle="accord.nombre_adj",
                                     explication="Accord pluriel adj post-nominal",
                                 ))
+                                break
+
+        # Regle 1f : ADJ pre-nominal singulier + NOM pluriel → pluraliser l'ADJ
+        # "de jolie femmes" → "de jolies femmes", "de petit enfants" → "de petits enfants"
+        # Guard: le mot avant l'ADJ doit etre une preposition (de, d', des)
+        _PREP_PRE_ADJ = frozenset({"de", "d'", "des", "d\u2019"})
+        if (
+            i > 0
+            and pos == "ADJ"
+            and not curr_low.endswith(("s", "x", "z"))
+            and len(curr) > 1
+            and curr_low not in INVARIABLES
+            and i + 1 < n
+        ):
+            _next_pos_1f = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+            if _next_pos_1f == "NOM":
+                _next_low_1f = result[i + 1].lower()
+                # Le NOM suivant doit etre au pluriel
+                if _next_low_1f.endswith(("s", "x", "z")) and len(result[i + 1]) > 2:
+                    _prev_low_1f = result[i - 1].lower()
+                    if _prev_low_1f in _PREP_PRE_ADJ:
+                        for candidate in generer_candidats_pluriel(curr):
+                            if lexique is None or lexique.existe(candidate):
+                                ancien = result[i]
+                                result[i] = candidate
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien,
+                                    corrige=candidate,
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.nombre_adj",
+                                    explication="Accord pluriel ADJ pre-nominal + NOM pluriel",
+                                ))
+                                curr = result[i]
+                                curr_low = curr.lower()
                                 break
 
         # Regle 1c : NOM singulier + ADJ pluriel → singulariser l'ADJ
@@ -1035,6 +1164,7 @@ def verifier_accords(
                         _c_infos = lexique.info(candidate)
                         _cand_ok = any(
                             e.get("cgram") in ("VER", "AUX")
+                            and float(e.get("freq") or 0) > 0.05
                             for e in _c_infos
                         )
                     if _cand_ok:
@@ -1875,6 +2005,10 @@ def _trouver_sujet_pluriel(
         pos_j = pos_tags[j] if j < len(pos_tags) else ""
         mot_j = mots[j].lower()
         if pos_j in ("NOM", "ADJ"):
+            # Demonstratives/possessives tagged ADJ act as singular DET
+            # boundaries — they start a new GN (e.g. "Cette notion")
+            if pos_j == "ADJ" and mot_j in SING_DET:
+                return False
             j -= 1
             continue
         # Contractions prepositionnelles : sauter du/au/aux
@@ -1899,9 +2033,9 @@ def _trouver_sujet_pluriel(
                     if _pp2_pos_sp == "PRE" or _pp2_mot_sp in PREPOSITIONS or _pp2_mot_sp == "des":
                         j -= 3  # sauter DET + ADJ + PRE
                         continue
-                # "des" apres un NOM = contraction "de+les" (PP)
-                # Ex: "le directeur des ecoles" → "des" introduit un PP
-                if mot_j == "des" and prev_pos == "NOM":
+                # "des" apres un NOM/ADJ = contraction "de+les" (PP)
+                # Ex: "le directeur des ecoles", "l'aspect actuel des cactus"
+                if mot_j == "des" and prev_pos in ("NOM", "ADJ", "NOM PROPRE"):
                     j -= 1  # sauter "des" (la PRE est incorporee)
                     continue
             # Guard: "un/une des NOM" = singulier (un des professeurs avait)

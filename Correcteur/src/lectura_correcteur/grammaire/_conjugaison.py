@@ -9,7 +9,9 @@ from __future__ import annotations
 from lectura_correcteur._types import Correction, TypeCorrection
 from lectura_correcteur._utils import transferer_casse
 from lectura_correcteur.grammaire._donnees import (
+    ALLER_FORMES,
     AUXILIAIRES,
+    ETRE_FORMES,
     IRREGULIERS_FORMES_FAUSSES,
     MODAUX_FORMES,
     PLUR_DET,
@@ -33,6 +35,51 @@ _TRANSPARENTS_SUJET = frozenset({
     "y", "en", "me", "m'", "te", "t'", "le", "la", "l'", "les",
     "lui", "nous", "vous", "leur",
 })
+
+# Demonstratives that can be tagged ADJ but act as DET boundaries.
+# Narrower than SING_DET/PLUR_DET to exclude adjective-like quantifiers
+# (différents, nombreux, etc.) which are not real determiners.
+_DEM_SING = frozenset({"ce", "cet", "cette"})
+_DEM_PLUR = frozenset({"ces"})
+
+
+def _est_infinitif(mot: str, lexique) -> bool:
+    """Detecte si un mot est un infinitif (par suffixe et/ou lexique)."""
+    low = mot.lower()
+    # Suffixes infinitifs classiques
+    if low.endswith(("er", "ir", "re", "oir")):
+        # Verifier dans le lexique que c'est bien un infinitif
+        if lexique is not None and hasattr(lexique, "info"):
+            infos = lexique.info(mot)
+            if infos:
+                return any(
+                    e.get("cgram") in ("VER", "AUX")
+                    and e.get("mode") in ("infinitif", "Inf", "inf")
+                    for e in infos
+                )
+            # Mot inconnu terminant en -er/-ir/-re → probablement infinitif
+            return True
+        return True
+    return False
+
+
+def _conjuguer_via_lexique(
+    lemme: str, personne: str, nombre: str, lexique,
+) -> str | None:
+    """Conjugue un verbe au present indicatif via le lexique."""
+    if lexique is None or not hasattr(lexique, "formes_de"):
+        return None
+    nb_key = "singulier" if nombre != "p" else "pluriel"
+    nb_key_s = "s" if nombre != "p" else "p"
+    for f in lexique.formes_de(lemme):
+        if (
+            str(f.get("personne")) == personne
+            and f.get("nombre") in (nb_key, nb_key_s)
+            and f.get("temps") == "present"
+            and f.get("mode") == "indicatif"
+        ):
+            return f.get("ortho", "")
+    return None
 
 
 def _nombre_sujet_nominal(
@@ -69,6 +116,12 @@ def _nombre_sujet_nominal(
         mot_j = mots[j].lower()
 
         if pos_j in ("NOM", "NOM PROPRE", "ADJ"):
+            # Demonstratives tagged ADJ act as DET boundaries
+            # (e.g. "Cette" tagged ADJ instead of DET:dem)
+            if pos_j == "ADJ" and mot_j in _DEM_SING:
+                return "sing"
+            if pos_j == "ADJ" and mot_j in _DEM_PLUR:
+                return "plur"
             if _first_nom_j < 0:
                 _first_nom_j = j
             j -= 1
@@ -142,6 +195,7 @@ def _nombre_sujet_nominal(
                     "NOM", "ADJ", "NOM PROPRE",
                     "PRO:dem", "PRO:rel", "PRO:ind",
                 ):
+                    _first_nom_j = -1
                     _crossed_pp = True
                     j -= 1  # sauter "des" (la PRE est incorporee)
                     continue
@@ -296,7 +350,7 @@ def verifier_conjugaisons(
             and i > 0
             and (pos in ("VER", "AUX", "?", "")
                  or curr_low in ETRE_FORMES
-                 or curr_low in AVOIR_FORMES)
+                 or curr_low in AUXILIAIRES)
         ):
             _pp_r2b = result[i - 1].lower()
             if _pp_r2b in ("qui", "ne", "n'", "n\u2019"):
@@ -545,23 +599,52 @@ def verifier_conjugaisons(
                         curr, personne, nombre, lexique,
                     )
                 if correction and correction.lower() != curr.lower():
-                    ancien = result[i]
-                    result[i] = transferer_casse(curr, correction)
-                    corrections.append(Correction(
-                        index=i,
-                        original=ancien,
-                        corrige=result[i],
-                        type_correction=TypeCorrection.GRAMMAIRE,
-                        regle="conjugaison.personne",
-                        explication=f"Conjugaison P{personne}",
-                    ))
-                    continue
+                    # Guard: if current form is already valid for
+                    # this person+number, don't override tense
+                    # (avoids changing passé simple to futur etc.)
+                    _already_ok = False
+                    if lexique is not None and hasattr(lexique, "info"):
+                        _pers_infos = lexique.info(curr.lower())
+                        _tgt_nb = (
+                            "pluriel" if nombre == "p" else "singulier"
+                        )
+                        if _pers_infos and any(
+                            e.get("cgram") in ("VER", "AUX")
+                            and str(e.get("personne")) == personne
+                            and e.get("nombre") in (_tgt_nb, "s" if nombre != "p" else "p")
+                            for e in _pers_infos
+                        ):
+                            _already_ok = True
+                    if not _already_ok:
+                        ancien = result[i]
+                        result[i] = transferer_casse(curr, correction)
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige=result[i],
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="conjugaison.personne",
+                            explication=f"Conjugaison P{personne}",
+                        ))
+                        continue
 
         # Regle 5b : Sujet nominal pluriel + imparfait/futur
         # "les gens se promenais" -> "promenaient"
+        # Guard: word after DET is likely NOM, not VER
+        # ("des avions" = NOM avion, not AUX avoir)
         if i > 0 and pos in ("VER", "AUX"):
+            _after_det_5b = False
+            if i > 0:
+                _prev_pos_5b = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                _prev_low_5b = result[i - 1].lower()
+                if (
+                    _prev_pos_5b.startswith(("ART", "DET"))
+                    or _prev_low_5b in PLUR_DET
+                    or _prev_low_5b in SING_DET
+                ):
+                    _after_det_5b = True
             temps = _detecter_temps_from_suffixe(curr)
-            if temps is not None and _est_sujet_nominal_pluriel(
+            if temps is not None and not _after_det_5b and _est_sujet_nominal_pluriel(
                 result, pos_tags, origs, i,
             ):
                 correction = _deriver_forme_nombre(
@@ -642,10 +725,23 @@ def verifier_conjugaisons(
             # un nom et pas un verbe conjugue au pluriel
             if _is_wrong_number and lexique is not None and hasattr(lexique, "info"):
                 _infos_5c = lexique.info(curr)
-                if _infos_5c and any(
-                    (e.get("cgram") or "") == "NOM" for e in _infos_5c
-                ):
-                    _is_wrong_number = False
+                if _infos_5c:
+                    # Skip si NOM, NOM PROPRE, ou SIGLE
+                    if any(
+                        (e.get("cgram") or "") in ("NOM", "NOM PROPRE", "SIGLE")
+                        for e in _infos_5c
+                    ):
+                        _is_wrong_number = False
+                    # Skip si VER tres basse freq + capitalise (NOM PROPRE non-recense)
+                    elif (
+                        curr[0].isupper()
+                        and all(
+                            float(e.get("freq") or 0) < 1.0
+                            for e in _infos_5c
+                            if e.get("cgram") in ("VER", "AUX")
+                        )
+                    ):
+                        _is_wrong_number = False
             # Guard cascade: si un NOM/ADJ entre DET et VER a ete
             # depluralize par une regle precedente ("soldats"→"soldat"),
             # la detection "sing" est suspecte → skip
@@ -746,9 +842,30 @@ def verifier_conjugaisons(
                 and lexique is not None
             ):
                 cand_5d = curr_low_5d[:-1]  # remove trailing -s
+                # Guard: NOM PROPRE — Castres, Sèvres ne sont pas des VER
+                _infos_orig_5d = lexique.info(curr)
+                if _infos_orig_5d and any(
+                    "PROPRE" in (e.get("cgram") or "")
+                    for e in _infos_orig_5d
+                ):
+                    cand_5d = None  # skip
+                # Guard: capitalise + VER basse freq = probable NOM PROPRE
+                if (
+                    cand_5d is not None
+                    and curr[0].isupper()
+                    and _infos_orig_5d
+                    and all(
+                        float(e.get("freq") or 0) < 1.0
+                        for e in _infos_orig_5d
+                        if e.get("cgram") in ("VER", "AUX")
+                    )
+                ):
+                    cand_5d = None  # skip
                 # Guard: candidat doit etre VER P3s dans le lexique
                 _cand_is_p3s = False
-                _cand_infos_5d = lexique.info(cand_5d)
+                _cand_infos_5d = None
+                if cand_5d is not None:
+                    _cand_infos_5d = lexique.info(cand_5d)
                 if _cand_infos_5d and any(
                     e.get("cgram") in ("VER", "AUX")
                     and str(e.get("personne")) == "3"
@@ -836,6 +953,209 @@ def verifier_conjugaisons(
                                     regle="conjugaison.relatif",
                                     explication="'qui' + mauvaise personne -> P3s",
                                 ))
+
+    # Regle 6 : PRO sujet + infinitif -> conjuguer au present
+    # "je revoir ce film" → "je revois ce film"
+    # Guards: modal/auxiliaire/aller avant → futur proche / modal OK
+    for i in range(n):
+        # Skip si deja corrige par une regle precedente
+        if result[i] != mots[i] or (
+            any(c.index == i for c in corrections)
+        ):
+            continue
+        if not _est_infinitif(result[i], lexique):
+            continue
+        # Chercher un pronom sujet avant (en sautant les transparents)
+        pronom_info = _trouver_pronom_sujet(result, origs, i, pos_tags)
+        if pronom_info is None:
+            continue
+        personne, nombre = pronom_info
+        # Guard: modal/auxiliaire/aller precede → ne pas conjuguer
+        _skip_modal = False
+        for _j6 in range(i - 1, max(-1, i - 4), -1):
+            _w6 = result[_j6].lower()
+            if _w6 in MODAUX_FORMES or _w6 in AUXILIAIRES or _w6 in ALLER_FORMES:
+                _skip_modal = True
+                break
+            if _w6 not in _TRANSPARENTS_AUX and _w6 not in PRONOM_PERSONNE:
+                break
+        if _skip_modal:
+            continue
+        # Guard: preposition avant le pronom → complement, pas sujet
+        # "pour revoir" (mais ici le pronom serait absent)
+        # Guard: "a" / "de" / preposition immediatement avant
+        _skip_prep = False
+        for _j6p in range(i - 1, max(-1, i - 3), -1):
+            _w6p = result[_j6p].lower()
+            if _w6p in PREPOSITIONS:
+                _skip_prep = True
+                break
+            if _w6p in PRONOM_PERSONNE or _w6p in _TRANSPARENTS_AUX:
+                continue
+            break
+        if _skip_prep:
+            continue
+        # Conjuguer via lexique
+        lemme_inf = result[i].lower()
+        forme = _conjuguer_via_lexique(lemme_inf, personne, nombre or "s", lexique)
+        if forme and forme.lower() != result[i].lower():
+            ancien = result[i]
+            result[i] = transferer_casse(mots[i], forme)
+            corrections.append(Correction(
+                index=i,
+                original=ancien,
+                corrige=result[i],
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle="conjugaison.infinitif_apres_pronom",
+                explication=f"PRO sujet + infinitif -> conjugaison P{personne}",
+            ))
+
+    # Regle 7 : Verification systematique personne/nombre via morpho + lexique
+    # Catch-all pour les cas que les regles par suffixe manquent (irreguliers)
+    # Ex: "il vais" (P1s→P3s), "tu prend" (P3s→P2s avec -s)
+    if lexique is not None and hasattr(lexique, "info") and hasattr(lexique, "formes_de"):
+        _pers_morpho = morpho.get("personne", [])
+        _nb_morpho = morpho.get("nombre", [])
+        _mode_morpho = morpho.get("mode", [])
+        _temps_morpho = morpho.get("temps", [])
+        for i in range(n):
+            # Skip si deja corrige
+            if result[i] != mots[i] or any(c.index == i for c in corrections):
+                continue
+            pos_i = pos_tags[i] if i < len(pos_tags) else ""
+            if pos_i not in ("VER", "AUX"):
+                continue
+            # Skip infinitifs, participes, gerondifs
+            _mode_i = _mode_morpho[i] if i < len(_mode_morpho) else "_"
+            if _mode_i in ("infinitif", "Inf", "inf", "participe", "Par",
+                           "par", "gerondif", "Ger", "ger"):
+                continue
+            # Guard: mot apres DET/possessif/demonstratif est probablement
+            # un NOM homographe (ex: "ses œuvres" tague VER mais = NOM)
+            if i > 0:
+                _prev_pos_r7 = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                if _prev_pos_r7.startswith(("ART", "DET", "ADJ:pos", "ADJ:dem", "ADJ:ind")):
+                    continue
+            # Guard: NOM PROPRE — ne pas conjuguer un nom propre
+            # (Castres, Sèvres ont des entrees NOM PROPRE + VER)
+            # (Auvergne n'a que VER "auvergner" mais freq tres basse)
+            _curr_r7_infos = lexique.info(result[i])
+            if _curr_r7_infos:
+                # Skip si le mot a une entree NOM PROPRE
+                _has_np_r7 = any(
+                    "PROPRE" in (e.get("cgram") or "")
+                    for e in _curr_r7_infos
+                )
+                if _has_np_r7:
+                    continue
+                # Skip si TOUTES les entrees VER sont tres basses en freq
+                # et le mot est capitalise (probablement NOM PROPRE non-recense)
+                _ver_entries_r7 = [
+                    e for e in _curr_r7_infos
+                    if e.get("cgram") in ("VER", "AUX")
+                ]
+                if (
+                    _ver_entries_r7
+                    and result[i][0].isupper()
+                    and all(float(e.get("freq") or 0) < 1.0 for e in _ver_entries_r7)
+                ):
+                    continue
+            # Guard: PP forms — le lexique dit que c'est un participe passe
+            # (émis, mis, pris, vu, dit, fait, etc.)
+            if _curr_r7_infos and any(
+                e.get("cgram") in ("VER", "AUX")
+                and e.get("mode") in ("participe", "par", "Par")
+                and e.get("temps") in ("passé", "pas", "past", "passe_simple",
+                                       "passé composé")
+                for e in _curr_r7_infos
+            ):
+                continue
+            # Detecter le sujet attendu
+            _pronom_r7 = _trouver_pronom_sujet(result, origs, i, pos_tags)
+            if _pronom_r7 is not None:
+                _pers_att, _nb_att = _pronom_r7
+                _nb_att = _nb_att or "s"
+            else:
+                _nb_sujet_r7 = _nombre_sujet_nominal(result, pos_tags, origs, i)
+                if _nb_sujet_r7 is None:
+                    continue
+                _pers_att = "3"
+                _nb_att = "s" if _nb_sujet_r7 == "sing" else "p"
+            # Trouver le lemme du verbe actuel
+            _infos_r7 = lexique.info(result[i])
+            if not _infos_r7:
+                continue
+            _lemmes_r7 = set(
+                e.get("lemme", "") for e in _infos_r7
+                if e.get("cgram") in ("VER", "AUX") and e.get("lemme")
+            )
+            if not _lemmes_r7:
+                continue
+            # Verifier si la forme actuelle est deja correcte
+            # (en cherchant une entree qui correspond au sujet attendu)
+            _deja_ok = False
+            for e in _infos_r7:
+                if e.get("cgram") not in ("VER", "AUX"):
+                    continue
+                _ep = str(e.get("personne", "_"))
+                _en = e.get("nombre", "_")
+                _en_norm = "s" if _en in ("s", "singulier", "Sing") else (
+                    "p" if _en in ("p", "pluriel", "Plur") else "_"
+                )
+                if _ep == _pers_att and _en_norm == _nb_att:
+                    _deja_ok = True
+                    break
+            if _deja_ok:
+                continue
+            # La forme ne correspond pas au sujet → chercher la bonne forme
+            # Determiner le temps cible (present par defaut, ou detecte)
+            _temps_i = _temps_morpho[i] if i < len(_temps_morpho) else "_"
+            _temps_cible = "present"
+            if _temps_i in ("imparfait", "Imp", "imp"):
+                _temps_cible = "imparfait"
+            elif _temps_i in ("futur", "Fut", "fut"):
+                _temps_cible = "futur"
+            _forme_r7 = None
+            for _lem_r7 in _lemmes_r7:
+                for f in lexique.formes_de(_lem_r7):
+                    if (
+                        str(f.get("personne")) == _pers_att
+                        and f.get("nombre") in (
+                            "singulier" if _nb_att == "s" else "pluriel",
+                            _nb_att,
+                        )
+                        and f.get("temps") == _temps_cible
+                        and f.get("mode") == "indicatif"
+                    ):
+                        _cand_r7 = f.get("ortho", "")
+                        if _cand_r7 and _cand_r7.lower() != result[i].lower():
+                            _forme_r7 = _cand_r7
+                            break
+                if _forme_r7:
+                    break
+            if _forme_r7:
+                # Guard: la forme candidate doit etre VER/AUX en majorite
+                _cand_infos_r7 = lexique.info(_forme_r7)
+                if _cand_infos_r7:
+                    _best_r7 = max(
+                        _cand_infos_r7,
+                        key=lambda e: float(e.get("freq") or 0),
+                    )
+                    if (_best_r7.get("cgram") or "") not in ("VER", "AUX"):
+                        continue
+                ancien = result[i]
+                result[i] = transferer_casse(mots[i], _forme_r7)
+                corrections.append(Correction(
+                    index=i,
+                    original=ancien,
+                    corrige=result[i],
+                    type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="conjugaison.accord_morpho",
+                    explication=(
+                        f"Accord sujet-verbe P{_pers_att}"
+                        f"{'s' if _nb_att == 's' else 'p'}"
+                    ),
+                ))
 
     return result, corrections
 

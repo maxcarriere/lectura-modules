@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from lectura_correcteur.orthographe._suggestions import _ACCENT_MAP
+
 # Mots etrangers courants dont le split donnerait un faux positif
 # (ex: "the" -> "t'hé", "she" -> "s'hé")
 _MOTS_ETRANGERS_COURT = frozenset({
@@ -68,6 +70,44 @@ def resegmenter(tokens: list[str], lexique: Any) -> list[str]:
     return result
 
 
+def _trouver_forme_accent(mot: str, lexique: Any) -> str | None:
+    """Retourne la forme accentuee du mot si elle existe dans le lexique.
+
+    Teste les variantes mono-position (e→é, e→è, etc.) puis bi-position.
+    Retourne la premiere forme trouvee ou None.
+    """
+    low = mot.lower()
+    positions: list[int] = []
+    for idx, ch in enumerate(low):
+        if ch in _ACCENT_MAP:
+            positions.append(idx)
+    if not positions:
+        return None
+    # Mono-position
+    for p in positions:
+        ch = low[p]
+        for alt in _ACCENT_MAP[ch]:
+            chars = list(low)
+            chars[p] = alt
+            candidate = "".join(chars)
+            if candidate != low and lexique.existe(candidate):
+                return candidate
+    # Bi-position
+    for i in range(len(positions)):
+        for j in range(i + 1, len(positions)):
+            pi, pj = positions[i], positions[j]
+            chi, chj = low[pi], low[pj]
+            for ai in _ACCENT_MAP[chi]:
+                for aj in _ACCENT_MAP[chj]:
+                    chars = list(low)
+                    chars[pi] = ai
+                    chars[pj] = aj
+                    candidate = "".join(chars)
+                    if candidate != low and lexique.existe(candidate):
+                        return candidate
+    return None
+
+
 def _tenter_split_clitique(token: str, lexique: Any) -> list[str] | None:
     """Tente de separer un clitique du debut du token."""
     token_low = token.lower()
@@ -95,14 +135,22 @@ def _tenter_split_clitique(token: str, lexique: Any) -> list[str] | None:
             # Pour les prefixes d'1 char, exiger que le reste soit assez
             # frequent (evite les FP sur noms propres/mots etrangers OOV :
             # "mart" -> "m'art", "selim" -> "s'elim")
+            # Seuil plus strict pour les restes courts (<=4 chars)
             if hasattr(lexique, "frequence"):
                 _freq_reste = lexique.frequence(reste)
-                if _freq_reste < 100.0:
+                _seuil_freq = 50.0 if len(reste) <= 4 else 10.0
+                if _freq_reste < _seuil_freq:
                     continue
 
-        if lexique.existe(reste):
-            clitique = token[:len(prefix_sans)] + "'"
-            return [clitique, reste]
+        reste_reel = reste
+        if not lexique.existe(reste):
+            reste_accent = _trouver_forme_accent(reste, lexique)
+            if reste_accent:
+                reste_reel = reste_accent
+            else:
+                continue
+        clitique = token[:len(prefix_sans)] + "'"
+        return [clitique, reste_reel]
 
     return None
 
@@ -249,11 +297,18 @@ def _tenter_split_elargi(token: str, lexique: Any) -> list[str] | None:
             # Meme garde frequence que _tenter_split_clitique
             if hasattr(lexique, "frequence"):
                 _freq_reste = lexique.frequence(reste)
-                if _freq_reste < 100.0:
+                _seuil_freq = 50.0 if len(reste) <= 4 else 10.0
+                if _freq_reste < _seuil_freq:
                     continue
 
-        if lexique.existe(reste):
-            clitique = token[:len(prefix_sans)] + "'"
-            return [clitique, reste]
+        reste_reel = reste
+        if not lexique.existe(reste):
+            reste_accent = _trouver_forme_accent(reste, lexique)
+            if reste_accent:
+                reste_reel = reste_accent
+            else:
+                continue
+        clitique = token[:len(prefix_sans)] + "'"
+        return [clitique, reste_reel]
 
     return None

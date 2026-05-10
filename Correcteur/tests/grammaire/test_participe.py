@@ -15,13 +15,13 @@ def test_ai_manger_mange(mock_lexique):
 
 
 def test_a_chanter_chante(mock_lexique):
-    """'a chanter' -> 'a chanté'."""
-    mots = ["a", "chanter"]
-    pos = ["AUX", "VER"]
+    """'il a chanter' -> 'il a chanté'."""
+    mots = ["il", "a", "chanter"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
         mots, pos, {}, mock_lexique,
     )
-    assert result[1] == "chanté"
+    assert result[2] == "chanté"
     assert len(corrections) == 1
 
 
@@ -70,79 +70,79 @@ def test_pas_correction_sans_auxiliaire(mock_lexique):
 
 
 def test_pas_correction_si_deja_participe(mock_lexique):
-    """'a mangé' -> pas de correction (deja participe)."""
-    mots = ["a", "mangé"]
-    pos = ["AUX", "VER"]
+    """'il a mangé' -> pas de correction (deja participe)."""
+    mots = ["il", "a", "mangé"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
         mots, pos, {}, mock_lexique,
     )
-    assert result[1] == "mangé"
+    assert result[2] == "mangé"
     assert len(corrections) == 0
 
 
 # --- Participes passes irreguliers ---
 
 def test_a_faire_fait(mock_lexique):
-    """'a faire' -> 'a fait' (participe passe irregulier)."""
-    mots = ["a", "faire"]
-    pos = ["AUX", "VER"]
+    """'il a faire' -> 'il a fait' (participe passe irregulier)."""
+    mots = ["il", "a", "faire"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
-        mots, pos, {}, mock_lexique, originaux=["a", "faire"],
+        mots, pos, {}, mock_lexique, originaux=["il", "a", "faire"],
     )
-    assert result[1] == "fait"
+    assert result[2] == "fait"
     assert any(c.corrige == "fait" for c in corrections)
 
 
 def test_a_prendre_pris(mock_lexique):
-    """'a prendre' -> 'a pris' (participe passe irregulier)."""
-    mots = ["a", "prendre"]
-    pos = ["AUX", "VER"]
+    """'il a prendre' -> 'il a pris' (participe passe irregulier)."""
+    mots = ["il", "a", "prendre"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
-        mots, pos, {}, mock_lexique, originaux=["a", "prendre"],
+        mots, pos, {}, mock_lexique, originaux=["il", "a", "prendre"],
     )
-    assert result[1] == "pris"
+    assert result[2] == "pris"
     assert any(c.corrige == "pris" for c in corrections)
 
 
 def test_a_voir_vu(mock_lexique):
-    """'a voir' -> 'a vu' (participe passe irregulier)."""
-    mots = ["a", "voir"]
-    pos = ["AUX", "VER"]
+    """'il a voir' -> 'il a vu' (participe passe irregulier)."""
+    mots = ["il", "a", "voir"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
-        mots, pos, {}, mock_lexique, originaux=["a", "voir"],
+        mots, pos, {}, mock_lexique, originaux=["il", "a", "voir"],
     )
-    assert result[1] == "vu"
+    assert result[2] == "vu"
     assert any(c.corrige == "vu" for c in corrections)
 
 
 def test_a_mettre_mis(mock_lexique):
-    """'a mettre' -> 'a mis' (participe passe irregulier)."""
-    mots = ["a", "mettre"]
-    pos = ["AUX", "VER"]
+    """'il a mettre' -> 'il a mis' (participe passe irregulier)."""
+    mots = ["il", "a", "mettre"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
-        mots, pos, {}, mock_lexique, originaux=["a", "mettre"],
+        mots, pos, {}, mock_lexique, originaux=["il", "a", "mettre"],
     )
-    assert result[1] == "mis"
+    assert result[2] == "mis"
     assert any(c.corrige == "mis" for c in corrections)
 
 
 def test_a_ecrire_ecrit(mock_lexique):
-    """'a ecrire' -> 'a ecrit' (participe passe irregulier)."""
-    mots = ["a", "écrire"]
-    pos = ["AUX", "VER"]
+    """'il a ecrire' -> 'il a ecrit' (participe passe irregulier)."""
+    mots = ["il", "a", "écrire"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
-        mots, pos, {}, mock_lexique, originaux=["a", "écrire"],
+        mots, pos, {}, mock_lexique, originaux=["il", "a", "écrire"],
     )
-    assert result[1] == "écrit"
+    assert result[2] == "écrit"
     assert any(c.corrige == "écrit" for c in corrections)
 
 
 def test_a_manger_mange_regulier(mock_lexique):
-    """'a manger' -> 'a mange' (participe passe regulier via PP)."""
-    mots = ["a", "manger"]
-    pos = ["AUX", "VER"]
+    """'il a manger' -> 'il a mange' (participe passe regulier via PP)."""
+    mots = ["il", "a", "manger"]
+    pos = ["PRO:per", "AUX", "VER"]
     result, corrections = verifier_participes_passes(
-        mots, pos, {}, mock_lexique, originaux=["a", "manger"],
+        mots, pos, {}, mock_lexique, originaux=["il", "a", "manger"],
     )
-    assert result[1] == "mangé"
+    assert result[2] == "mangé"
     assert any(c.corrige == "mangé" for c in corrections)

@@ -172,12 +172,12 @@ def test_le_petit_fille(mock_lexique):
 
 
 def test_un_belle_maison(mock_lexique):
-    """'un belle maison' -> un/une excluded from Rule 8 (too many FP with ambiguous NOM genre)."""
+    """'un belle maison' -> 'une belle maison' (Rule 8 now handles un/une)."""
     mots = ["un", "belle", "maison"]
     pos = ["ART:ind", "ADJ", "NOM"]
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
-    # un/une excluded from DET genre correction (Rule 8) like le/la
-    assert result[0] == "un"
+    # un→une car maison est 100% feminin
+    assert result[0] == "une"
     assert result[1] == "belle"
     assert result[2] == "maison"
 
@@ -220,3 +220,100 @@ def test_les_gateau_gateaux(mock_lexique):
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
     assert result[1] == "gâteaux"
     assert any(c.corrige == "gâteaux" for c in corrections)
+
+
+# --- A1 : Chiffres arabes comme declencheur pluriel ---
+
+def test_chiffre_pluriel_nom(mock_lexique):
+    """'29 mort' -> '29 morts' (chiffre >= 2 pluralise le NOM)."""
+    mots = ["29", "mort"]
+    pos = ["NUM", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "morts"
+    assert any(c.corrige == "morts" for c in corrections)
+
+
+def test_chiffre_1_pas_de_pluriel(mock_lexique):
+    """'1 mort' -> pas de pluriel (chiffre = 1)."""
+    mots = ["1", "mort"]
+    pos = ["NUM", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "mort"
+    assert not any(c.corrige == "morts" for c in corrections)
+
+
+def test_chiffre_nom_deja_pluriel(mock_lexique):
+    """'3 morts' -> pas de correction (deja pluriel)."""
+    mots = ["3", "morts"]
+    pos = ["NUM", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "morts"
+    assert not any(c.original == "morts" for c in corrections)
+
+
+# --- A2 : même n'est plus exclu des accords ---
+
+def test_meme_pluriel_apres_det(mock_lexique):
+    """'les même règles' -> 'les mêmes règles' (même accorde au pluriel)."""
+    mots = ["les", "même"]
+    pos = ["ART:def", "ADJ"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "mêmes"
+    assert any(c.corrige == "mêmes" for c in corrections)
+
+
+def test_memes_singulier_apres_det(mock_lexique):
+    """'la mêmes' -> 'la même' (mêmes singularise apres DET singulier)."""
+    mots = ["la", "mêmes"]
+    pos = ["ART:def", "ADJ"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "même"
+
+
+# --- A3 : un/une genre correction ---
+
+def test_une_segment_un_segment(mock_lexique):
+    """'une segment' -> 'un segment' (segment est 100% masculin)."""
+    mots = ["une", "segment"]
+    pos = ["ART:ind", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[0] == "un"
+    assert any(c.corrige == "un" for c in corrections)
+
+
+def test_un_maison_une_maison(mock_lexique):
+    """'un maison' -> 'une maison' (maison est 100% feminin)."""
+    mots = ["un", "maison"]
+    pos = ["ART:ind", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[0] == "une"
+    assert any(c.corrige == "une" for c in corrections)
+
+
+def test_un_enfant_pas_de_correction(mock_lexique):
+    """'un enfant' -> pas de correction (enfant n'est pas 100% feminin)."""
+    mots = ["un", "enfant"]
+    pos = ["ART:ind", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[0] == "un"
+    assert not any(c.regle == "accord.genre_det" for c in corrections)
+
+
+# --- A4 : ADJ pre-nominal + NOM pluriel ---
+
+def test_de_jolie_femmes(mock_lexique):
+    """'de jolie femmes' -> 'de jolies femmes' (ADJ pre-nominal pluralise)."""
+    mots = ["de", "jolie", "femmes"]
+    pos = ["PRE", "ADJ", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "jolies"
+    assert any(c.corrige == "jolies" for c in corrections)
+
+
+def test_de_jolies_femmes_pas_de_correction(mock_lexique):
+    """'de jolies femmes' -> pas de correction (ADJ deja pluriel)."""
+    mots = ["de", "jolies", "femmes"]
+    pos = ["PRE", "ADJ", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    assert result[1] == "jolies"
+    assert not any(c.original == "jolies" for c in corrections)

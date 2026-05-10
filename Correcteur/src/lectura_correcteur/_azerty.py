@@ -2,6 +2,9 @@
 
 Fournit ratio_adjacence_azerty() pour le scoring : quand un candidat ne differe
 que par des substitutions de touches AZERTY-voisines, il est favorise.
+
+Fournit generer_variantes_azerty() pour la generation de candidats : pour chaque
+position du mot, substitue le caractere par chaque voisin AZERTY.
 """
 
 from __future__ import annotations
@@ -96,3 +99,20 @@ def ratio_adjacence_azerty(original: str, candidat: str) -> float:
         return 0.5  # identiques
 
     return n_adjacentes / n_subs
+
+
+def generer_variantes_azerty(mot: str) -> list[str]:
+    """Genere toutes les variantes par substitution AZERTY d'un caractere.
+
+    Pour chaque position du mot, remplace le caractere par chaque voisin
+    AZERTY. Retourne ~5*len(mot) variantes (moy ~5 voisins par touche).
+    """
+    mot_low = mot.lower()
+    variantes: list[str] = []
+    for i, c in enumerate(mot_low):
+        voisins = AZERTY_ADJACENCE.get(c)
+        if voisins is None:
+            continue
+        for v in voisins:
+            variantes.append(mot_low[:i] + v + mot_low[i + 1:])
+    return variantes

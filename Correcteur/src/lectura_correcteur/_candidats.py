@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lectura_correcteur._azerty import generer_variantes_azerty
 from lectura_correcteur._config import CorrecteurConfig
 from lectura_correcteur._types import Candidat
 from lectura_correcteur.orthographe._suggestions import (
@@ -81,6 +82,37 @@ def generer_candidats(
         and hasattr(lexique, "frequence")
         and lexique.frequence(low) < cfg.seuil_freq_suspicion
     )
+    # Guards : ne pas activer la suspicion pour les noms propres, sigles,
+    # formes flechies et NOM/ADJ singuliers de base.
+    if suspicion_freq and hasattr(lexique, "info"):
+        infos = lexique.info(low)
+        if infos:
+            # Guard NOM PROPRE / SIGLE
+            if all(
+                "PROPRE" in (e.get("cgram") or "")
+                or (e.get("cgram") or "") == "SIGLE"
+                for e in infos
+            ):
+                suspicion_freq = False
+            # Guard forme flechie (pluriel, feminin, verbe conjugue)
+            if suspicion_freq and any(
+                e.get("nombre") in ("p", "pluriel")
+                or e.get("genre") in ("f",)
+                or (
+                    e.get("cgram", "") in ("VER", "AUX")
+                    and e.get("mode") not in ("", None)
+                )
+                for e in infos
+                if e.get("cgram", "") in ("NOM", "ADJ", "VER", "AUX")
+            ):
+                suspicion_freq = False
+            # Guard NOM/ADJ singulier de base
+            if suspicion_freq and any(
+                e.get("cgram", "") in ("NOM", "ADJ")
+                and e.get("nombre") in ("s", "singulier")
+                for e in infos
+            ):
+                suspicion_freq = False
     if not dans_lexique or suspicion_freq:
         if suggestions is not None:
             candidats.extend(
@@ -89,9 +121,12 @@ def generer_candidats(
         else:
             candidats.extend(_tier2_edit_distance(low, lexique, g2p, seen))
         # Toujours tenter le canal G2P en complement (les suggestions
-        # SymSpell ne couvrent pas forcement les candidats phonetiques)
+        # d=1/d=2 ne couvrent pas forcement les candidats phonetiques)
         if g2p is not None and suggestions is not None:
             candidats.extend(_tier2_g2p(low, lexique, g2p, seen))
+        # Candidats par substitution AZERTY (typos clavier)
+        if cfg.activer_azerty:
+            candidats.extend(_tier2_azerty(low, lexique, seen))
 
     # --- Tier 3 : variantes morphologiques (in-lexique) ---
     if dans_lexique:
@@ -370,6 +405,47 @@ def _tier2_g2p(
                 genre=entry.get("genre", ""),
                 nombre=entry.get("nombre", ""),
             ))
+    return candidats
+
+
+def _tier2_azerty(
+    mot: str,
+    lexique: Any,
+    seen: set[str],
+) -> list[Candidat]:
+    """Tier 2 AZERTY : candidats par substitution de touches voisines."""
+    candidats: list[Candidat] = []
+    for variante in generer_variantes_azerty(mot):
+        if variante in seen:
+            continue
+        if not lexique.existe(variante):
+            continue
+        seen.add(variante)
+        freq = lexique.frequence(variante) if hasattr(lexique, "frequence") else 0.0
+        infos = lexique.info(variante) if hasattr(lexique, "info") else []
+        pos = ""
+        phone = ""
+        lemme = ""
+        genre = ""
+        nombre = ""
+        if infos:
+            best = max(infos, key=lambda e: float(e.get("freq", 0)))
+            pos = best.get("cgram", "")
+            phone = best.get("phone", "")
+            lemme = best.get("lemme", "")
+            genre = best.get("genre", "")
+            nombre = best.get("nombre", "")
+        candidats.append(Candidat(
+            forme=variante,
+            source="azerty",
+            freq=freq,
+            edit_dist=1,
+            pos=pos,
+            phone=phone,
+            lemme=lemme,
+            genre=genre,
+            nombre=nombre,
+        ))
     return candidats
 
 
