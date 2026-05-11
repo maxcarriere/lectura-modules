@@ -19,7 +19,7 @@ except Exception:
     HAS_MODELS = False
 
 try:
-    import lectura_nlp
+    import lectura_phonemiseur
     HAS_G2P = True
 except ImportError:
     HAS_G2P = False

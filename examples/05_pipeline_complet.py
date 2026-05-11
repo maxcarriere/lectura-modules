@@ -3,7 +3,7 @@
 Cet exemple montre comment enchainer les modules Lectura pour un
 traitement complet du francais.
 
-pip install lectura-tokeniseur lectura-formules lectura-g2p[onnx] lectura-aligneur
+pip install lectura-tokeniseur lectura-formules lectura-phonemiseur[onnx] lectura-aligneur
 """
 
 from pathlib import Path
@@ -38,15 +38,15 @@ for f in resultat_tk.formules:
 print()
 
 # --- Etape 3 : G2P (phonetisation) ---
-MODELES = Path(__file__).resolve().parent.parent / "G2P" / "modeles"
+MODELES = Path(__file__).resolve().parent.parent / "Phonemiseur" / "modeles"
 
 print("=" * 60)
 print("ETAPE 3 — Phonetisation G2P")
 print("=" * 60)
 
 try:
-    from lectura_nlp.inference_onnx import OnnxInferenceEngine
-    from lectura_nlp.tokeniseur import tokeniser
+    from lectura_phonemiseur.inference_onnx import OnnxInferenceEngine
+    from lectura_phonemiseur.tokeniseur import tokeniser
 
     engine = OnnxInferenceEngine(
         str(MODELES / "unifie_int8.onnx"),
@@ -63,7 +63,7 @@ try:
 
 except ImportError:
     print("  (onnxruntime non installe — etape sautee)")
-    print("  pip install lectura-g2p[onnx]")
+    print("  pip install lectura-phonemiseur[onnx]")
 
 print()
 print("=" * 60)

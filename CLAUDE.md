@@ -17,27 +17,28 @@ Chaque module est un package Python autonome dans son propre dossier :
 
 ```
 Modules/
-├── Tokeniseur/    pip install lectura-tokeniseur
-├── G2P/           pip install lectura-g2p
-├── P2G/           pip install lectura-p2g
-├── Aligneur/      pip install lectura-aligneur
-├── Formules/      pip install lectura-formules
-├── Correcteur/    pip install lectura-correcteur  (en cours)
-├── Lexique/       donnees linguistiques partagees
-├── pyproject.toml meta-package "lectura" (installe tout)
-└── exporter.py    script d'export vers output/
+├── Tokeniseur/      pip install lectura-tokeniseur
+├── Formules/        pip install lectura-formules
+├── Phonemiseur/     pip install lectura-phonemiseur  (ex G2P)
+├── Graphemiseur/    pip install lectura-graphemiseur (ex P2G)
+├── Aligneur/        pip install lectura-aligneur
+├── Correcteur/      pip install lectura-correcteur
+├── Lexique/         donnees linguistiques partagees
+├── G2P-Pipeline/    pip install lectura-g2p (pipeline couche 2)
+├── pyproject.toml   meta-package "lectura" (installe tout)
+└── exporter.py      script d'export vers output/
 ```
 
 Installation en mode dev (editable) :
 ```bash
 pip install -e Tokeniseur/
-pip install -e G2P/[onnx]
+pip install -e Phonemiseur/[onnx]
 ```
 
 Tests :
 ```bash
 cd Tokeniseur && python -m pytest tests/
-cd G2P && python -m pytest tests/
+cd Phonemiseur && python -m pytest tests/
 ```
 
 ### Etape 2 — Export (workspace → output)
@@ -79,8 +80,8 @@ twine upload dist/*
 
 Packages PyPI :
 - `lectura` (meta-package)
-- `lectura-tokeniseur`, `lectura-g2p`, `lectura-p2g`
-- `lectura-aligneur`, `lectura-formules`
+- `lectura-tokeniseur`, `lectura-phonemiseur`, `lectura-graphemiseur`
+- `lectura-aligneur`, `lectura-formules`, `lectura-g2p` (pipeline)
 
 ### Etape 5 — Mettre a jour le site
 

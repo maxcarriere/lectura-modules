@@ -24,7 +24,7 @@ dependencies = []
 
 [project.optional-dependencies]
 onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
-g2p = ["lectura-g2p", "lectura-tokeniseur"]
+g2p = ["lectura-phonemiseur", "lectura-tokeniseur"]
 formules = ["lectura-formules"]
 aligneur = ["lectura-aligneur"]
 all = ["lectura-tts-monospeaker[onnx,g2p,formules,aligneur]"]

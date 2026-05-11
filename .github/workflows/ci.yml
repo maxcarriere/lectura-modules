@@ -39,14 +39,14 @@ jobs:
           PYTHONPATH: Aligneur/src:Formules/src:Tokeniseur/src
         run: pytest Aligneur/tests/ -v
 
-      - name: Tests G2P
+      - name: Tests Phonemiseur
         env:
-          PYTHONPATH: G2P/src:Formules/src:Tokeniseur/src
-        run: pytest G2P/tests/ -v --ignore=G2P/tests/test_pipeline_formules.py
+          PYTHONPATH: Phonemiseur/src:Formules/src:Tokeniseur/src
+        run: pytest Phonemiseur/tests/ -v --ignore=Phonemiseur/tests/test_pipeline_formules.py
         continue-on-error: true
 
-      - name: Tests P2G
+      - name: Tests Graphemiseur
         env:
-          PYTHONPATH: P2G/src
-        run: pytest P2G/tests/ -v
+          PYTHONPATH: Graphemiseur/src
+        run: pytest Graphemiseur/tests/ -v
         continue-on-error: true

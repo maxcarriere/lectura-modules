@@ -735,6 +735,30 @@ def _DONNEES_DEFAUT() -> dict[str, list[dict[str, Any]]]:
                     "freq": 10.0, "genre": "m", "nombre": "s"}],
         "berlin": [{"ortho": "berlin", "cgram": "NOM PROPRE", "phone": "bɛʁlɛ̃",
                     "freq": 8.0, "genre": "m", "nombre": "s"}],
+        # A1 : chiffres arabes + NOM
+        "mort": [{"ortho": "mort", "cgram": "NOM", "phone": "mɔʁ",
+                  "freq": 30.0, "genre": "m", "nombre": "s"}],
+        "morts": [{"ortho": "morts", "cgram": "NOM", "phone": "mɔʁ",
+                   "freq": 15.0, "genre": "m", "nombre": "p"}],
+        "siège": [{"ortho": "siège", "cgram": "NOM", "phone": "sjɛʒ",
+                   "freq": 20.0, "genre": "m", "nombre": "s"}],
+        "sièges": [{"ortho": "sièges", "cgram": "NOM", "phone": "sjɛʒ",
+                    "freq": 10.0, "genre": "m", "nombre": "p"}],
+        # A2 : même/mêmes
+        "même": [{"ortho": "même", "cgram": "ADJ", "phone": "mɛm",
+                  "freq": 80.0, "genre": "m", "nombre": "s"}],
+        "mêmes": [{"ortho": "mêmes", "cgram": "ADJ", "phone": "mɛm",
+                   "freq": 40.0, "genre": "m", "nombre": "p"}],
+        # A3 : segment (100% masculin)
+        "segment": [{"ortho": "segment", "cgram": "NOM", "phone": "sɛɡmɑ̃",
+                     "freq": 10.0, "genre": "m", "nombre": "s"}],
+        "segments": [{"ortho": "segments", "cgram": "NOM", "phone": "sɛɡmɑ̃",
+                      "freq": 5.0, "genre": "m", "nombre": "p"}],
+        # A4 : joli/jolis (masculin)
+        "joli": [{"ortho": "joli", "cgram": "ADJ", "phone": "ʒɔli",
+                  "freq": 15.0, "genre": "m", "nombre": "s"}],
+        "jolis": [{"ortho": "jolis", "cgram": "ADJ", "phone": "ʒɔli",
+                   "freq": 8.0, "genre": "m", "nombre": "p"}],
     }
 
 

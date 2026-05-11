@@ -24,7 +24,7 @@ dependencies = []
 
 [project.optional-dependencies]
 local = ["pyworld>=0.3.4", "numpy>=1.24", "scipy>=1.10", "soundfile>=0.12"]
-g2p = ["lectura-g2p", "lectura-tokeniseur", "lectura-formules"]
+g2p = ["lectura-phonemiseur", "lectura-tokeniseur", "lectura-formules"]
 all = ["lectura-tts-diphone[local,g2p]"]
 
 [project.urls]

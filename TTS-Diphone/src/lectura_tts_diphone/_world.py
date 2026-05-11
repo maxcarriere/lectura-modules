@@ -79,10 +79,16 @@ def stretch_params(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray,
 def concat_diphones(
     segments: list[dict],
     overlap: int = OVERLAP_FRAMES,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Concatenate diphone WORLD params with smooth overlap blending."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[tuple[int, int]]]:
+    """Concatenate diphone WORLD params with smooth overlap blending.
+
+    Returns:
+        (f0, sp, ap, boundaries) where boundaries is a list of
+        (start_frame, end_frame) tuples, one per segment.
+    """
     if len(segments) == 1:
-        return segments[0]["f0"], segments[0]["sp"], segments[0]["ap"]
+        n = len(segments[0]["f0"])
+        return segments[0]["f0"], segments[0]["sp"], segments[0]["ap"], [(0, n)]
 
     # Calculate total frames
     total = sum(len(s["f0"]) for s in segments)
@@ -93,6 +99,7 @@ def concat_diphones(
     f0_out = np.zeros(total, dtype=np.float64)
     sp_out = np.full((total, n_bins), 1e-10, dtype=np.float64)
     ap_out = np.ones((total, n_bins), dtype=np.float64)
+    boundaries: list[tuple[int, int]] = []
 
     pos = 0
     for i, seg in enumerate(segments):
@@ -103,8 +110,10 @@ def concat_diphones(
             f0_out[pos:pos + n] = seg["f0"]
             sp_out[pos:pos + n] = seg["sp"]
             ap_out[pos:pos + n] = seg["ap"]
+            boundaries.append((pos, pos + n))
             pos += n - actual_overlap
         else:
+            seg_start = pos
             # Blend overlap zone
             blend_len = min(actual_overlap, total - pos, n)
             if blend_len > 0:
@@ -137,9 +146,11 @@ def concat_diphones(
                     sp_out[sl] = seg["sp"][rest_start:rest_start + write_len]
                     ap_out[sl] = seg["ap"][rest_start:rest_start + write_len]
 
+            seg_end = min(pos + n - actual_overlap + actual_overlap, total)
+            boundaries.append((seg_start, seg_end))
             pos += n - actual_overlap
 
-    return f0_out[:total], sp_out[:total], ap_out[:total]
+    return f0_out[:total], sp_out[:total], ap_out[:total], boundaries
 
 
 def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray,
@@ -154,3 +165,79 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray,
 
     audio = pw.synthesize(f0, sp, ap, sr, frame_period)
     return audio.astype(np.float32)
+
+
+def compress_aperiodicity(ap: np.ndarray, gamma: float = 1.5,
+                          sr: int = SIWIS_SR) -> np.ndarray:
+    """Reduire le plancher AP par compression power-law frequentielle.
+
+    gamma > 1 pousse les petites valeurs d'AP vers 0 (= plus periodique).
+    Bandes de frequence :
+      0-2 kHz : gamma * 1.3 (nettoyage fort, region F1/F2)
+      2-5 kHz : gamma * 1.0 (modere, region F3/F4)
+      5+ kHz  : gamma * 0.7 (doux, preserve fricatives/sibilantes)
+    """
+    if gamma <= 1.0:
+        return ap
+    n_bins = ap.shape[1]
+    freq_per_bin = (sr / 2) / max(1, n_bins - 1)
+    bin_2k = int(2000 / freq_per_bin)
+    bin_5k = int(5000 / freq_per_bin)
+    gammas = np.ones(n_bins, dtype=np.float64)
+    gammas[:bin_2k] = gamma * 1.3
+    gammas[bin_2k:bin_5k] = gamma * 1.0
+    gammas[bin_5k:] = gamma * 0.7
+    return np.clip(np.power(np.clip(ap, 0.0, 1.0), gammas[np.newaxis, :]),
+                   0.0, 1.0)
+
+
+def sharpen_formants(sp: np.ndarray, gain: float = 1.3,
+                     n_ceps: int = 30) -> np.ndarray:
+    """Affuter les pics formantiques par liftering cepstral.
+
+    Amplifie les coefficients cepstraux 1..n_ceps (structure formantique)
+    avec une rampe lineaire de gain → 1.0 pour eviter le ringing.
+    Le coefficient 0 (energie globale) est preserve.
+    """
+    if gain <= 1.0:
+        return sp
+    from scipy.fft import dct, idct
+    log_sp = np.log(np.maximum(sp, 1e-10))
+    cepstrum = dct(log_sp, type=2, axis=1, norm='ortho')
+    n_bins = cepstrum.shape[1]
+    lifter = np.ones(n_bins, dtype=np.float64)
+    upper = min(n_ceps + 1, n_bins)
+    lifter[1:upper] = np.linspace(gain, 1.0, upper - 1)
+    cepstrum *= lifter[np.newaxis, :]
+    return np.exp(idct(cepstrum, type=2, axis=1, norm='ortho'))
+
+
+def warp_vtln(sp: np.ndarray, alpha: float = 1.0,
+              sr: int = SIWIS_SR) -> np.ndarray:
+    """Warping VTLN de l'enveloppe spectrale.
+
+    Warping lineaire par morceaux de l'axe frequentiel :
+      - Sous 3/4 Nyquist : f_new = f * alpha
+      - Au-dessus : interpolation lineaire vers Nyquist
+    alpha > 1 : tract plus court (brillant), alpha < 1 : tract plus long (sombre).
+    """
+    if abs(alpha - 1.0) < 0.001:
+        return sp
+    n_bins = sp.shape[1]
+    nyquist = sr / 2
+    freqs = np.linspace(0, nyquist, n_bins)
+    f_pivot = nyquist * 0.75
+    warped = np.where(
+        freqs <= f_pivot,
+        freqs * alpha,
+        f_pivot * alpha + (freqs - f_pivot) / (nyquist - f_pivot)
+                          * (nyquist - f_pivot * alpha),
+    )
+    warped = np.clip(warped, 0, nyquist)
+    log_sp = np.log(np.maximum(sp, 1e-10))
+    idx = np.clip(np.searchsorted(warped, freqs) - 1, 0, n_bins - 2)
+    denom = np.maximum(warped[idx + 1] - warped[idx], 1e-10)
+    w = np.clip((freqs - warped[idx]) / denom, 0, 1)
+    sp_out = np.exp(log_sp[:, idx] * (1 - w[np.newaxis, :])
+                    + log_sp[:, idx + 1] * w[np.newaxis, :])
+    return np.ascontiguousarray(np.maximum(sp_out, 1e-10))

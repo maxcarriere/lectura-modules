@@ -37,8 +37,8 @@ def _get_g2p_corrections() -> set[str]:
         return _G2P_CORRECTIONS_KEYS
     _G2P_CORRECTIONS_KEYS = set()
     try:
-        import lectura_nlp
-        corr_path = Path(lectura_nlp.__file__).parent / "data" / "g2p_corrections_unifie.json"
+        import lectura_phonemiseur
+        corr_path = Path(lectura_phonemiseur.__file__).parent / "data" / "g2p_corrections_unifie.json"
         if corr_path.exists():
             with open(corr_path, encoding="utf-8") as f:
                 _G2P_CORRECTIONS_KEYS = set(json.load(f).keys())
@@ -129,7 +129,7 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
 
     Args:
         text: Texte francais.
-        g2p: Engine G2P (lectura_nlp).
+        g2p: Engine G2P (lectura_phonemiseur).
 
     Returns:
         Liste de (ipa_string, phrase_type) par phrase.
@@ -196,14 +196,11 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
         all_mot_ipa = []
         all_mot_liaison = []
 
-    # Importer l'aligneur si disponible (pour les liaisons)
+    # Importer le G2P si disponible (pour les groupes de lecture / liaisons)
     _cg = None
-    _MA = None
     try:
-        from lectura_aligneur import construire_groupes as _cg_fn
-        from lectura_aligneur import MotAnalyse as _MA_cls
+        from lectura_phonemiseur.groupes_lecture import construire_groupes_lecture as _cg_fn
         _cg = _cg_fn
-        _MA = _MA_cls
     except ImportError:
         pass
 
@@ -242,8 +239,8 @@ def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
         if not word_entries:
             continue
 
-        if _cg is not None and _MA is not None:
-            ipa = _build_ipa_groupes(word_entries, _cg, _MA)
+        if _cg is not None:
+            ipa = _build_ipa_groupes(word_entries, _cg)
         else:
             ipa = _build_ipa_simple(word_entries)
 
@@ -353,23 +350,36 @@ def _build_ipa_simple(word_entries: list[dict]) -> str:
     return "".join(parts)
 
 
+class _MotEntryG2P:
+    """Mot duck-typed pour construire_groupes_lecture (usage TTS)."""
+    __slots__ = ("text", "phone", "liaison", "ponctuation_avant",
+                 "est_formule", "est_ponctuation")
+
+    def __init__(self, phone, liaison, ponctuation_avant):
+        self.text = ""
+        self.phone = phone
+        self.liaison = liaison
+        self.ponctuation_avant = ponctuation_avant
+        self.est_formule = False
+        self.est_ponctuation = False
+
+
 def _build_ipa_groupes(
     word_entries: list[dict],
-    construire_groupes,
-    MotAnalyse,
+    construire_groupes_lecture,
 ) -> str:
-    """Construit l'IPA avec liaisons via l'aligneur.
+    """Construit l'IPA avec liaisons via le G2P (groupes de lecture).
 
-    Cree des MotAnalyse a partir des entrees, applique
-    construire_groupes() pour les liaisons et enchainements,
+    Cree des mots duck-typed a partir des entrees, applique
+    construire_groupes_lecture() pour les liaisons et enchainements,
     puis reassemble avec la ponctuation.
     """
     if not word_entries:
         return ""
 
-    # Construire les MotAnalyse
+    # Construire les mots pour le G2P
     mots = [
-        MotAnalyse(
+        _MotEntryG2P(
             phone=e["ipa"],
             liaison=e["liaison"],
             ponctuation_avant=e["punct_before"] is not None,
@@ -377,8 +387,12 @@ def _build_ipa_groupes(
         for e in word_entries
     ]
 
+    class _ResultProxy:
+        def __init__(self, mots_list):
+            self.mots = mots_list
+
     # Construire les groupes de lecture (applique liaisons + enchainements)
-    groupes = construire_groupes(mots)
+    groupes = construire_groupes_lecture(_ResultProxy(mots))
 
     # Assembler l'IPA depuis les groupes + ponctuation inter-groupes
     # NB: phone_groupe ne contient PAS les consonnes de liaison,
@@ -515,7 +529,7 @@ class OnnxTTSEngine:
             pause_scale: Multiplicateur pour les pauses.
         """
         try:
-            from lectura_nlp import creer_engine as creer_g2p
+            from lectura_phonemiseur import creer_engine as creer_g2p
         except ImportError:
             raise ImportError(
                 "lectura-g2p requis pour synthesize(text). "

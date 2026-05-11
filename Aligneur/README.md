@@ -2,7 +2,9 @@
 
 **Aligneur grapheme-phoneme et syllabeur phonologique du francais**
 
-Module autonome, **zero dependance** Python. Pivot central du pipeline Lectura, il realise l'alignement lettre-par-lettre entre orthographe et phonetique, construit les groupes de lecture en gerant les phenomenes de chaine parlee (elisions, liaisons, enchainements), et decompose chaque syllabe en attaque/noyau/coda avec correspondance grapheme-phoneme.
+Module autonome, **zero dependance** Python. Pivot central du pipeline Lectura, il realise l'alignement lettre-par-lettre entre orthographe et phonetique, et decompose chaque syllabe en attaque/noyau/coda avec correspondance grapheme-phoneme.
+
+> **Note v4.0.0 :** la construction des groupes de lecture (elisions, liaisons, enchainements) a ete transferee dans le module **lectura-phonemiseur**. L'Aligneur accepte les groupes pre-construits et se concentre sur l'alignement et la syllabation.
 
 C'est grace a cet alignement que les corpus d'entrainement des modeles G2P et P2G ont ete prepares.
 
@@ -19,7 +21,7 @@ pip install lectura-aligneur
 | **Alignement grapheme-phoneme** | Correspondance lettre-par-lettre entre orthographe et IPA via algorithme DFS |
 | **Lettres muettes** | Detection et marquage des lettres silencieuses (e, s, t, d, h, x...) |
 | **Lettres fusionnees** | Identification des graphemes multi-phonemes (x = ks/gz, y...) |
-| **Groupes de lecture** | Regroupement des mots lies par elision, liaison ou enchainement |
+| **Groupes de lecture** | Accepte les groupes pre-construits par le phonemiseur (elision, liaison, enchainement) |
 | **Syllabation phonologique** | Decoupage en syllabes par modele de sonorite (IPA + orthographe) |
 | **Decomposition attaque/noyau/coda** | Chaque syllabe decomposee en ses constituants avec phonemes distribues |
 | **Spans** | Positions caractere de chaque syllabe, groupe et composant dans le texte source |
@@ -100,8 +102,8 @@ print(syllabes)  # ['ʃɔ', 'kɔ', 'la']
 
 ```python
 from lectura_aligneur import LecturaSyllabeur
-from lectura_nlp.inference_onnx import OnnxInferenceEngine
-from lectura_nlp import get_model_path
+from lectura_phonemiseur.inference_onnx import OnnxInferenceEngine
+from lectura_phonemiseur import get_model_path
 
 g2p = OnnxInferenceEngine(get_model_path("unifie_int8.onnx"),
                            get_model_path("unifie_vocab.json"))
@@ -142,7 +144,7 @@ L'Aligneur-Syllabeur est le **pivot central** de Lectura :
 - **Zero dependance** Python
 - **Alignement DFS** grapheme-phoneme avec gestion des lettres muettes et fusionnees
 - **Modele de sonorite** pour la syllabation (5 classes : obstruantes, nasales, liquides, semi-voyelles, voyelles)
-- **Architecture E1/E2** : construction des groupes (E1) puis syllabation (E2), utilisables separement
+- **Architecture E1/E2** : groupes de lecture (E1, depuis lectura-phonemiseur) puis syllabation (E2), utilisables separement
 - **Phonemiseur pluggable** : eSpeak-NG, Lectura G2P, ou tout objet compatible
 - **Python 3.10+** avec type hints complets (PEP-561)
 - **Licence** : AGPL-3.0 (non commerciale) — licence commerciale sur demande

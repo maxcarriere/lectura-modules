@@ -88,39 +88,6 @@ class ResultatAnalyse:
 
 
 @dataclass
-class MotAnalyse:
-    """Mot avec ses annotations G2P.
-
-    Attributs :
-        token : Token du tokeniseur (ou None si non disponible)
-        phone : IPA du mot (ex: "le", "\u0251\u0303f\u0251\u0303")
-        liaison : Label liaison (none, Lz, Lt, Ln, Lr, Lp)
-        pos : POS tag optionnel
-    """
-    token: object | None = None
-    phone: str = ""
-    liaison: str = "none"
-    pos: str = ""
-    ponctuation_avant: bool = False
-    elision_avant: bool = False
-    est_formule: bool = False
-
-    @property
-    def text(self) -> str:
-        """Texte du mot (depuis le token ou chaine vide)."""
-        if self.token is not None and hasattr(self.token, "text"):
-            return self.token.text
-        return ""
-
-    @property
-    def span(self) -> Span:
-        """Span du mot (depuis le token ou (0,0))."""
-        if self.token is not None and hasattr(self.token, "span"):
-            return self.token.span
-        return (0, 0)
-
-
-@dataclass
 class EventFormule:
     """Un cran de lecture pour une formule."""
     ortho: str
@@ -147,8 +114,12 @@ class OptionsGroupes:
 
 @dataclass
 class GroupeLecture:
-    """Groupe de lecture : mots lies par elision, liaison ou enchainement."""
-    mots: list[MotAnalyse] = field(default_factory=list)
+    """Groupe de lecture : mots lies par elision, liaison ou enchainement.
+
+    Le champ ``mots`` accepte tout objet avec attributs ``text`` et ``phone``
+    (duck typing : MotAnalyseG2P du G2P ou tout equivalent).
+    """
+    mots: list = field(default_factory=list)
     phone_groupe: str = ""
     span: Span = (0, 0)
     jonctions: list[str] = field(default_factory=list)

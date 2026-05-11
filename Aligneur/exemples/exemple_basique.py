@@ -1,6 +1,7 @@
 """Exemple basique — Lectura Syllabeur Complet.
 
-Montre les cas d'usage les plus courants, incluant les groupes de lecture.
+Montre les cas d'usage les plus courants, incluant les groupes de lecture
+construits via le module G2P (lectura_phonemiseur.groupes_lecture).
 """
 
 import sys
@@ -10,16 +11,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from lectura_aligneur import (
-    LecturaSyllabeur, MotAnalyse, OptionsGroupes,
+    LecturaSyllabeur, OptionsGroupes,
     GroupeLecture, LectureFormule, EventFormule,
 )
-
-
-# -- Token factice pour les exemples --
-@dataclass
-class FakeToken:
-    text: str
-    span: tuple
+from lectura_phonemiseur.groupes_lecture import (
+    construire_groupes_lecture,
+    OptionsGroupes as G2POptionsGroupes,
+)
+from lectura_phonemiseur.pipeline_formules import MotAnalyseG2P, ResultatPhraseG2P
 
 
 # -- Creation du syllabeur (eSpeak par defaut) --
@@ -49,39 +48,42 @@ print("\n=== IPA direct ===\n")
 sylls = syl.syllabify_ipa("ɛkstʁaɔʁdinɛʁ")
 print(f"ɛkstʁaɔʁdinɛʁ -> {'.'.join(sylls)}")
 
-# -- Groupes de lecture avec liaison --
+# -- Groupes de lecture avec liaison (via G2P) --
 print("\n=== Groupes de lecture (liaison) ===\n")
 
-mots = [
-    MotAnalyse(token=FakeToken("les", (0, 3)), phone="lez", liaison="Lz"),
-    MotAnalyse(token=FakeToken("enfants", (4, 11)), phone="ɑ̃fɑ̃"),
-    MotAnalyse(token=FakeToken("jouent", (12, 18)), phone="ʒu"),
-]
-r = syl.analyser_complet(mots)
+result_g2p = ResultatPhraseG2P(mots=[
+    MotAnalyseG2P(text="les", phone="lez", liaison="Lz"),
+    MotAnalyseG2P(text="enfants", phone="ɑ̃fɑ̃"),
+    MotAnalyseG2P(text="jouent", phone="ʒu"),
+])
+groupes = construire_groupes_lecture(result_g2p)
+r = syl.analyser_complet(groupes=groupes)
 print(r.format_detail())
 
 # -- Groupes de lecture avec enchainement --
 print("\n=== Groupes de lecture (enchainement) ===\n")
 
-mots = [
-    MotAnalyse(token=FakeToken("avec", (0, 4)), phone="avɛk"),
-    MotAnalyse(token=FakeToken("elle", (5, 9)), phone="ɛl"),
-]
-r = syl.analyser_complet(mots)
+result_g2p = ResultatPhraseG2P(mots=[
+    MotAnalyseG2P(text="avec", phone="avɛk"),
+    MotAnalyseG2P(text="elle", phone="ɛl"),
+])
+groupes = construire_groupes_lecture(result_g2p)
+r = syl.analyser_complet(groupes=groupes)
 print(r.format_detail())
 
 # -- Options : desactiver enchainement --
 print("\n=== Sans enchainement ===\n")
 
-opts = OptionsGroupes(gerer_enchainement=False)
-r = syl.analyser_complet(mots, options=opts)
+opts = G2POptionsGroupes(gerer_enchainement=False)
+groupes = construire_groupes_lecture(result_g2p, opts)
+r = syl.analyser_complet(groupes=groupes)
 print(r.format_detail())
 
 # -- Formule avec lecture pre-calculee --
 print("\n=== Formule avec lecture ===\n")
 
 groupe = GroupeLecture(
-    mots=[MotAnalyse(token=FakeToken("42", (0, 2)), phone="kaʁɑ̃tdø")],
+    mots=[MotAnalyseG2P(text="42", phone="kaʁɑ̃tdø", est_formule=True)],
     phone_groupe="kaʁɑ̃tdø",
     span=(0, 2),
     est_formule=True,
@@ -98,14 +100,14 @@ for s in result_groupes[0].syllabes:
     print(f"  <<{s.ortho}>> /{s.phone}/")
 
 # -- E1 seul : construire des groupes --
-print("\n=== E1 seul ===\n")
+print("\n=== E1 seul (via G2P) ===\n")
 
-mots = [
-    MotAnalyse(token=FakeToken("les", (0, 3)), phone="lez", liaison="Lz"),
-    MotAnalyse(token=FakeToken("enfants", (4, 11)), phone="ɑ̃fɑ̃"),
-    MotAnalyse(token=FakeToken("sont", (12, 16)), phone="sɔ̃"),
-    MotAnalyse(token=FakeToken("arrives", (17, 24)), phone="aʁive"),
-]
-groupes = syl.construire_groupes(mots)
+result_g2p = ResultatPhraseG2P(mots=[
+    MotAnalyseG2P(text="les", phone="lez", liaison="Lz"),
+    MotAnalyseG2P(text="enfants", phone="ɑ̃fɑ̃"),
+    MotAnalyseG2P(text="sont", phone="sɔ̃"),
+    MotAnalyseG2P(text="arrives", phone="aʁive"),
+])
+groupes = construire_groupes_lecture(result_g2p)
 for g in groupes:
     print(f"  <<{g.text}>> /{g.phone_groupe}/ jonctions={g.jonctions}")
