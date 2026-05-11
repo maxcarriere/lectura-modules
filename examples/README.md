@@ -19,7 +19,7 @@ Exemples d'utilisation des modules Lectura NLP pour le traitement du francais.
 pip install lectura-tokeniseur lectura-formules
 
 # Complet (tous les exemples)
-pip install lectura-tokeniseur lectura-formules lectura-g2p[onnx] lectura-aligneur
+pip install lectura-tokeniseur lectura-formules lectura-phonemiseur[onnx] lectura-aligneur
 ```
 
 ## Lancer un exemple

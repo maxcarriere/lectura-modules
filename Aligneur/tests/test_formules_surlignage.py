@@ -14,7 +14,6 @@ from lectura_aligneur import (
     GroupeLecture,
     GroupePhonologique,
     LectureFormule,
-    MotAnalyse,
     Phoneme,
     ResultatGroupe,
     Syllabe,

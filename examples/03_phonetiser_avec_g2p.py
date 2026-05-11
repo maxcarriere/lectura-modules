@@ -1,6 +1,6 @@
 """Exemple 3 — Convertir du texte en phonetique IPA (G2P).
 
-pip install lectura-g2p[onnx]
+pip install lectura-phonemiseur[onnx]
 
 Trois backends disponibles :
   - OnnxInferenceEngine  (~2ms/phrase, necessite onnxruntime)
@@ -11,12 +11,12 @@ Trois backends disponibles :
 from pathlib import Path
 
 # Adapter le chemin vers les modeles
-MODELES = Path(__file__).resolve().parent.parent / "G2P" / "modeles"
+MODELES = Path(__file__).resolve().parent.parent / "Phonemiseur" / "modeles"
 
 # --- Backend ONNX (le plus rapide) ---
 try:
-    from lectura_nlp.inference_onnx import OnnxInferenceEngine
-    from lectura_nlp.tokeniseur import tokeniser
+    from lectura_phonemiseur.inference_onnx import OnnxInferenceEngine
+    from lectura_phonemiseur.tokeniseur import tokeniser
 
     engine = OnnxInferenceEngine(
         str(MODELES / "unifie_int8.onnx"),
@@ -33,12 +33,12 @@ try:
         print(f"  {mot['ortho']:15s} → /{mot['phonemes']}/  (POS: {mot['pos']})")
 
 except ImportError:
-    print("onnxruntime non installe. Essayez : pip install lectura-g2p[onnx]")
+    print("onnxruntime non installe. Essayez : pip install lectura-phonemiseur[onnx]")
 
 # --- Backend Pure Python (zero dependance) ---
 print("\n--- Backend Pure Python ---")
-from lectura_nlp.inference_pure import PureInferenceEngine
-from lectura_nlp.tokeniseur import tokeniser
+from lectura_phonemiseur.inference_pure import PureInferenceEngine
+from lectura_phonemiseur.tokeniseur import tokeniser
 
 engine_pure = PureInferenceEngine(
     str(MODELES / "unifie_weights.json"),

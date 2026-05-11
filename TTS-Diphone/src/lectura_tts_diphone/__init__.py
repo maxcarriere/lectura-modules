@@ -89,10 +89,13 @@ def synthetiser(
     synth_mode: str = "FLUIDE",
     duration_scale: float = 1.0,
     pause_scale: float = 1.0,
-    macro_expressivity: float = 2.0,
-    micro_expressivity: float = 5.0,
+    macro_expressivity: float = 1.0,
+    micro_expressivity: float = 1.0,
     seed: int | None = None,
     prosody_style: str = "auto",
+    ap_cleanup: float = 1.5,
+    formant_sharpening: float = 1.3,
+    vtln_alpha: float = 1.0,
 ) -> Any:
     """Convenience : texte → numpy audio float32 @ 44100 Hz.
 
@@ -109,15 +112,22 @@ def synthetiser(
     pause_scale : float
         Facteur de pauses
     macro_expressivity : float
-        Gestes prosodiques aux ponctuations (0=neutre, 2=normal, 4=exagere)
+        Facteur des gestes prosodiques (0=plat, 1=normal, 2=exagere)
     micro_expressivity : float
-        Micro-variations continues (0=robot, 5=normal, 10=tres expressif)
+        Facteur des micro-variations (0=robot, 1=normal, 2=tres expressif).
+        Actif en mode FLUIDE uniquement.
     seed : int | None
         Graine aleatoire pour la micro-prosodie.
         None = aleatoire, meme seed = meme resultat.
     prosody_style : str
         Style prosodique force. "auto" = determine par la ponctuation.
         Autres : "declaratif", "question", "exclamation", "suspensif", "neutre".
+    ap_cleanup : float
+        Compression AP (1.0=off, 1.5=defaut, max 3.0). Reduit la raucite.
+    formant_sharpening : float
+        Affutage formants (1.0=off, 1.3=defaut, max 2.0). Restaure la nettete.
+    vtln_alpha : float
+        Warping VTLN (0.8=grave, 1.0=neutre, 1.2=aigu).
 
     Returns
     -------
@@ -142,6 +152,9 @@ def synthetiser(
         micro_expressivity=micro_expressivity,
         seed=seed,
         prosody_style=prosody_style,
+        ap_cleanup=ap_cleanup,
+        formant_sharpening=formant_sharpening,
+        vtln_alpha=vtln_alpha,
     )
 
 

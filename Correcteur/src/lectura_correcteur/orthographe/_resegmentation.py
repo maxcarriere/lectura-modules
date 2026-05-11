@@ -190,6 +190,18 @@ def _tenter_fusion(tokens: list[str], lexique: Any) -> list[str]:
     result: list[str] = []
     i = 0
     while i < len(tokens):
+        # Triplet : mot + apostrophe + mot → "aujourd'hui", "quelqu'un"
+        if (
+            i + 2 < len(tokens)
+            and tokens[i + 1] in ("'", "\u2019")
+            and tokens[i].isalpha()
+            and tokens[i + 2].isalpha()
+        ):
+            fusionne_apos = tokens[i] + "'" + tokens[i + 2]
+            if lexique.existe(fusionne_apos) or lexique.existe(fusionne_apos.lower()):
+                result.append(fusionne_apos)
+                i += 3
+                continue
         if i + 1 < len(tokens):
             # d'en → dans : fusionner sauf si suivi d'un infinitif ou expression
             _pair = (tokens[i].lower(), tokens[i + 1].lower())

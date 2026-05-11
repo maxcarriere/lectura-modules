@@ -155,6 +155,29 @@ def _reclasser_par_pos(
     return accents + [s for s, _ in compatibles] + [s for s, _ in autres]
 
 
+def _a_variante_accent_lexique(mot: str, lexique) -> bool:
+    """True si le mot a une variante accentuee dans le lexique.
+
+    Un mot OOV qui n'est que la version sans accent d'un mot connu
+    (etait→était, ecole→école) n'est pas un mot etranger.
+    """
+    low = mot.lower()
+    from lectura_correcteur.orthographe._suggestions import _ACCENT_MAP
+    positions = [i for i, ch in enumerate(low) if ch in _ACCENT_MAP]
+    if not positions:
+        return False
+    # Test mono-position (rapide, couvre la majorite des cas)
+    for p in positions:
+        ch = low[p]
+        for alt in _ACCENT_MAP[ch]:
+            chars = list(low)
+            chars[p] = alt
+            candidate = "".join(chars)
+            if lexique.existe(candidate):
+                return True
+    return False
+
+
 class VerificateurOrthographe:
     """Verification orthographique mot par mot via le lexique."""
 
@@ -272,6 +295,27 @@ class VerificateurOrthographe:
 
             dans_lexique = self._lexique.existe(mot)
 
+            # Entree fantome : freq=0, NP-only, en minuscule, mot long
+            # → traiter comme OOV pour passer par le pipeline de suggestions
+            # (ex: "pissine" NOM PROPRE wikidata → correction en "piscine")
+            # Guard len>=5 : les mots courts (rome, mark) sont souvent des
+            # vrais noms propres ecrits en minuscule.
+            if (
+                dans_lexique
+                and not mot[0].isupper()
+                and len(mot) >= 5
+                and hasattr(self._lexique, "info")
+                and hasattr(self._lexique, "frequence")
+            ):
+                _freq_np = self._lexique.frequence(mot)
+                if _freq_np < 0.01:
+                    _infos_np = self._lexique.info(mot)
+                    if _infos_np and all(
+                        "PROPRE" in (e.get("cgram") or "")
+                        for e in _infos_np
+                    ):
+                        dans_lexique = False
+
             # Tokens avec trait d'union dont les parties sont connues
             # (ex: "vas-tu", "a-t-il") : considerer comme dans le lexique
             if (
@@ -294,6 +338,10 @@ class VerificateurOrthographe:
             # Accent disambiguation: mot in-lexique but rare,
             # and an accent variant is much more frequent
             if dans_lexique and not PUNCT_RE.match(mot):
+                freq_actuelle = (
+                    self._lexique.frequence(mot)
+                    if hasattr(self._lexique, "frequence") else 999.0
+                )
                 # Guard SIGLE / NOM PROPRE: skip accent disambiguation
                 _only_sigle = False
                 _only_np = False
@@ -304,11 +352,9 @@ class VerificateurOrthographe:
                         if all(c == "SIGLE" for c in _cgrams_acc):
                             _only_sigle = True
                         if all("PROPRE" in c for c in _cgrams_acc):
-                            _only_np = True
-                freq_actuelle = (
-                    self._lexique.frequence(mot)
-                    if hasattr(self._lexique, "frequence") else 999.0
-                )
+                            # Exception: freq=0 en minuscule = entree fantome
+                            if freq_actuelle >= 0.1 or mot[0].isupper():
+                                _only_np = True
                 accent_alt = _meilleure_variante_accent(
                     mot, self._lexique, freq_actuelle,
                 )
@@ -475,8 +521,14 @@ class VerificateurOrthographe:
                         if _best_form is not None:
                             # Toujours suggerer meme si ratio insuffisant
                             suggestions_list.append(_best_form)
-                            _ratio_min = 500 if _len > 3 else 1000
-                            _freq_abs_min = 500.0 if _len > 3 else 2000.0
+                            # Seuils adaptatifs selon la frequence du mot original
+                            # freq == 0 = entree fantome/archaique → seuil permissif
+                            if freq_actuelle < 0.01:
+                                _ratio_min = 1
+                                _freq_abs_min = 15.0
+                            else:
+                                _ratio_min = 500 if _len > 3 else 1000
+                                _freq_abs_min = 500.0 if _len > 3 else 2000.0
 
                             if (
                                 _best_freq >= _freq_abs_min
@@ -639,6 +691,34 @@ class VerificateurOrthographe:
                         )
                         top = _best_accent
                         top_low = top.lower()
+                    # Phonetic match: G2P prononciation identique
+                    # (signal fort, autorise auto-correction meme a ed >= 3)
+                    # Scanne toutes les suggestions pour trouver le meilleur
+                    # candidat phonetiquement identique (pas seulement le top).
+                    _is_phone_match = False
+                    if self._g2p is not None and hasattr(self._g2p, "prononcer"):
+                        _ph_mot = self._g2p.prononcer(low)
+                        if _ph_mot:
+                            _best_phone_cand = None
+                            _best_phone_freq = -1.0
+                            for _cand_ph in suggestions_list:
+                                _ph_cand = self._g2p.prononcer(_cand_ph.lower())
+                                if _ph_cand and _ph_cand == _ph_mot:
+                                    _cand_freq = (
+                                        self._lexique.frequence(_cand_ph)
+                                        if hasattr(self._lexique, "frequence")
+                                        else 0.0
+                                    )
+                                    if _cand_freq > _best_phone_freq:
+                                        _best_phone_freq = _cand_freq
+                                        _best_phone_cand = _cand_ph
+                            if (
+                                _best_phone_cand is not None
+                                and _best_phone_freq >= 0.5
+                            ):
+                                _is_phone_match = True
+                                top = _best_phone_cand
+                                top_low = top.lower()
                     # Accent-only variants: auto-correct (very safe)
                     # Guard for very short words (<=3): require high frequency
                     # to avoid false corrections like "the" -> "thé"
@@ -667,6 +747,7 @@ class VerificateurOrthographe:
                         i > 0
                         and not self._lexique.existe(_prev.lower())
                         and not PUNCT_RE.match(_prev)
+                        and not _a_variante_accent_lexique(_prev, self._lexique)
                     )
                     # Guard: prev word exists but ONLY as NOM PROPRE
                     # (e.g., "bob yari", "karl harrer" — prev is a known
@@ -704,6 +785,9 @@ class VerificateurOrthographe:
                             _next_broad.isalpha()
                             and len(_next_broad) > 1
                             and not self._lexique.existe(_next_broad.lower())
+                            and not _a_variante_accent_lexique(
+                                _next_broad, self._lexique,
+                            )
                         ):
                             _oov_foreign_ctx_broad = True
                     # OOV density: count OOV words in ±3 window
@@ -717,6 +801,9 @@ class VerificateurOrthographe:
                             _kd_w.isalpha()
                             and len(_kd_w) > 1
                             and not self._lexique.existe(_kd_w.lower())
+                            and not _a_variante_accent_lexique(
+                                _kd_w, self._lexique,
+                            )
                         ):
                             _oov_density += 1
                     if _est_variante_accent(low, top_low):
@@ -734,6 +821,14 @@ class VerificateurOrthographe:
                     elif _oov_foreign_ctx_broad or _oov_density >= 2:
                         # In foreign/name context, skip all auto-correction
                         pass
+                    elif _is_phone_match:
+                        # Prononciation identique : signal fort, seuil bas
+                        top_freq = (
+                            self._lexique.frequence(top)
+                            if hasattr(self._lexique, "frequence") else 0.0
+                        )
+                        if top_freq >= 0.5:
+                            corrige = top
                     elif _est_doublement_consonne(low, top_low):
                         # Doublement/dedoublement de consonne: lower threshold
                         top_freq = (
@@ -760,7 +855,7 @@ class VerificateurOrthographe:
                         # 4-char words: high FP rate (proper names,
                         # foreign words, abbreviations) — higher thresholds
                         ed = _edit_distance_rapide(low, top_low)
-                        if ed >= 3:
+                        if ed >= 3 and not _is_phone_match:
                             pass
                         else:
                             top_freq = (
@@ -773,7 +868,7 @@ class VerificateurOrthographe:
                     elif len(low) == 5:
                         # 5-char words: moderate threshold
                         ed = _edit_distance_rapide(low, top_low)
-                        if ed >= 3:
+                        if ed >= 3 and not _is_phone_match:
                             pass
                         else:
                             top_freq = (
@@ -790,7 +885,7 @@ class VerificateurOrthographe:
                         )
                         # Higher threshold for edit distance >= 2, skip for >= 3
                         ed = _edit_distance_rapide(low, top_low)
-                        if ed >= 3:
+                        if ed >= 3 and not _is_phone_match:
                             pass  # Too distant, skip auto-correction
                         elif ed == 2:
                             # Mots longs (7+) : seuil plus permissif

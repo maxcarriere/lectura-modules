@@ -368,9 +368,12 @@ def suggerer(
 
     combined_1234 = combined_123 + phase4_g2p
 
-    # --- Phase 5 : distance 2 (dernier recours si aucun candidat) ---
+    # --- Phase 5 : distance 2 (dernier recours) ---
+    # Tourne si aucun candidat OU si les candidats existants sont tous freq < 1
+    # (evite que du bruit G2P/homophones bloque des candidats d2 pertinents)
     valides_d2: list[tuple[str, float]] = []
-    if distance >= 2 and not combined_1234:
+    _has_good_candidate = any(f >= 1.0 for _, f in combined_1234)
+    if distance >= 2 and not _has_good_candidate:
         count = 0
         for c in d1:
             if lexique.existe(c):
@@ -389,15 +392,24 @@ def suggerer(
     # Assembler par priorite :
     #   1. Variantes accent (toujours fiables)
     #   2. d=1 edit hors homophones (other_d1, tries par freq)
-    #   3. G2P phonetiques (tries par freq, signal fort)
+    #   3. G2P phonetiques freq >= 1 (signal fort)
     #   4. Homophones des d=1 (phase 3)
     #   5. d=2 brute-force (tries par freq)
+    #   6. G2P phonetiques freq < 1 (bruit : henaurme, etc.)
+    phase4_good = [(c, f) for c, f in phase4_g2p if f >= 1.0]
+    phase4_junk = [(c, f) for c, f in phase4_g2p if f < 1.0]
+    # Accents freq=0 : entrees fantomes (cocolât, etc.) → demoter apres d=1
+    all_accent = accent_sweep + accent_d1
+    accent_good = [(c, f) for c, f in all_accent if f >= 1.0]
+    accent_junk = [(c, f) for c, f in all_accent if f < 1.0]
     combined = (
-        accent_sweep + accent_d1     # 1. accents
+        accent_good                  # 1. accents (freq >= 1)
         + other_d1                   # 2. d=1 edit
-        + phase4_g2p                 # 3. G2P phonetiques
-        + phase3                     # 4. homophones
-        + valides_d2                 # 5. d=2
+        + accent_junk                # 3. accents junk (freq < 1)
+        + phase4_good                # 4. G2P (freq >= 1)
+        + phase3                     # 5. homophones
+        + valides_d2                 # 6. d=2
+        + phase4_junk                # 7. G2P junk
     )
 
     return [c for c, _ in combined[:max_n]]

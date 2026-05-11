@@ -256,7 +256,7 @@ def creer_adapter_g2p_unifie(
 ) -> G2PUnifieAdapter | None:
     """Factory : cree un G2PUnifieAdapter si les fichiers sont disponibles.
 
-    Tente d'abord d'utiliser le module lectura_nlp installe (qui a
+    Tente d'abord d'utiliser le module lectura_phonemiseur installe (qui a
     use_lex pour le double tagging). Si absent, fallback sur la copie
     locale dans Correcteur/data/g2p_v2/.
 
@@ -265,7 +265,7 @@ def creer_adapter_g2p_unifie(
 
     Args:
         model_dir: Repertoire contenant les fichiers G2P V2.
-            Si None, essaie lectura_nlp puis Correcteur/data/g2p_v2/.
+            Si None, essaie lectura_phonemiseur puis Correcteur/data/g2p_v2/.
     """
     try:
         import onnxruntime  # noqa: F401
@@ -273,15 +273,15 @@ def creer_adapter_g2p_unifie(
         logger.info("onnxruntime non installe — G2P Unifie V2 indisponible")
         return None
 
-    # 1. Essayer lectura_nlp installe (supporte use_lex)
+    # 1. Essayer lectura_phonemiseur installe (supporte use_lex)
     if model_dir is None:
         try:
-            from lectura_nlp import creer_engine
+            from lectura_phonemiseur import creer_engine
             engine = creer_engine(mode="onnx")
-            logger.info("G2P Unifie V2 charge via lectura_nlp")
+            logger.info("G2P Unifie V2 charge via lectura_phonemiseur")
             return G2PUnifieAdapter(engine)
         except Exception:
-            logger.debug("lectura_nlp indisponible, fallback copie locale")
+            logger.debug("lectura_phonemiseur indisponible, fallback copie locale")
 
     # 2. Fallback : copie locale dans data/g2p_v2/
     if model_dir is None:

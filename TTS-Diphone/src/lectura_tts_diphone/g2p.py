@@ -4,7 +4,7 @@ Convertit du texte en groupes prosodiques avec phones IPA.
 
 Backends (ordre de detection) :
   1. LecturaLocalG2P : lecteur_syllabique.Pipeline (Lectura Edition)
-  2. LecturaNlpG2P : lectura_nlp + lectura_tokeniseur (pip install)
+  2. LecturaNlpG2P : lectura_phonemiseur + lectura_tokeniseur (pip install)
   3. LecturaApiG2P : POST /g2p/analyser (urllib, zero deps)
   4. CallableG2P : wraps any callable(text) → list[dict]
 
@@ -151,7 +151,7 @@ class LecturaLocalG2P:
 
 
 class LecturaNlpG2P:
-    """G2P via lectura_nlp + lectura_tokeniseur (modules PyPI standards)."""
+    """G2P via lectura_phonemiseur + lectura_tokeniseur (modules PyPI standards)."""
 
     def __init__(self) -> None:
         self._g2p = None
@@ -159,7 +159,7 @@ class LecturaNlpG2P:
     def _ensure_loaded(self) -> None:
         if self._g2p is not None:
             return
-        from lectura_nlp import creer_engine
+        from lectura_phonemiseur import creer_engine
         self._g2p = creer_engine(mode="auto")
 
     def phonemize(self, text: str) -> list[dict]:
@@ -382,7 +382,7 @@ def auto_detect_g2p(
 
     Cascade :
       1. lecteur_syllabique (Lectura Edition complet)
-      2. lectura_nlp + lectura_tokeniseur (modules PyPI)
+      2. lectura_phonemiseur + lectura_tokeniseur (modules PyPI)
       3. API Lectura (zero deps)
 
     Args:
@@ -404,11 +404,11 @@ def auto_detect_g2p(
         except ImportError:
             pass
 
-        # 2. lectura_nlp + lectura_tokeniseur (modules PyPI)
+        # 2. lectura_phonemiseur + lectura_tokeniseur (modules PyPI)
         try:
-            import lectura_nlp  # noqa: F401
+            import lectura_phonemiseur  # noqa: F401
             import lectura_tokeniseur  # noqa: F401
-            log.debug("G2P disponible (lectura_nlp + lectura_tokeniseur)")
+            log.debug("G2P disponible (lectura_phonemiseur + lectura_tokeniseur)")
             return LecturaNlpG2P()
         except ImportError:
             if preference == "local":

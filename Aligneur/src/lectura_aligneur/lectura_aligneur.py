@@ -3,10 +3,12 @@
 Fichier unique, autonome, zero dependance Python.
 Phonemiseur pluggable avec backend eSpeak-NG par defaut.
 
-Architecture en 3 couches :
+Architecture en 2 couches :
     Alignement : correspondance lettre-par-lettre orthographe <-> IPA (DFS)
-    E1 : Groupes de lecture (elisions, liaisons, enchainements)
     E2 : Syllabation sur les groupes avec decomposition attaque/noyau/coda
+
+Note : La construction des groupes de lecture (E1) est desormais dans
+le module G2P (lectura_phonemiseur.groupes_lecture).
 
 Usage rapide :
     from lectura_aligneur import LecturaSyllabeur
@@ -16,14 +18,11 @@ Usage rapide :
     for s in result.syllabes:
         print(f"{s.ortho} -> /{s.phone}/")
 
-Usage complet (avec groupes de lecture) :
-    from lectura_aligneur import LecturaSyllabeur, MotAnalyse, OptionsGroupes
+Usage complet (avec groupes de lecture du G2P) :
+    from lectura_phonemiseur import construire_groupes_lecture, GroupeLecture
 
-    mots = [
-        MotAnalyse(token=..., phone="lez", liaison="Lz"),
-        MotAnalyse(token=..., phone="ɑ̃fɑ̃", liaison="none"),
-    ]
-    r = syl.analyser_complet(mots)
+    groupes = construire_groupes_lecture(result_g2p)
+    r = syl.analyser_complet(groupes=groupes)
     print(f"{r.nb_groupes} groupes, {r.nb_syllabes} syllabes")
 
 IPA direct (sans phonémiseur) :
@@ -50,7 +49,6 @@ from lectura_aligneur._chargeur import (
     alphabet_ipa as _get_alphabet_ipa,
     phone_to_graphemes as _get_phone_to_graphemes,
     espeak_to_ipa as _get_espeak_to_ipa,
-    liaison_consonnes as _get_liaison_consonnes,
     lettres_muettes_possibles as _get_lettres_muettes_possibles,
     voyelles as _get_voyelles,
     consonnes as _get_consonnes,
@@ -64,7 +62,6 @@ from lectura_aligneur._types import (  # noqa: F401
     GroupePhonologique,
     Syllabe,
     ResultatAnalyse,
-    MotAnalyse,
     EventFormule,
     LectureFormule,
     OptionsGroupes,
@@ -841,168 +838,6 @@ def _build_syllabes(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# E1 — Groupes de lecture
-# ══════════════════════════════════════════════════════════════════════════════
-
-_LIAISON_CONSONNES = _get_liaison_consonnes
-
-
-def _phone_starts_with_vowel(phone: str) -> bool:
-    """Vrai si la chaîne IPA commence par une voyelle."""
-    if not phone:
-        return False
-    phonemes = iter_phonemes(phone)
-    if not phonemes:
-        return False
-    return est_voyelle(phonemes[0])
-
-
-def _phone_ends_with_consonne(phone: str) -> bool:
-    """Vrai si la chaîne IPA finit par une consonne."""
-    if not phone:
-        return False
-    phonemes = iter_phonemes(phone)
-    if not phonemes:
-        return False
-    return est_consonne(phonemes[-1])
-
-
-def _phone_ends_with_schwa(phone: str) -> bool:
-    """Vrai si la chaîne IPA finit par un schwa (ə)."""
-    if not phone:
-        return False
-    phonemes = iter_phonemes(phone)
-    return phonemes[-1] == "ə" if phonemes else False
-
-
-# ── Schwas pédagogiques ──────────────────────────────────────────────────────
-
-# Ortho finit par e/es (sauf é/è/ê/ë)
-_RE_E_MUET = re.compile(r"(?<![éèêë])es?$", re.IGNORECASE)
-# Verbe finit par -ent (3e pers. pluriel)
-_RE_VERB_ENT = re.compile(r"ent$", re.IGNORECASE)
-
-
-def ajouter_schwa_final(ortho: str, pos: str, phone: str) -> str:
-    """Ajoute un ə pédagogique final si le mot a un e-muet non prononcé.
-
-    Conditions :
-    - ortho finit par e/es (sauf é/è/ê/ë) OU ortho finit par -ent avec POS=VER
-    - ET l'IPA ne finit pas déjà par une voyelle
-    """
-    if not phone or not ortho:
-        return phone
-
-    has_e_muet = bool(_RE_E_MUET.search(ortho))
-    has_verb_ent = (
-        bool(_RE_VERB_ENT.search(ortho))
-        and isinstance(pos, str)
-        and pos.upper().startswith("VER")
-    )
-
-    if not (has_e_muet or has_verb_ent):
-        return phone
-
-    phonemes = iter_phonemes(phone)
-    if phonemes and est_voyelle(phonemes[-1]):
-        return phone
-
-    return phone + "ə"
-
-
-def construire_groupes(
-    mots: list[MotAnalyse],
-    options: OptionsGroupes | None = None,
-) -> list[GroupeLecture]:
-    """E1 — Construit les groupes de lecture depuis une liste de mots analysés.
-
-    Parcourt les mots séquentiellement et les regroupe selon :
-    - Élisions (l'enfant → 1 groupe)
-    - Liaisons (les‿enfants → 1 groupe)
-    - Enchaînements (avec‿elle → 1 groupe)
-    """
-    if options is None:
-        options = OptionsGroupes()
-
-    if not mots:
-        return []
-
-    groupes: list[GroupeLecture] = []
-    current_mots: list[MotAnalyse] = [mots[0]]
-    current_phones: list[str] = [mots[0].phone]
-    current_jonctions: list[str] = []
-
-    for i in range(1, len(mots)):
-        mot_courant = mots[i]
-        mot_precedent = mots[i - 1]
-
-        # La ponctuation ou une formule interdit toute fusion entre les mots
-        if mot_courant.ponctuation_avant or mot_courant.est_formule or mot_precedent.est_formule:
-            pass  # tombe dans le « pas de fusion » ci-dessous
-        else:
-            # Élision : apostrophe entre les deux mots (m'appelle, l'enfant)
-            if options.gerer_elisions and (
-                mot_precedent.text.endswith("'") or mot_courant.elision_avant
-            ):
-                current_mots.append(mot_courant)
-                current_phones.append(mot_courant.phone)
-                current_jonctions.append("elision")
-                continue
-
-            # Liaison : mot précédent a un label de liaison et mot courant commence par voyelle
-            if options.gerer_liaisons and mot_precedent.liaison != "none":
-                if _phone_starts_with_vowel(mot_courant.phone):
-                    liaison_consonne = _LIAISON_CONSONNES().get(mot_precedent.liaison, "")
-                    if liaison_consonne:
-                        current_mots.append(mot_courant)
-                        current_phones.append(mot_courant.phone)
-                        current_jonctions.append(f"liaison_{liaison_consonne}")
-                        continue
-
-            # Enchaînement : consonne finale de mot1 + voyelle initiale de mot2
-            if options.gerer_enchainement:
-                if (_phone_ends_with_consonne(mot_precedent.phone) and
-                        _phone_starts_with_vowel(mot_courant.phone)):
-                    current_mots.append(mot_courant)
-                    current_phones.append(mot_courant.phone)
-                    current_jonctions.append("enchainement")
-                    continue
-
-        # Pas de fusion → fermer le groupe courant et en ouvrir un nouveau
-        phone_groupe = "".join(current_phones)
-        span_start = current_mots[0].span[0] if current_mots else 0
-        span_end = current_mots[-1].span[1] if current_mots else 0
-        is_formule = any(m.est_formule for m in current_mots)
-        groupes.append(GroupeLecture(
-            mots=current_mots,
-            phone_groupe=phone_groupe,
-            span=(span_start, span_end),
-            jonctions=current_jonctions,
-            est_formule=is_formule,
-        ))
-        current_mots = [mot_courant]
-        current_phones = [mot_courant.phone]
-        current_jonctions = []
-
-    # Fermer le dernier groupe
-    if current_mots:
-        phone_groupe = "".join(current_phones)
-        span_start = current_mots[0].span[0] if current_mots else 0
-        span_end = current_mots[-1].span[1] if current_mots else 0
-
-        is_formule = any(m.est_formule for m in current_mots)
-        groupes.append(GroupeLecture(
-            mots=current_mots,
-            phone_groupe=phone_groupe,
-            span=(span_start, span_end),
-            jonctions=current_jonctions,
-            est_formule=is_formule,
-        ))
-
-    return groupes
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # Conversion G2P → Syllabeur
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1116,7 +951,7 @@ def syllabifier_groupes(
         # Pour l'alignement, retirer les espaces si le groupe est uni
         if len(groupe.mots) == 1:
             ortho = groupe.mots[0].text
-            word_offset = groupe.mots[0].span[0]
+            word_offset = getattr(groupe.mots[0], "span", (0, 0))[0]
             dec_ph, dec_gr, dec_spans, ok = _aligner(ortho, phone)
         else:
             # Multi-mots : concaténer sans espaces pour l'alignement IPA
@@ -1136,8 +971,9 @@ def syllabifier_groupes(
             # (le concat "dansunarbre" ignore les espaces inter-mots)
             _c2a: list[int] = []
             for m in groupe.mots:
+                m_span = getattr(m, "span", (0, 0))
                 for ci in range(len(m.text)):
-                    _c2a.append(m.span[0] + ci)
+                    _c2a.append(m_span[0] + ci)
             n = len(_c2a)
             dec_spans = [
                 (_c2a[s] if s < n else (_c2a[-1] + 1 if n else s),
@@ -1238,20 +1074,28 @@ class LecturaSyllabeur:
 
     def analyser_complet(
         self,
-        mots: list[MotAnalyse],
+        mots: list | None = None,
         lectures_formules: dict[int, LectureFormule] | None = None,
         options: OptionsGroupes | None = None,
+        *,
+        groupes: list[GroupeLecture] | None = None,
     ) -> ResultatSyllabation:
-        """Analyse complète E1 + E2 : groupes de lecture puis syllabation.
+        """Analyse complète : groupes de lecture puis syllabation.
 
         Parameters
         ----------
-        mots : list[MotAnalyse]
-            Liste de mots avec annotations G2P (phone, liaison, etc.)
+        mots : list | None
+            Liste de mots (duck-typed : .text, .phone, .liaison, etc.).
+            Utilise pour construire les groupes via le G2P.
+            Ignore si ``groupes`` est fourni.
         lectures_formules : dict[int, LectureFormule] | None
-            Lectures pré-calculées pour les formules (index groupe -> lecture)
+            Lectures pre-calculees pour les formules (index groupe -> lecture).
         options : OptionsGroupes | None
-            Options de regroupement (élisions, liaisons, enchaînements, schwas)
+            Options de regroupement (elisions, liaisons, enchainements, schwas).
+        groupes : list[GroupeLecture] | None
+            Groupes de lecture pre-construits (sortie de
+            ``lectura_phonemiseur.construire_groupes_lecture``). Si fourni,
+            ``mots`` et ``options`` sont ignores pour la phase E1.
 
         Returns
         -------
@@ -1260,13 +1104,23 @@ class LecturaSyllabeur:
         if options is None:
             options = OptionsGroupes()
 
-        logger.debug("analyser_complet() called with %s mots", len(mots))
-
-        # E1 : construire les groupes de lecture
-        groupes = construire_groupes(mots, options)
+        if groupes is not None:
+            # Groupes pre-construits (pipeline G2P → Aligneur)
+            logger.debug("analyser_complet() received %s pre-built groupes", len(groupes))
+            # Reconstituer le texte depuis les groupes
+            all_mots = []
+            for g in groupes:
+                all_mots.extend(g.mots)
+            texte = " ".join(getattr(m, "text", "") for m in all_mots)
+        elif mots is not None:
+            logger.debug("analyser_complet() called with %s mots", len(mots))
+            # Construire les groupes via le G2P
+            groupes = self.construire_groupes(mots, options)
+            texte = " ".join(getattr(m, "text", "") for m in mots)
+        else:
+            raise ValueError("analyser_complet() requiert 'mots' ou 'groupes'")
 
         # Remap lectures_formules : mot index → group index
-        # (construire_groupes regroupe les mots, décalant les indices)
         group_lectures: dict[int, LectureFormule] = {}
         if lectures_formules:
             mot_idx = 0
@@ -1282,9 +1136,6 @@ class LecturaSyllabeur:
             groupes, group_lectures,
         )
 
-        # Reconstituer le texte original
-        texte = " ".join(m.text for m in mots)
-
         result = ResultatSyllabation(
             texte_original=texte,
             groupes=resultats_groupes,
@@ -1296,15 +1147,17 @@ class LecturaSyllabeur:
 
     def construire_groupes(
         self,
-        mots: list[MotAnalyse],
+        mots: list,
         options: OptionsGroupes | None = None,
     ) -> list[GroupeLecture]:
-        """E1 seul : construit les groupes de lecture.
+        """E1 : construit les groupes de lecture via le module G2P.
+
+        Delegue a ``lectura_phonemiseur.construire_groupes_lecture`` si disponible.
 
         Parameters
         ----------
-        mots : list[MotAnalyse]
-            Liste de mots avec annotations G2P.
+        mots : list
+            Liste de mots (duck-typed : .text, .phone, .liaison).
         options : OptionsGroupes | None
             Options de regroupement.
 
@@ -1312,7 +1165,30 @@ class LecturaSyllabeur:
         -------
         list[GroupeLecture]
         """
-        return construire_groupes(mots, options)
+        try:
+            from lectura_phonemiseur.groupes_lecture import construire_groupes_lecture
+            from lectura_phonemiseur.groupes_lecture import OptionsGroupes as G2POptionsGroupes
+        except ImportError:
+            raise RuntimeError(
+                "construire_groupes() requiert le module lectura_phonemiseur. "
+                "Installez-le : pip install lectura-phonemiseur"
+            )
+
+        # Creer un objet result-like avec la liste de mots
+        class _ResultProxy:
+            def __init__(self, mots_list):
+                self.mots = mots_list
+
+        g2p_options = None
+        if options is not None:
+            g2p_options = G2POptionsGroupes(
+                gerer_elisions=options.gerer_elisions,
+                gerer_liaisons=options.gerer_liaisons,
+                gerer_enchainement=options.gerer_enchainement,
+                ajouter_schwas_finaux=options.ajouter_schwas_finaux,
+            )
+
+        return construire_groupes_lecture(_ResultProxy(mots), g2p_options)
 
     def syllabifier_groupes(
         self,
