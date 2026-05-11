@@ -159,16 +159,15 @@ def test_sujet_distant_au(mock_lexique):
 # --- Regle 8 : Coherence DET↔NOM en genre ---
 
 def test_le_petit_fille(mock_lexique):
-    """'le petit fille' -> DET le/la excluded from Rule 8 (too many FP).
-    Pre-nominal ADJ not corrected (Rule 7 is post-nominal only)."""
+    """'le petit fille' -> 'la petite fille' (NOM unambigu fem, DET+ADJ corriges)."""
     mots = ["le", "petit", "fille"]
     pos = ["ART:def", "ADJ", "NOM"]
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
-    # le/la excluded from DET genre correction (Rule 8)
-    assert result[0] == "le"
-    # Pre-nominal ADJ not feminized (Rule 7 is post-nominal only)
-    assert result[1] == "petit"
+    # NOM "fille" unambigu fem → flip DET + feminiser ADJ
+    assert result[0] == "la"
+    assert result[1] == "petite"
     assert result[2] == "fille"
+    assert len(corrections) >= 2
 
 
 def test_un_belle_maison(mock_lexique):
@@ -183,14 +182,50 @@ def test_un_belle_maison(mock_lexique):
 
 
 def test_le_grosse_chat(mock_lexique):
-    """'le grosse chat' -> le/la excluded from Rule 8, ADJ not de-feminized."""
+    """'le grosse chat' -> 'le gros chat' (DET+NOM masc, ADJ de-feminisee)."""
     mots = ["le", "grosse", "chat"]
     pos = ["ART:def", "ADJ", "NOM"]
     result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    # DET+NOM masc agree → de-feminiser l'ADJ
     assert result[0] == "le"
-    # le/la excluded from Rule 8, so ADJ stays as-is
-    assert result[1] == "grosse"
+    assert result[1] == "gros"
     assert result[2] == "chat"
+    assert len(corrections) >= 1
+
+
+def test_le_grosse_enfant_ambigu(mock_lexique):
+    """'le grosse enfant' with ambiguous NOM (m+f) → correct ADJ only.
+    DET 'le' signals masc intent, NOM accepts masc → ADJ aligns to masc."""
+    from tests.conftest import MockLexique
+    formes = {
+        "le": [{"ortho": "le", "cgram": "ART:def", "freq": 890, "genre": "m", "nombre": "s"}],
+        "la": [{"ortho": "la", "cgram": "ART:def", "freq": 720, "genre": "f", "nombre": "s"}],
+        "grosse": [{"ortho": "grosse", "cgram": "ADJ", "freq": 20, "genre": "f", "nombre": "s"}],
+        "gros": [{"ortho": "gros", "cgram": "ADJ", "freq": 30, "genre": "m", "nombre": "s"}],
+        "enfant": [
+            {"ortho": "enfant", "cgram": "NOM", "freq": 30, "genre": "m", "nombre": "s"},
+            {"ortho": "enfant", "cgram": "NOM", "freq": 25, "genre": "f", "nombre": "s"},
+        ],
+    }
+    lex = MockLexique(formes=formes)
+    mots = ["le", "grosse", "enfant"]
+    pos = ["ART:def", "ADJ", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, lex)
+    # NOM ambigu (m+f) but DET masc → Fix 1: ADJ aligns to DET+NOM(m)
+    assert result[0] == "le"
+    assert result[1] == "gros"
+    assert result[2] == "enfant"
+    assert len(corrections) >= 1
+
+
+def test_le_fille_no_adj_still_excluded(mock_lexique):
+    """'le fille' (DET+NOM, no ADJ) → no correction (le/la guard still active)."""
+    mots = ["le", "fille"]
+    pos = ["ART:def", "NOM"]
+    result, corrections = verifier_accords(mots, pos, {}, mock_lexique)
+    # Without ADJ intercale, le/la exclusion still applies (no Fix 1/2)
+    assert result[0] == "le"
+    assert result[1] == "fille"
 
 
 # --- Pluriels irreguliers (-al -> -aux, -eau -> -eaux) ---

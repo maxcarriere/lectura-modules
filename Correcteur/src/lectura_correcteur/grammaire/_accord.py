@@ -173,9 +173,117 @@ def verifier_accords(
                         nom_idx = i + 2
 
             if nom_idx is not None:
-                # Guard: skip le/la → la/le (trop de FP avec noms ambigus)
+                # Guard: le/la — ne pas flipper le DET sauf si NOM unambigu
+                # et ADJ intercale confirme le desaccord
                 if curr_low in _DET_GENRE_EXCLUS:
-                    pass  # Skip Rule 8 for le/la
+                    if adj_idx is not None:
+                        nom_infos_ex = lexique.info(result[nom_idx])
+                        nom_only_ex = [
+                            e for e in nom_infos_ex
+                            if e.get("cgram", "").startswith("NOM")
+                        ]
+                        if not nom_only_ex:
+                            nom_only_ex = nom_infos_ex
+                        nom_genres_ex = {
+                            e.get("genre") for e in nom_only_ex
+                            if e.get("genre")
+                        }
+                        det_genre = (
+                            "m" if curr_low in SING_MASC_DET else "f"
+                        )
+                        adj_infos_ex = lexique.info(result[adj_idx])
+                        adj_genred_ex = [
+                            e for e in adj_infos_ex if e.get("genre")
+                        ]
+                        adj_genre_ex = {
+                            e.get("genre") for e in adj_genred_ex
+                        } if adj_genred_ex else set()
+
+                        # Fix 1: DET+NOM agree, ADJ disagrees → correct ADJ
+                        if (
+                            det_genre in nom_genres_ex
+                            and adj_genre_ex
+                            and det_genre not in adj_genre_ex
+                        ):
+                            target = det_genre
+                            gen_fn = (
+                                generer_candidats_masculin
+                                if target == "m"
+                                else generer_candidats_feminin
+                            )
+                            for cand in gen_fn(result[adj_idx]):
+                                c_infos = lexique.info(cand)
+                                if c_infos and any(
+                                    e.get("genre") == target
+                                    for e in c_infos
+                                ):
+                                    ancien = result[adj_idx]
+                                    result[adj_idx] = cand
+                                    corrections.append(Correction(
+                                        index=adj_idx,
+                                        original=ancien,
+                                        corrige=cand,
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="accord.genre_adj",
+                                        explication=(
+                                            f"ADJ→{target} "
+                                            f"(DET+NOM '{result[nom_idx]}' "
+                                            f"sont {'masculins' if target == 'm' else 'feminins'})"
+                                        ),
+                                    ))
+                                    break
+
+                        # Fix 2: NOM unambigu, DET+ADJ both wrong → flip DET + correct ADJ
+                        elif (
+                            len(nom_genres_ex) == 1
+                            and det_genre not in nom_genres_ex
+                        ):
+                            nom_g = next(iter(nom_genres_ex))
+                            # Flip DET
+                            new_det = DET_GENRE_MAP.get(curr_low)
+                            if new_det:
+                                ancien_det = result[i]
+                                result[i] = transferer_casse(curr, new_det)
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien_det,
+                                    corrige=result[i],
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_det",
+                                    explication=(
+                                        f"DET {det_genre}→{nom_g} "
+                                        f"(NOM '{result[nom_idx]}' unambigu)"
+                                    ),
+                                ))
+                                curr = result[i]
+                                curr_low = curr.lower()
+                            # Correct ADJ if also wrong genre
+                            if adj_genre_ex and nom_g not in adj_genre_ex:
+                                gen_fn2 = (
+                                    generer_candidats_masculin
+                                    if nom_g == "m"
+                                    else generer_candidats_feminin
+                                )
+                                for cand in gen_fn2(result[adj_idx]):
+                                    c_infos = lexique.info(cand)
+                                    if c_infos and any(
+                                        e.get("genre") == nom_g
+                                        for e in c_infos
+                                    ):
+                                        ancien_adj = result[adj_idx]
+                                        result[adj_idx] = cand
+                                        corrections.append(Correction(
+                                            index=adj_idx,
+                                            original=ancien_adj,
+                                            corrige=cand,
+                                            type_correction=TypeCorrection.GRAMMAIRE,
+                                            regle="accord.genre_adj",
+                                            explication=(
+                                                f"ADJ→{nom_g} "
+                                                f"(NOM '{result[nom_idx]}' unambigu)"
+                                            ),
+                                        ))
+                                        break
                 else:
                     nom_infos = lexique.info(result[nom_idx])
                     # Only consider NOM entries for genre (ignore ADJ homographs)
