@@ -455,10 +455,11 @@ class DiphoneEngine:
                         # Penultimate stays low to create contrast
                         syl_targets_st[-2] = min(syl_targets_st[-2], -0.5 * k)
                 elif is_exclamation:
-                    # Exclamation: high attack, fall on last
+                    # Exclamation: high attack, moderate fall on last
+                    # (base_f0 already boosted +20% in synthesize_groups)
                     if n_syl >= 2:
-                        syl_targets_st[0] = max(syl_targets_st[0], 2.0 * k)
-                    syl_targets_st[-1] = -3.0 * k
+                        syl_targets_st[0] = max(syl_targets_st[0], 1.5 * k)
+                    syl_targets_st[-1] = -2.0 * k
                 elif is_suspensive:
                     # Suspensive: mid-level final (no strong fall)
                     syl_targets_st[-1] = -0.5 * k
@@ -478,10 +479,11 @@ class DiphoneEngine:
             min_st = min(syl_targets_st)
             fb = ap_base * (2.0 ** (min_st / 12.0))
 
-            # Build accent commands for each syllable above the floor
-            # Duration = 2 phones (~syllable), onset so that peak (offset)
-            # coincides with the vowel position.  Amplitude compensated
-            # so that the Ga peak * aa matches the target exactly.
+            # Build accent commands for each syllable above the floor.
+            # Duration = 2 phones (~syllable).  Onset placed so that
+            # offset (= Ga peak) falls on the vowel — negative onset
+            # allowed (command "started before the AP").
+            # Amplitude compensated so Ga_peak * aa == target.
             accent_cmds: list[tuple[float, float, float]] = []
             cmd_dur = 2.0 * _PHONE_DUR_S       # ~160ms, full syllable
             peak_ga = _fujisaki_accent_peak(cmd_dur, _FUJI_BETA)
@@ -489,12 +491,11 @@ class DiphoneEngine:
                 delta_st = syl_targets_st[si] - min_st
                 if delta_st < 0.01:
                     continue
-                # Amplitude: compensated so peak reaches target Hz
                 aa_raw = delta_st * math.log(2.0) / 12.0
                 aa = aa_raw / max(peak_ga, 0.1)
-                # Onset placed so offset (=peak) falls on the vowel
                 t_vowel = (vp - ap_start) * _PHONE_DUR_S
-                t_onset = max(0.0, t_vowel - cmd_dur)
+                # Allow negative onset so peak always lands on vowel
+                t_onset = t_vowel - cmd_dur
                 accent_cmds.append((t_onset, cmd_dur, aa))
 
             # Optional phrase command for long APs (4+ syllables)
@@ -512,21 +513,24 @@ class DiphoneEngine:
                 f0s[j] = contour_hz[idx]
 
         # Cross-AP boundary blending: smooth the transition between
-        # consecutive APs over ±1 phone to avoid discontinuities.
+        # consecutive APs over a ±2 phone window to avoid F0 jumps.
         for ai in range(len(aps) - 1):
-            _, end_a = aps[ai]
-            start_b, _ = aps[ai + 1]
-            # end_a == start_b (APs are contiguous)
-            # Blend zone: last phone of AP_a and first phone of AP_b
-            left = end_a - 1   # last phone of AP_a
-            right = start_b    # first phone of AP_b
-            if left >= 0 and right < n:
-                avg = (f0s[left] + f0s[right]) / 2.0
-                f0s[left] = 0.5 * f0s[left] + 0.5 * avg
-                f0s[right] = 0.5 * f0s[right] + 0.5 * avg
-                # Also soften the second phone of the new AP if it exists
-                if right + 1 < n and right + 1 < (aps[ai + 1][1]):
-                    f0s[right + 1] = 0.7 * f0s[right + 1] + 0.3 * avg
+            end_a = aps[ai][1]       # first phone of next AP
+            start_b = aps[ai + 1][0]
+            # Boundary value: average of the two meeting phones
+            left = end_a - 1
+            right = start_b
+            if left < 0 or right >= n:
+                continue
+            avg = (f0s[left] + f0s[right]) / 2.0
+            # Blend weights: boundary phones 50%, ±1 phone 25%
+            f0s[left] = 0.5 * f0s[left] + 0.5 * avg
+            f0s[right] = 0.5 * f0s[right] + 0.5 * avg
+            # ±1: soften neighbours
+            if left - 1 >= aps[ai][0]:
+                f0s[left - 1] = 0.75 * f0s[left - 1] + 0.25 * avg
+            if right + 1 < aps[ai + 1][1]:
+                f0s[right + 1] = 0.75 * f0s[right + 1] + 0.25 * avg
 
         return f0s
 
@@ -739,6 +743,10 @@ class DiphoneEngine:
 
             if gi < n_groups - 1:
                 pause_ms = self._get_pause_ms(boundary) * pause_scale
+                # Progressive lengthening: pauses grow slightly later
+                # in the utterance (natural phrasing deceleration)
+                phrase_pos = gi / max(1, n_groups - 1)
+                pause_ms *= 1.0 + 0.15 * phrase_pos * macro_expressivity
                 n_silence = int(pause_ms / 1000.0 * SIWIS_SR)
                 if n_silence > 0:
                     audio_parts.append(np.zeros(n_silence, dtype=np.float32))
@@ -857,6 +865,41 @@ class DiphoneEngine:
                 phone_durations = [max(20.0, d * (1.0 + j))
                                    for d, j in zip(phone_durations, dur_jitter)]
             diphone_durations = self._phone_durs_to_diphone_durs(chain, phone_durations)
+
+        # ── Prosodic rhythm modulation ──
+        # Natural speech compresses AP-medial syllables and lengthens
+        # boundary syllables.  Depth scaled by macro_k.
+        if mode == SynthMode.FLUIDE and n > 2:
+            rhythm = [1.0] * n
+            depth = 0.15 * macro_k  # 0 = flat, 0.15 = normal, 0.30 = expressive
+            for ap_start, ap_end in aps:
+                ap_len = ap_end - ap_start
+                if ap_len < 3:
+                    continue
+                for j in range(ap_start, ap_end):
+                    pos = (j - ap_start) / max(1, ap_len - 1)
+                    # Quadratic U-shape: 1.0 at edges, (1-depth) at center
+                    rhythm[j] = 1.0 - depth * (1.0 - (2.0 * pos - 1.0) ** 2)
+                    # Schwa: naturally shorter
+                    if phones[j] == "\u0259":          # ə
+                        rhythm[j] *= 0.80
+                    # AP-final accent: slightly longer
+                    if j in accent_positions:
+                        rhythm[j] *= 1.0 + 0.1 * macro_k
+
+            # Apply per-phone rhythm to diphone durations
+            for di_idx, di_key in enumerate(chain):
+                if di_key.startswith("#-"):
+                    factor = rhythm[0]
+                elif di_key.endswith("-#"):
+                    factor = rhythm[-1]
+                else:
+                    a_idx = di_idx - 1
+                    b_idx = di_idx
+                    fa = rhythm[a_idx] if a_idx < n else 1.0
+                    fb = rhythm[b_idx] if b_idx < n else 1.0
+                    factor = (fa + fb) / 2.0
+                diphone_durations[di_idx] *= factor
 
         # Facteur de base pour vitesse naturelle + facteur utilisateur
         rate = _BASE_RATE * duration_scale
