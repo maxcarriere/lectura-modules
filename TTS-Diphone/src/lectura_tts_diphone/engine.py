@@ -9,6 +9,7 @@ Modes : FLUIDE, MOT_A_MOT, SYLLABES
 from __future__ import annotations
 
 import logging
+import math
 import pickle
 import time
 from enum import Enum
@@ -17,10 +18,12 @@ from pathlib import Path
 import numpy as np
 
 from lectura_tts_diphone._compression import load_compressed
+from lectura_tts_diphone._fujisaki import generate_contour as _fujisaki_contour
 from lectura_tts_diphone._world import (
     FRAME_PERIOD, OVERLAP_FRAMES, SIWIS_SR,
-    compress_aperiodicity, concat_diphones, ensure_full_spectrum,
-    sharpen_formants, stretch_params, synthesize, warp_vtln,
+    apply_timbre, compress_aperiodicity, concat_diphones,
+    ensure_full_spectrum, sharpen_formants, stretch_params, synthesize,
+    warp_vtln,
 )
 
 log = logging.getLogger(__name__)
@@ -93,7 +96,6 @@ class DiphoneEngine:
         self.diphones: dict[str, dict] = {}
         self.diphone_stats: dict[str, dict] = {}
         self.pause_stats: dict[str, dict] = {}
-        self._postfilter = None
         self.loaded = False
 
     def load(self, models_dir: str | Path | None = None) -> None:
@@ -158,17 +160,6 @@ class DiphoneEngine:
             self.diphone_stats = stats_data.get("diphone_stats", {})
             self.pause_stats = stats_data.get("pause_stats", {})
             log.info("Charge stats corpus: %d diphones", len(self.diphone_stats))
-
-        # Charger le post-filtre spectral (optionnel)
-        postfilter_path = resolved / "sp_postfilter.onnx"
-        if postfilter_path.exists():
-            try:
-                from lectura_tts_diphone._postfilter import SPPostFilter
-                self._postfilter = SPPostFilter(postfilter_path)
-            except ImportError:
-                log.debug("onnxruntime non disponible, post-filtre desactive")
-            except Exception:
-                log.warning("Erreur chargement post-filtre", exc_info=True)
 
         self.loaded = True
 
@@ -473,37 +464,44 @@ class DiphoneEngine:
                     if n_syl >= 2:
                         syl_targets_st[-2] = min(syl_targets_st[-2], -0.5 * k)
 
-            # Map syllable targets to phone positions
-            for j in range(ap_start, ap_end):
-                base_ch = phones[j][0] if phones[j] else ""
-                is_vowel = base_ch in _VOWELS
+            # Map syllable targets to phone positions via Fujisaki model
+            # Estimate temporal positions (~80ms per phone)
+            _PHONE_DUR_S = 0.08
+            ap_len = ap_end - ap_start
+            phone_times = [i * _PHONE_DUR_S for i in range(ap_len)]
 
-                if is_vowel and j in vowel_positions:
-                    si = vowel_positions.index(j)
-                    st = syl_targets_st[si]
-                    f0s[j] = cls._st_to_hz(ap_base, st)
-                else:
-                    # Consonant: interpolate from surrounding vowels
-                    prev_vi = None
-                    next_vi = None
-                    for vi_idx, vp in enumerate(vowel_positions):
-                        if vp <= j:
-                            prev_vi = vi_idx
-                        if vp > j and next_vi is None:
-                            next_vi = vi_idx
-                    if prev_vi is not None and next_vi is not None:
-                        vp_prev = vowel_positions[prev_vi]
-                        vp_next = vowel_positions[next_vi]
-                        t = (j - vp_prev) / max(1, vp_next - vp_prev)
-                        st = (syl_targets_st[prev_vi] * (1 - t)
-                              + syl_targets_st[next_vi] * t)
-                    elif next_vi is not None:
-                        st = syl_targets_st[next_vi]
-                    elif prev_vi is not None:
-                        st = syl_targets_st[prev_vi]
-                    else:
-                        st = 0.0
-                    f0s[j] = cls._st_to_hz(ap_base, st)
+            # Fb = ap_base shifted to the lowest target in this AP
+            min_st = min(syl_targets_st)
+            fb = ap_base * (2.0 ** (min_st / 12.0))
+
+            # Build accent commands for each syllable above the floor
+            accent_cmds: list[tuple[float, float, float]] = []
+            for si, vp in enumerate(vowel_positions):
+                delta_st = syl_targets_st[si] - min_st
+                if delta_st < 0.01:
+                    continue
+                # Amplitude: convert semitones to ln-scale
+                aa = delta_st * math.log(2.0) / 12.0
+                # Time: centre of the vowel relative to AP start
+                t_centre = (vp - ap_start) * _PHONE_DUR_S
+                dur = _PHONE_DUR_S  # one-phone duration
+                # Onset slightly before vowel centre for smooth rise
+                t_onset = max(0.0, t_centre - dur * 0.5)
+                accent_cmds.append((t_onset, dur, aa))
+
+            # Optional phrase command for long APs (4+ syllables)
+            phrase_cmds: list[tuple[float, float]] = []
+            if n_syl >= 4:
+                phrase_cmds.append((0.0, 0.02 * k))
+
+            # Evaluate Fujisaki at each phone position
+            eval_times = [phone_times[j - ap_start]
+                          for j in range(ap_start, ap_end)]
+            contour_hz = _fujisaki_contour(
+                fb, phrase_cmds, accent_cmds, eval_times)
+
+            for idx, j in enumerate(range(ap_start, ap_end)):
+                f0s[j] = contour_hz[idx]
 
         return f0s
 
@@ -592,6 +590,8 @@ class DiphoneEngine:
         ap_cleanup: float = 1.5,
         formant_sharpening: float = 1.3,
         vtln_alpha: float = 1.0,
+        timbre: str | None = None,
+        base_f0: float = 175.0,
     ) -> np.ndarray:
         """Synthesize multiple prosodic groups with inter-group pauses.
 
@@ -622,6 +622,11 @@ class DiphoneEngine:
                 1.3=defaut, max 2.0). Restaure la nettete spectrale.
             vtln_alpha: warping VTLN du tract vocal (0.8=grave/sombre,
                 1.0=neutre, 1.2=aigu/brillant).
+            timbre: nom de signature de timbre (ex: "homme", "enfant") ou
+                chemin vers un fichier .json. None = pas de transfert de timbre.
+            base_f0: pitch de base en Hz (defaut 175.0). Ajuste le F0 de
+                reference pour toute la synthese (homme ~120, femme ~200,
+                enfant ~280).
 
         Returns:
             np.float32 audio array at 44100 Hz
@@ -650,11 +655,17 @@ class DiphoneEngine:
             "neutre": "none",
         }
 
+        # Charger la signature de timbre si demandee
+        timbre_signature = None
+        if timbre is not None:
+            from lectura_tts_diphone._timbre import load_signature
+            timbre_signature = load_signature(timbre)
+
         if not groups:
             return np.array([], dtype=np.float32)
 
         n_groups = len(groups)
-        base_f0_start = 175.0
+        base_f0_start = base_f0
 
         audio_parts = []
         for gi, group in enumerate(groups):
@@ -697,6 +708,7 @@ class DiphoneEngine:
                 ap_cleanup=ap_cleanup,
                 formant_sharpening=formant_sharpening,
                 vtln_alpha=vtln_alpha,
+                timbre_signature=timbre_signature,
             )
             audio_parts.append(audio)
 
@@ -754,6 +766,7 @@ class DiphoneEngine:
         ap_cleanup: float = 1.0,
         formant_sharpening: float = 1.0,
         vtln_alpha: float = 1.0,
+        timbre_signature: np.ndarray | None = None,
     ) -> np.ndarray:
         """Synthesize from a phone list using diphone chain.
 
@@ -769,6 +782,7 @@ class DiphoneEngine:
             ap_cleanup: AP compression factor (1.0=off, 1.5=default)
             formant_sharpening: cepstral formant sharpening (1.0=off, 1.3=default)
             vtln_alpha: VTLN warping factor (0.8=grave, 1.0=neutral, 1.2=aigu)
+            timbre_signature: vecteur cepstral de timbre cible (None = pas de transfert)
 
         Returns:
             np.float32 audio array at 44100 Hz
@@ -967,31 +981,34 @@ class DiphoneEngine:
         f0_cat, sp_cat, ap_cat, boundaries = concat_diphones(diphone_segments)
 
         # ── Pipeline timbre ──────────────────────────────────────
+        # Ordre : AP cleanup → formant sharpening → GV → timbre transfer → VTLN
 
-        if self._postfilter is not None:
-            # Post-filtre appris : correction spectrale par paire de phones
-            diphone_keys = [seg["key"] for seg in diphone_segments]
-            sp_cat, ap_cat = self._postfilter.apply(
-                sp_cat, ap_cat, diphone_keys, boundaries)
-        else:
-            # Fallback parametrique
-            # Ordre : AP cleanup → formant sharpening → GV
+        # 1. Compression AP : reduire le bruit d'aperiodicite
+        if ap_cleanup > 1.0:
+            ap_cat = compress_aperiodicity(ap_cat, gamma=ap_cleanup, sr=SIWIS_SR)
 
-            # 1. Compression AP : reduire le bruit d'aperiodicite
-            if ap_cleanup > 1.0:
-                ap_cat = compress_aperiodicity(ap_cat, gamma=ap_cleanup, sr=SIWIS_SR)
+        # 2. Affutage formants : restaurer les pics spectraux
+        if formant_sharpening > 1.0:
+            sp_cat = sharpen_formants(sp_cat, gain=formant_sharpening)
 
-            # 2. Affutage formants : restaurer les pics spectraux
-            if formant_sharpening > 1.0:
-                sp_cat = sharpen_formants(sp_cat, gain=formant_sharpening)
+        # 3. GV compensation : contraste spectral frame-a-frame
+        if spectral_contrast > 1.0:
+            log_sp = np.log(np.maximum(sp_cat, 1e-10))
+            mean_log = np.mean(log_sp, axis=0, keepdims=True)
+            sp_cat = np.exp(mean_log + (log_sp - mean_log) * spectral_contrast)
 
-            # 3. GV compensation : contraste spectral frame-a-frame
-            if spectral_contrast > 1.0:
-                log_sp = np.log(np.maximum(sp_cat, 1e-10))
-                mean_log = np.mean(log_sp, axis=0, keepdims=True)
-                sp_cat = np.exp(mean_log + (log_sp - mean_log) * spectral_contrast)
+        # 4. Transfert de timbre : appliquer la signature cepstrale cible
+        if timbre_signature is not None:
+            # Adapter la taille de la signature aux bins spectraux
+            n_bins = sp_cat.shape[1]
+            if len(timbre_signature) >= n_bins:
+                sig = timbre_signature[:n_bins]
+            else:
+                sig = np.zeros(n_bins, dtype=np.float64)
+                sig[:len(timbre_signature)] = timbre_signature
+            sp_cat = apply_timbre(sp_cat, sig)
 
-        # VTLN reste actif dans les deux cas (orthogonal au post-filtre)
+        # 5. VTLN : ajustement fin de l'identite vocale
         if abs(vtln_alpha - 1.0) > 0.001:
             sp_cat = warp_vtln(sp_cat, alpha=vtln_alpha, sr=SIWIS_SR)
 

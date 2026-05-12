@@ -258,10 +258,15 @@ def _fermer_groupe(
             lecture = lec
             break
 
+    # Calculer le span du groupe depuis les spans des mots
+    first_span = getattr(mots[0], "span", (0, 0))
+    last_span = getattr(mots[-1], "span", (0, 0))
+    group_span = (first_span[0], last_span[1])
+
     groupes.append(GroupeLecture(
         mots=list(mots),
         phone_groupe=phone_groupe,
-        span=(0, 0),
+        span=group_span,
         jonctions=list(jonctions),
         est_formule=is_formule,
         lecture=lecture,

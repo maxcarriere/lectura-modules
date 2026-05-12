@@ -5,6 +5,8 @@ Operations sur les parametres WORLD (F0, spectral envelope, aperiodicity) :
   - concat_diphones : concatenation avec overlap en domaine log
   - synthesize : appel pw.synthesize()
   - ensure_full_spectrum : pad si bins tronques
+  - extract_timbre_signature : signature cepstrale moyenne
+  - apply_timbre : transfert de timbre par domaine cepstral
 """
 
 from __future__ import annotations
@@ -241,3 +243,64 @@ def warp_vtln(sp: np.ndarray, alpha: float = 1.0,
     sp_out = np.exp(log_sp[:, idx] * (1 - w[np.newaxis, :])
                     + log_sp[:, idx + 1] * w[np.newaxis, :])
     return np.ascontiguousarray(np.maximum(sp_out, 1e-10))
+
+
+def extract_timbre_signature(sp: np.ndarray) -> np.ndarray:
+    """Extraire la signature cepstrale moyenne d'une enveloppe spectrale.
+
+    Calcule le cepstre moyen sur toutes les frames.
+    Retourne un vecteur 1D de dimension n_bins.
+    """
+    from scipy.fft import dct
+
+    log_sp = np.log(np.maximum(sp, 1e-10))
+    cepstrum = dct(log_sp, type=2, axis=1, norm='ortho')
+    return np.mean(cepstrum, axis=0)
+
+
+def apply_timbre(sp: np.ndarray, signature: np.ndarray,
+                 blend: float = 0.8, texture: float = 0.5,
+                 formant_low: int = 3, formant_high: int = 16,
+                 ) -> np.ndarray:
+    """Appliquer une signature de timbre sur une enveloppe spectrale.
+
+    Preserve les coefficients cepstraux formant_low..formant_high
+    (contenu phonetique). Transfere les coefficients d'identite
+    (0..formant_low) et de texture (formant_high..) depuis la signature.
+
+    Args:
+        sp: (n_frames, n_bins) enveloppe spectrale lineaire
+        signature: (n_bins,) signature cepstrale cible
+        blend: force du transfert pour les coefficients d'identite (0..formant_low)
+        texture: force du transfert pour les coefficients de texture (formant_high..)
+        formant_low: debut de la zone formantique preservee
+        formant_high: fin de la zone formantique preservee
+
+    Returns:
+        sp modifiee avec le timbre cible applique
+    """
+    from scipy.fft import dct, idct
+
+    log_sp = np.log(np.maximum(sp, 1e-10))
+    ceps = dct(log_sp, type=2, axis=1, norm='ortho')
+    n_bins = ceps.shape[1]
+
+    # Signature cepstrale du signal courant (moyenne par frame)
+    ceps_mean = np.mean(ceps, axis=0)
+
+    # Coefficients d'identite (tilt spectral, energie)
+    fl = min(formant_low, n_bins)
+    if fl > 0 and blend > 0:
+        # Deplacer chaque frame vers la signature cible
+        delta = signature[:fl] - ceps_mean[:fl]
+        ceps[:, :fl] += delta[np.newaxis, :] * blend
+
+    # Zone formantique (formant_low..formant_high) : preservee intacte
+
+    # Coefficients de texture (detail spectral fin)
+    fh = min(formant_high, n_bins)
+    if fh < n_bins and texture > 0:
+        delta = signature[fh:] - ceps_mean[fh:]
+        ceps[:, fh:] += delta[np.newaxis, :] * texture
+
+    return np.maximum(np.exp(idct(ceps, type=2, axis=1, norm='ortho')), 1e-10)

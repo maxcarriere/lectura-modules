@@ -8,8 +8,8 @@ Installez tout d'un coup avec `pip install lectura` ou chaque module independamm
 
 | Module | Description | Version | pip install |
 |--------|-------------|---------|-------------|
-| **[Tokeniseur](Tokeniseur/)** | Normalisation et tokenisation du francais, detection de formules | 2.0.0 | `pip install lectura-tokeniseur` |
-| **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 2.0.0 | `pip install lectura-formules` |
+| **[Tokeniseur](Tokeniseur/)** | Normalisation et tokenisation du francais, detection de formules | 2.3.0 | `pip install lectura-tokeniseur` |
+| **[Formules](Formules/)** | Lecture algorithmique des formules (nombres, dates, heures...) | 3.1.0 | `pip install lectura-formules` |
 | **[Phonemiseur](Phonemiseur/)** | Phonemiseur neural : G2P + POS + Morpho + Liaison + Groupes de lecture | 4.0.0 | `pip install lectura-phonemiseur` |
 | **[Graphemiseur](Graphemiseur/)** | Graphemiseur neural : P2G + POS + Morpho (IPA vers orthographe) | 4.0.0 | `pip install lectura-graphemiseur` |
 | **[Aligneur-Syllabeur](Aligneur/)** | Alignement grapheme-phoneme, syllabation | 4.0.0 | `pip install lectura-aligneur` |
