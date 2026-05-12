@@ -152,6 +152,26 @@ class TestNormalisation:
         result = normalise("3,14")
         assert "3.14" in result
 
+    def test_normalise_exclamation_apres_mot(self):
+        """Le ! est separe d'un mot francais (pas factorielle)."""
+        assert normalise("Bonjour!") == "Bonjour !"
+        assert normalise("Quelle joie!") == "Quelle joie !"
+
+    def test_normalise_exclamation_factorielle_chiffre(self):
+        """Le ! reste colle apres un chiffre (factorielle)."""
+        assert "5!" in normalise("5!")
+        assert "10!" in normalise("10!")
+
+    def test_normalise_exclamation_factorielle_variable(self):
+        """Le ! reste colle apres une lettre isolee (variable math)."""
+        assert "n!" in normalise("n!")
+        assert "x!" in normalise("x!")
+
+    def test_normalise_exclamation_avec_espace(self):
+        """Le ! avec espace avant est preserve normalement."""
+        result = normalise("Bonjour !")
+        assert "Bonjour !" in result
+
 
 # ============================================================================
 # 2. Tokenisation

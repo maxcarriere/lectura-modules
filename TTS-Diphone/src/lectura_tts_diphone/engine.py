@@ -18,7 +18,11 @@ from pathlib import Path
 import numpy as np
 
 from lectura_tts_diphone._compression import load_compressed
-from lectura_tts_diphone._fujisaki import generate_contour as _fujisaki_contour
+from lectura_tts_diphone._fujisaki import (
+    BETA_DEFAULT as _FUJI_BETA,
+    accent_peak as _fujisaki_accent_peak,
+    generate_contour as _fujisaki_contour,
+)
 from lectura_tts_diphone._world import (
     FRAME_PERIOD, OVERLAP_FRAMES, SIWIS_SR,
     apply_timbre, compress_aperiodicity, concat_diphones,
@@ -475,19 +479,23 @@ class DiphoneEngine:
             fb = ap_base * (2.0 ** (min_st / 12.0))
 
             # Build accent commands for each syllable above the floor
+            # Duration = 2 phones (~syllable), onset so that peak (offset)
+            # coincides with the vowel position.  Amplitude compensated
+            # so that the Ga peak * aa matches the target exactly.
             accent_cmds: list[tuple[float, float, float]] = []
+            cmd_dur = 2.0 * _PHONE_DUR_S       # ~160ms, full syllable
+            peak_ga = _fujisaki_accent_peak(cmd_dur, _FUJI_BETA)
             for si, vp in enumerate(vowel_positions):
                 delta_st = syl_targets_st[si] - min_st
                 if delta_st < 0.01:
                     continue
-                # Amplitude: convert semitones to ln-scale
-                aa = delta_st * math.log(2.0) / 12.0
-                # Time: centre of the vowel relative to AP start
-                t_centre = (vp - ap_start) * _PHONE_DUR_S
-                dur = _PHONE_DUR_S  # one-phone duration
-                # Onset slightly before vowel centre for smooth rise
-                t_onset = max(0.0, t_centre - dur * 0.5)
-                accent_cmds.append((t_onset, dur, aa))
+                # Amplitude: compensated so peak reaches target Hz
+                aa_raw = delta_st * math.log(2.0) / 12.0
+                aa = aa_raw / max(peak_ga, 0.1)
+                # Onset placed so offset (=peak) falls on the vowel
+                t_vowel = (vp - ap_start) * _PHONE_DUR_S
+                t_onset = max(0.0, t_vowel - cmd_dur)
+                accent_cmds.append((t_onset, cmd_dur, aa))
 
             # Optional phrase command for long APs (4+ syllables)
             phrase_cmds: list[tuple[float, float]] = []
@@ -502,6 +510,23 @@ class DiphoneEngine:
 
             for idx, j in enumerate(range(ap_start, ap_end)):
                 f0s[j] = contour_hz[idx]
+
+        # Cross-AP boundary blending: smooth the transition between
+        # consecutive APs over ±1 phone to avoid discontinuities.
+        for ai in range(len(aps) - 1):
+            _, end_a = aps[ai]
+            start_b, _ = aps[ai + 1]
+            # end_a == start_b (APs are contiguous)
+            # Blend zone: last phone of AP_a and first phone of AP_b
+            left = end_a - 1   # last phone of AP_a
+            right = start_b    # first phone of AP_b
+            if left >= 0 and right < n:
+                avg = (f0s[left] + f0s[right]) / 2.0
+                f0s[left] = 0.5 * f0s[left] + 0.5 * avg
+                f0s[right] = 0.5 * f0s[right] + 0.5 * avg
+                # Also soften the second phone of the new AP if it exists
+                if right + 1 < n and right + 1 < (aps[ai + 1][1]):
+                    f0s[right + 1] = 0.7 * f0s[right + 1] + 0.3 * avg
 
         return f0s
 
