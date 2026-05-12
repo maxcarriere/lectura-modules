@@ -41,7 +41,7 @@ where = ["src"]
 exclude = ["scripts*", "benchmark*", "checkpoints*"]
 
 [tool.setuptools.package-data]
-lectura_correcteur = ["data/*.json", "data/*.json.gz", "data/*.db", "data/*.csv.gz"]
+lectura_correcteur = ["data/*.json", "data/*.json.gz", "data/*.db", "data/*.csv.gz", "data/g2p_v2/*.py", "data/g2p_v2/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
