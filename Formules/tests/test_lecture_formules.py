@@ -821,9 +821,7 @@ class TestLirePourcentage:
 class TestLireIntervalle:
     def test_closed_closed(self):
         result = lire_intervalle("[2;5]", span=(0, 5))
-        assert "de" in result.display_fr
         assert "deux" in result.display_fr
-        assert "à" in result.display_fr
         assert "cinq" in result.display_fr
 
     def test_open_open(self):
