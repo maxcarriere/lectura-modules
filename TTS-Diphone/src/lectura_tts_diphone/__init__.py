@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
-__version__ = "1.3.7"
+__version__ = "1.4.0"
 
 
 def creer_engine(
@@ -96,6 +96,8 @@ def synthetiser(
     ap_cleanup: float = 1.5,
     formant_sharpening: float = 1.3,
     vtln_alpha: float = 1.0,
+    timbre: str | None = None,
+    base_f0: float = 175.0,
 ) -> Any:
     """Convenience : texte → numpy audio float32 @ 44100 Hz.
 
@@ -128,6 +130,12 @@ def synthetiser(
         Affutage formants (1.0=off, 1.3=defaut, max 2.0). Restaure la nettete.
     vtln_alpha : float
         Warping VTLN (0.8=grave, 1.0=neutre, 1.2=aigu).
+    timbre : str | None
+        Nom de signature de timbre ("homme", "enfant", etc.) ou chemin
+        vers un fichier .json. None = pas de transfert de timbre.
+    base_f0 : float
+        Pitch de base en Hz (defaut 175.0). homme ~120, femme ~200,
+        enfant ~280.
 
     Returns
     -------
@@ -155,6 +163,8 @@ def synthetiser(
         ap_cleanup=ap_cleanup,
         formant_sharpening=formant_sharpening,
         vtln_alpha=vtln_alpha,
+        timbre=timbre,
+        base_f0=base_f0,
     )
 
 

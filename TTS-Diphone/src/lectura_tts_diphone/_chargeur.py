@@ -25,7 +25,6 @@ REQUIRED_FILES = [
 # Fichiers optionnels
 OPTIONAL_FILES = [
     "diphone_statistics.pkl",
-    "sp_postfilter.onnx",
 ]
 
 

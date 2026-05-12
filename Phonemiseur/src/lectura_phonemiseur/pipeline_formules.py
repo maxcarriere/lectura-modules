@@ -116,7 +116,7 @@ def _get_compound_corrections() -> set[str]:
         corr_path = Path(__file__).parent / "data" / "g2p_corrections_unifie.json"
         if corr_path.exists():
             with open(corr_path, encoding="utf-8") as f:
-                _COMPOUND_CORRECTIONS = {k for k in json.load(f) if "-" in k}
+                _COMPOUND_CORRECTIONS = {k for k in json.load(f) if "-" in k or "'" in k}
     except Exception:
         pass
     return _COMPOUND_CORRECTIONS

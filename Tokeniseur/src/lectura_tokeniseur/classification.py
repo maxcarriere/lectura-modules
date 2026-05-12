@@ -19,7 +19,10 @@ from lectura_tokeniseur.detection import (
     _ROMAN_VALID_RE, _MATHS_OPERATORS, _MATHS_SUPERSCRIPTS, _GREEK_LETTERS,
     _MATHS_FUNCTIONS, _MATHS_SPECIAL,
 )
-from lectura_tokeniseur.maths import UNIT_NAMES_LOWER as _UNIT_NAMES_LOWER
+try:
+    from lectura_formules._maths import UNIT_NAMES_LOWER as _UNIT_NAMES_LOWER
+except ImportError:
+    _UNIT_NAMES_LOWER: set[str] = set()
 
 logger = logging.getLogger(__name__)
 
@@ -900,7 +903,10 @@ def _build_formule_children(text: str, ftype: FormuleType, offset: int) -> list[
         return children
 
     if ftype == FormuleType.MATHS:
-        from lectura_tokeniseur.maths import tokenize_maths
+        try:
+            from lectura_formules._maths import tokenize_maths
+        except ImportError:
+            return []
         math_toks = tokenize_maths(text)
         children = []
         scan = 0

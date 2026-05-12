@@ -108,6 +108,7 @@ class VCEngine:
         reference: np.ndarray | str | Path | None = None,
         mode: str | None = None,
         sr_in: int | None = None,
+        ref_sr: int | None = None,
         protect: float | None = None,
         pitch_modification: float | None = None,
         tau: float = 0.3,
@@ -121,6 +122,7 @@ class VCEngine:
         reference : audio de reference pour zero-shot (array ou chemin).
         mode : forcer un mode (rvc/zeroshot/cascade/auto).
         sr_in : sample rate source (auto si fichier).
+        ref_sr : sample rate de la reference si c'est un ndarray.
         protect : facteur de protection voix (None = auto).
         pitch_modification : shift en demi-tons (None = auto).
         tau : parametre OpenVoice (0 = deterministe).
@@ -143,10 +145,11 @@ class VCEngine:
         if effective_mode == "rvc":
             return self._convert_rvc(audio_np, sr, speaker, protect, pitch_modification)
         elif effective_mode == "zeroshot":
-            return self._convert_zeroshot(audio_np, sr, reference, tau)
+            return self._convert_zeroshot(audio_np, sr, reference, tau, ref_sr=ref_sr)
         elif effective_mode == "cascade":
             return self._convert_cascade(
-                audio_np, sr, speaker, reference, protect, pitch_modification, tau
+                audio_np, sr, speaker, reference, protect, pitch_modification, tau,
+                ref_sr=ref_sr,
             )
         else:
             raise ValueError(f"Mode inconnu: {effective_mode}")
@@ -188,6 +191,7 @@ class VCEngine:
         sr: int,
         reference: np.ndarray | str | Path | None,
         tau: float,
+        ref_sr: int | None = None,
     ) -> tuple[np.ndarray, int]:
         """Conversion zero-shot via OpenVoice."""
         if reference is None:
@@ -197,7 +201,7 @@ class VCEngine:
 
         # Extraire SE de la source et de la reference
         src_se = ov.extract_se(audio, sr=sr)
-        tgt_se = self._resolve_reference_se(reference)
+        tgt_se = self._resolve_reference_se(reference, sr=ref_sr)
 
         return ov.convert(audio, src_se, tgt_se, sr=sr, tau=tau)
 
@@ -210,6 +214,7 @@ class VCEngine:
         protect: float | None,
         pitch_modification: float | None,
         tau: float,
+        ref_sr: int | None = None,
     ) -> tuple[np.ndarray, int]:
         """Cascade: RVC (proxy) puis OpenVoice (timbre)."""
         if speaker is None:
@@ -225,7 +230,7 @@ class VCEngine:
         # Phase 2: OpenVoice pour ajuster le timbre
         ov = self._get_openvoice()
         src_se = ov.extract_se(rvc_audio, sr=rvc_sr)
-        tgt_se = self._resolve_reference_se(reference)
+        tgt_se = self._resolve_reference_se(reference, sr=ref_sr)
 
         return ov.convert(rvc_audio, src_se, tgt_se, sr=rvc_sr, tau=tau)
 
@@ -234,13 +239,21 @@ class VCEngine:
     def _resolve_reference_se(
         self,
         reference: np.ndarray | str | Path,
+        sr: int | None = None,
     ) -> np.ndarray:
-        """Extrait le speaker embedding de la reference."""
+        """Extrait le speaker embedding de la reference.
+
+        Parameters
+        ----------
+        reference : audio de reference (array, chemin, ou liste).
+        sr : sample rate de la reference si c'est un ndarray.
+             Indispensable pour le resampling a 22050 Hz.
+        """
         ov = self._get_openvoice()
 
         if isinstance(reference, (list, tuple)):
-            return ov.extract_se_multi(reference)
-        return ov.extract_se(reference)
+            return ov.extract_se_multi(reference, sr=sr)
+        return ov.extract_se(reference, sr=sr)
 
     @staticmethod
     def _load_audio(

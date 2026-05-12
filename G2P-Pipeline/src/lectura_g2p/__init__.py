@@ -17,7 +17,7 @@ Exemple rapide::
     result = analyser_phrase("Les enfants jouent dans le jardin.")
 """
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 
 # ── Re-exports depuis le phonemiseur (couche 1) ──────────────────────────
 
@@ -109,3 +109,151 @@ def analyser_phrase(
     # Attacher les groupes au resultat
     result._groupes = groupes
     return result
+
+
+# ── Ponctuation TTS ────────────────────────────────────────────────────
+
+_PUNCT_MAP = {
+    ",": ",", ";": ",", ":": ",",
+    ".": ".", "!": "!", "?": "?",
+    "\u2026": "\u2026", "...": "\u2026",
+}
+
+_SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
+
+
+# ── Pipeline texte → IPA (pour TTS) ───────────────────────────────────
+
+def groupes_vers_ipa(groupes: list[GroupeLecture]) -> str:
+    """Assemble les groupes de lecture en chaine IPA avec liaisons.
+
+    Les groupes de ponctuation sont convertis en caracteres de pause
+    reconnus par les modeles TTS (,  .  ?  !  …).
+
+    Parameters
+    ----------
+    groupes : list[GroupeLecture]
+        Sortie de ``construire_groupes_lecture()``.
+
+    Returns
+    -------
+    str
+        Chaine IPA avec espaces entre groupes et ponctuation inseree.
+    """
+    parts: list[str] = []
+    for gi, grp in enumerate(groupes):
+        # Ponctuation → caractere de pause
+        if len(grp.mots) == 1 and getattr(grp.mots[0], "est_ponctuation", False):
+            p = _PUNCT_MAP.get(grp.mots[0].text.strip())
+            if p:
+                parts.append(p)
+            continue
+
+        # Espace entre groupes (sauf avant le premier et apres ponctuation)
+        if gi > 0 and parts and parts[-1] not in (",", ".", "?", "!", "\u2026"):
+            parts.append(" ")
+
+        # Assembler l'IPA du groupe avec insertions de liaison
+        grp_phones = [m.phone for m in grp.mots]
+        if grp.jonctions:
+            grp_parts = [grp_phones[0]]
+            for j, jonction in enumerate(grp.jonctions):
+                if jonction.startswith("liaison_"):
+                    grp_parts.append(jonction[len("liaison_"):])
+                grp_parts.append(grp_phones[j + 1])
+            parts.append("".join(grp_parts))
+        else:
+            parts.append(grp.phone_groupe)
+
+    return "".join(parts)
+
+
+def texte_vers_phrases_ipa(
+    texte: str,
+    *,
+    engine: object | None = None,
+    options_groupes: OptionsGroupes | None = None,
+) -> list[tuple[str, int]]:
+    """Convertit du texte francais en phrases IPA avec type de phrase.
+
+    Pipeline unifie : Tokeniseur → Formules → G2P → Groupes de lecture → IPA.
+    Gere les liaisons, elisions, enchainements et la ponctuation.
+
+    Parameters
+    ----------
+    texte : str
+        Texte francais (une ou plusieurs phrases).
+    engine : object | None
+        Moteur G2P neural. Si None, en cree un automatiquement.
+    options_groupes : OptionsGroupes | None
+        Options pour les groupes de lecture.
+
+    Returns
+    -------
+    list[tuple[str, int]]
+        Liste de (ipa_string, phrase_type) par phrase.
+        phrase_type : 0=declaratif, 1=interrogatif, 2=exclamatif, 3=suspensif.
+
+    Example
+    -------
+    >>> from lectura_g2p import texte_vers_phrases_ipa
+    >>> texte_vers_phrases_ipa("Les enfants jouent.")
+    [('lez‿ɑ̃fɑ̃ ʒu.', 0)]
+    """
+    from lectura_tokeniseur import tokenise
+
+    if engine is None:
+        engine = creer_engine()
+
+    all_tokens = tokenise(texte)
+
+    # Enrichir les formules
+    try:
+        from lectura_formules import enrichir_formules
+        enrichir_formules(all_tokens)
+    except ImportError:
+        pass
+
+    # Decouper en phrases (a la ponctuation terminale)
+    sentences: list[list] = []
+    current: list = []
+    for token in all_tokens:
+        current.append(token)
+        if token.type.name == "PONCTUATION" and token.text.strip() in _SENTENCE_PUNCT:
+            sentences.append(current)
+            current = []
+    if current and any(t.type.name in ("MOT", "FORMULE") for t in current):
+        sentences.append(current)
+
+    if not sentences:
+        return []
+
+    results: list[tuple[str, int]] = []
+
+    for sent_tokens in sentences:
+        # Detecter phrase_type depuis la ponctuation terminale
+        phrase_type = 0
+        for tok in reversed(sent_tokens):
+            if tok.type.name == "PONCTUATION":
+                p = tok.text.strip()
+                if p == "?":
+                    phrase_type = 1
+                elif p == "!":
+                    phrase_type = 2
+                elif p in ("\u2026", "..."):
+                    phrase_type = 3
+                break
+
+        # Pipeline G2P
+        result = analyser_phrase_complete(sent_tokens, engine=engine)
+
+        # Groupes de lecture (liaisons, elisions, enchainements)
+        groupes = construire_groupes_lecture(result, options_groupes)
+
+        # Assembler l'IPA
+        ipa = groupes_vers_ipa(groupes)
+
+        if ipa:
+            results.append((ipa, phrase_type))
+
+    return results

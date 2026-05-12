@@ -408,4 +408,230 @@ def test_engine_postfilter_none_by_default():
     """Engine sans modele ONNX a _postfilter = None."""
     from lectura_tts_diphone.engine import DiphoneEngine
     engine = DiphoneEngine()
-    assert engine._postfilter is None
+    assert not hasattr(engine, '_postfilter') or engine._postfilter is None
+
+
+# ── Tests timbre cepstral ────────────────────────────────────────
+
+
+def test_extract_timbre_signature():
+    """Signature extraite a la bonne forme (1D, n_bins)."""
+    import numpy as np
+    from lectura_tts_diphone._world import extract_timbre_signature
+
+    sp = np.random.rand(20, 64).astype(np.float64) + 0.01
+    sig = extract_timbre_signature(sp)
+    assert sig.ndim == 1
+    assert sig.shape[0] == 64
+
+
+def test_apply_timbre_identity():
+    """blend=0 et texture=0 ne changent rien."""
+    import numpy as np
+    from lectura_tts_diphone._world import apply_timbre
+
+    sp = np.random.rand(10, 64).astype(np.float64) + 0.01
+    sig = np.zeros(64, dtype=np.float64)
+    result = apply_timbre(sp, sig, blend=0.0, texture=0.0)
+    np.testing.assert_allclose(result, sp, rtol=1e-6)
+
+
+def test_apply_timbre_full():
+    """blend=1 modifie les coefficients de tilt spectral."""
+    import numpy as np
+    from lectura_tts_diphone._world import apply_timbre, extract_timbre_signature
+
+    sp = np.random.rand(10, 64).astype(np.float64) + 0.01
+    # Signature avec tilt spectral fort
+    sig = np.zeros(64, dtype=np.float64)
+    sig[0] = 1.0  # energie
+    sig[1] = -0.5  # tilt
+    sig[2] = -0.3  # tilt
+
+    result = apply_timbre(sp, sig, blend=1.0, texture=0.0)
+    # Le resultat doit differer de l'original
+    assert not np.allclose(result, sp, rtol=1e-3)
+
+
+def test_apply_timbre_preserves_formants():
+    """Coefficients cepstraux 3-15 (formants) restent inchanges."""
+    import numpy as np
+    from scipy.fft import dct
+    from lectura_tts_diphone._world import apply_timbre
+
+    sp = np.random.rand(10, 64).astype(np.float64) + 0.01
+    sig = np.zeros(64, dtype=np.float64)
+    sig[0] = 2.0
+    sig[1] = -1.0
+    sig[20] = 0.5  # texture
+
+    # Extraire les coefficients cepstraux avant
+    log_sp = np.log(np.maximum(sp, 1e-10))
+    ceps_before = dct(log_sp, type=2, axis=1, norm='ortho')
+
+    result = apply_timbre(sp, sig, blend=1.0, texture=1.0,
+                          formant_low=3, formant_high=16)
+
+    # Extraire les coefficients cepstraux apres
+    log_result = np.log(np.maximum(result, 1e-10))
+    ceps_after = dct(log_result, type=2, axis=1, norm='ortho')
+
+    # Les coefficients 3-15 doivent etre identiques
+    np.testing.assert_allclose(
+        ceps_after[:, 3:16], ceps_before[:, 3:16], rtol=1e-6)
+
+
+def test_list_signatures():
+    """Signatures pre-calculees accessibles."""
+    from lectura_tts_diphone._timbre import list_signatures
+
+    sigs = list_signatures()
+    assert isinstance(sigs, list)
+    assert len(sigs) >= 3
+    assert "neutre" in sigs
+    assert "homme" in sigs
+    assert "enfant" in sigs
+
+
+def test_load_signature_builtin():
+    """Chargement d'une signature pre-calculee par nom."""
+    import numpy as np
+    from lectura_tts_diphone._timbre import load_signature
+
+    sig = load_signature("homme")
+    assert isinstance(sig, np.ndarray)
+    assert sig.ndim == 1
+    # Tilt spectral negatif pour voix masculine
+    assert sig[1] < 0
+
+
+def test_load_signature_unknown_raises():
+    """Nom inconnu leve ValueError."""
+    import pytest
+    from lectura_tts_diphone._timbre import load_signature
+
+    with pytest.raises(ValueError, match="Signature inconnue"):
+        load_signature("voix_inexistante")
+
+
+def test_base_f0_scaling():
+    """base_f0 ajuste les F0 targets dans synthesize_groups."""
+    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
+
+    # Test que group_info recoit le bon base_f0
+    phones = ["b", "a", "l"]
+    info_default = {
+        "group_idx": 0, "n_groups": 1, "boundary": "period",
+        "base_f0": 175.0, "macro_expressivity": 1.0,
+    }
+    info_low = {
+        "group_idx": 0, "n_groups": 1, "boundary": "period",
+        "base_f0": 120.0, "macro_expressivity": 1.0,
+    }
+
+    f0s_default = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info_default)
+    f0s_low = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info_low)
+
+    # F0 avec base_f0=120 doit etre globalement plus bas
+    import numpy as np
+    assert np.mean(f0s_low) < np.mean(f0s_default)
+
+
+def test_timbre_signature_dimensions():
+    """Les signatures builtin ont la bonne dimension."""
+    import numpy as np
+    from lectura_tts_diphone._timbre import BUILTIN_SIGNATURES
+
+    for name, sig in BUILTIN_SIGNATURES.items():
+        assert isinstance(sig, np.ndarray), f"{name}: pas un ndarray"
+        assert sig.ndim == 1, f"{name}: pas 1D"
+        assert len(sig) == 400, f"{name}: taille {len(sig)} != 400"
+
+
+# ── Tests Fujisaki ──────────────────────────────────────────────
+
+
+def test_fujisaki_phrase_response():
+    """Gp(0)=0, pic a t=1/alpha, decroissance ensuite."""
+    from lectura_tts_diphone._fujisaki import ALPHA_DEFAULT, phrase_response
+
+    # t < 0 → 0
+    assert phrase_response(-1.0) == 0.0
+    # t = 0 → 0
+    assert phrase_response(0.0) == 0.0
+    # pic a t = 1/alpha
+    t_peak = 1.0 / ALPHA_DEFAULT
+    val_peak = phrase_response(t_peak)
+    assert val_peak > 0.0
+    # Avant le pic, valeur plus basse
+    assert phrase_response(t_peak * 0.5) < val_peak
+    # Apres le pic, decroissance
+    assert phrase_response(t_peak * 3.0) < val_peak
+
+
+def test_fujisaki_accent_response():
+    """Ga monte puis redescend, max ~1.0 pendant la commande active."""
+    from lectura_tts_diphone._fujisaki import BETA_DEFAULT, accent_response
+
+    dur = 0.1  # 100ms command
+    # Avant la commande → 0
+    assert accent_response(-0.1, dur) == 0.0
+    # Pendant la commande → monte vers 1.0
+    val_mid = accent_response(dur * 0.8, dur)
+    assert val_mid > 0.3
+    # Apres offset → redescend
+    val_after = accent_response(dur * 3.0, dur)
+    assert val_after < val_mid
+    # Bien apres → proche de 0
+    val_late = accent_response(dur * 10.0, dur)
+    assert val_late < 0.05
+
+
+def test_fujisaki_generate_contour():
+    """Contour avec accent command produit un pic au bon endroit."""
+    from lectura_tts_diphone._fujisaki import generate_contour
+
+    fb = 150.0
+    # Un seul accent a t=0.2, duree 0.1, amplitude 0.3
+    accent_cmds = [(0.2, 0.1, 0.3)]
+    times = [i * 0.05 for i in range(10)]  # 0.0 a 0.45s
+
+    contour = generate_contour(fb, [], accent_cmds, times)
+    assert len(contour) == 10
+    # Toutes les valeurs >= fb (accent ajoute)
+    assert all(f >= fb - 0.01 for f in contour)
+    # Le pic doit etre pres de t=0.2-0.3 (indices 4-6)
+    peak_idx = contour.index(max(contour))
+    assert 3 <= peak_idx <= 7
+
+
+def test_fujisaki_generate_contour_flat():
+    """Sans commandes, contour plat a fb."""
+    from lectura_tts_diphone._fujisaki import generate_contour
+
+    fb = 180.0
+    times = [i * 0.05 for i in range(5)]
+    contour = generate_contour(fb, [], [], times)
+    assert all(abs(f - fb) < 0.01 for f in contour)
+
+
+def test_f0_contour_smoothness():
+    """Transitions entre phones adjacents sont lisses (pas de sauts)."""
+    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
+
+    # Long phrase with multiple APs to test smoothness
+    phones = ["b", "ɔ̃", "ʒ", "u", "ʁ", "k", "ɔ", "m", "ɑ̃",
+              "s", "a", "v", "a"]
+    info = {"group_idx": 0, "n_groups": 1, "boundary": "period",
+            "base_f0": 175.0, "macro_expressivity": 1.0}
+    f0s = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info, word_boundaries=[5, 9])
+
+    # Check no jump > 30 Hz between consecutive phones
+    max_jump = 0.0
+    for i in range(1, len(f0s)):
+        jump = abs(f0s[i] - f0s[i - 1])
+        max_jump = max(max_jump, jump)
+    assert max_jump < 30.0, f"Max F0 jump = {max_jump:.1f} Hz"

@@ -1,0 +1,52 @@
+{
+  "speakers": [
+    {
+      "id": 0,
+      "name": "siwis",
+      "gender": "female",
+      "label": "Siwis"
+    },
+    {
+      "id": 1,
+      "name": "ezwa",
+      "gender": "female",
+      "label": "Ezwa"
+    },
+    {
+      "id": 2,
+      "name": "nadine",
+      "gender": "female",
+      "label": "Nadine"
+    },
+    {
+      "id": 3,
+      "name": "bernard",
+      "gender": "male",
+      "label": "Bernard"
+    },
+    {
+      "id": 4,
+      "name": "gilles",
+      "gender": "male",
+      "label": "Gilles"
+    },
+    {
+      "id": 5,
+      "name": "zeckou",
+      "gender": "male",
+      "label": "Zeckou"
+    }
+  ],
+  "default": "siwis",
+  "n_style_dims": 5,
+  "style_presets": [
+    "neutral",
+    "expressive",
+    "calm",
+    "dialogue",
+    "fast",
+    "slow",
+    "rising",
+    "suspense"
+  ]
+}

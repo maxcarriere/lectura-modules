@@ -127,8 +127,8 @@ except FileNotFoundError:
     _DIX = ("", "")
     _EXPOSANT = ("", "")
 
-# Constantes maths importées du tokeniseur (source unique)
-from lectura_tokeniseur.maths import (
+# Constantes maths (source locale)
+from lectura_formules._maths import (
     MathToken as _MathToken,
     tokenize_maths as _tokenize_maths,
     FUNCTION_LIKE_VARS as _FUNCTION_LIKE_VARS,
@@ -2049,8 +2049,8 @@ def lire_scientifique(
 
 
 # -- MATHS ---------------------------------------------------------------------
-# _tokenize_maths, _requalify_unit_vars et les constantes maths sont désormais
-# dans lectura_tokeniseur.maths (importés en haut du fichier).
+# _tokenize_maths, _requalify_unit_vars et les constantes maths sont dans
+# lectura_formules._maths (importes en haut du fichier).
 # Seul _GREEK_CHARS reste ici car il dépend de _GREC (table G2P locale).
 _GREEK_CHARS = set(_GREC.keys())
 

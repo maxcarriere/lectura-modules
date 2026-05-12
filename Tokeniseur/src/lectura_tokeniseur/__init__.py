@@ -26,6 +26,10 @@ from lectura_tokeniseur.pipeline import (
     ResultatTokenisation,
     LecturaTokeniseur,
 )
-from lectura_tokeniseur.maths import MathToken, tokenize_maths
+try:
+    from lectura_formules._maths import MathToken, tokenize_maths
+except ImportError:
+    MathToken = None  # type: ignore[assignment,misc]
+    tokenize_maths = None  # type: ignore[assignment]
 
-__version__ = "2.2.1"
+__version__ = "2.3.0"

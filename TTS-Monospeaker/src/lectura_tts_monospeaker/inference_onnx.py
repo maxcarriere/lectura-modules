@@ -22,36 +22,9 @@ log = logging.getLogger(__name__)
 
 SEMITONE = 0.0577622  # log(2) / 12
 
-# Cache des mots avec correction G2P (evite de splitter les composés corrigés)
-_G2P_CORRECTIONS_KEYS: set[str] | None = None
-
-
-def _get_g2p_corrections() -> set[str]:
-    """Charge les clefs de la table de corrections G2P (singleton).
-
-    Permet de savoir si un mot compose (avec tiret) a une correction
-    dediee, auquel cas on ne le scinde pas avant le G2P.
-    """
-    global _G2P_CORRECTIONS_KEYS
-    if _G2P_CORRECTIONS_KEYS is not None:
-        return _G2P_CORRECTIONS_KEYS
-    _G2P_CORRECTIONS_KEYS = set()
-    try:
-        import lectura_phonemiseur
-        corr_path = Path(lectura_phonemiseur.__file__).parent / "data" / "g2p_corrections_unifie.json"
-        if corr_path.exists():
-            with open(corr_path, encoding="utf-8") as f:
-                _G2P_CORRECTIONS_KEYS = set(json.load(f).keys())
-    except (ImportError, Exception):
-        pass
-    return _G2P_CORRECTIONS_KEYS
-
 # Ponctuation reconnue par le modele TTS
 _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
               "\u2026": "\u2026", "...": "\u2026"}
-
-# Ponctuation terminale (decoupe en phrases)
-_SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
 
 # Durees minimales en frames pour la ponctuation (1 frame ≈ 11.6 ms)
 _PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 25}
@@ -120,309 +93,19 @@ def _zero_silence_regions(
 def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
     """Decoupe le texte en phrases, chacune avec IPA + phrase_type.
 
-    Pipeline : Tokeniseur → (Formules) → decoupage en phrases → G2P
-               → (Aligneur/liaisons) → IPA par phrase.
-
-    Modules optionnels :
-        - lectura-formules : lecture des nombres/formules (display_fr)
-        - lectura-aligneur : liaisons et groupes de lecture
-
-    Args:
-        text: Texte francais.
-        g2p: Engine G2P (lectura_phonemiseur).
-
-    Returns:
-        Liste de (ipa_string, phrase_type) par phrase.
+    Delegue au pipeline unifie lectura_g2p.texte_vers_phrases_ipa().
     """
     try:
-        from lectura_tokeniseur import tokenise
+        from lectura_g2p import texte_vers_phrases_ipa
+        return texte_vers_phrases_ipa(text, engine=g2p)
     except ImportError:
-        log.warning("lectura-tokeniseur non installe — ponctuation ignoree")
+        # Fallback minimal sans le pipeline complet
+        log.warning("lectura-g2p non installe — liaisons et formules ignorees")
         words = text.split()
         if not words:
             return []
         result = g2p.analyser(words)
         return [("".join(result.get("g2p", [])), 0)]
-
-    all_tokens = tokenise(text)
-
-    # Enrichir les formules si le module est disponible
-    try:
-        from lectura_formules import enrichir_formules
-        enrichir_formules(all_tokens)
-    except ImportError:
-        pass
-
-    # Grouper les tokens en phrases (decoupage a la ponctuation terminale)
-    sentences: list[list] = []
-    current: list = []
-    for token in all_tokens:
-        current.append(token)
-        if token.type.name == "PONCTUATION" and token.text.strip() in _SENTENCE_PUNCT:
-            sentences.append(current)
-            current = []
-    if current and any(t.type.name in ("MOT", "FORMULE") for t in current):
-        sentences.append(current)
-
-    if not sentences:
-        return []
-
-    # Collecter uniquement les MOT pour G2P (les FORMULE ont deja leur IPA)
-    # Les mots composes (tirets) sont scindes en sous-mots pour le G2P,
-    # SAUF si le mot complet a une correction dediee dans la table G2P.
-    corrections = _get_g2p_corrections()
-    all_mot_words: list[str] = []
-    mot_counts: list[int] = []
-    for sent_tokens in sentences:
-        n = 0
-        for t in sent_tokens:
-            if t.type.name == "MOT":
-                if "-" in t.text and t.text.lower() in corrections:
-                    # Correction dediee : passer le mot entier
-                    all_mot_words.append(t.text)
-                    n += 1
-                else:
-                    parts = [p for p in t.text.split("-") if p]
-                    all_mot_words.extend(parts)
-                    n += len(parts)
-        mot_counts.append(n)
-
-    # Un seul appel G2P pour tous les mots (pas les formules)
-    if all_mot_words:
-        g2p_result = g2p.analyser(all_mot_words)
-        all_mot_ipa = g2p_result.get("g2p", [])
-        all_mot_liaison = g2p_result.get("liaison", [])
-    else:
-        all_mot_ipa = []
-        all_mot_liaison = []
-
-    # Importer le G2P si disponible (pour les groupes de lecture / liaisons)
-    _cg = None
-    try:
-        from lectura_phonemiseur.groupes_lecture import construire_groupes_lecture as _cg_fn
-        _cg = _cg_fn
-    except ImportError:
-        pass
-
-    # Construire l'IPA par phrase
-    results: list[tuple[str, int]] = []
-    mot_idx = 0
-
-    for sent_tokens, n_mots in zip(sentences, mot_counts):
-        # Distribuer les resultats G2P pour cette phrase
-        sent_mot_ipa = all_mot_ipa[mot_idx:mot_idx + n_mots]
-        sent_mot_liaison = (
-            all_mot_liaison[mot_idx:mot_idx + n_mots]
-            if all_mot_liaison else ["none"] * n_mots
-        )
-        mot_idx += n_mots
-
-        # Detecter phrase_type depuis la ponctuation terminale
-        phrase_type = 0
-        for tok in reversed(sent_tokens):
-            if tok.type.name == "PONCTUATION":
-                p = tok.text.strip()
-                if p == "?":
-                    phrase_type = 1
-                elif p == "!":
-                    phrase_type = 2
-                elif p in ("\u2026", "..."):
-                    phrase_type = 3
-                break
-
-        # Construire la sequence IPA/liaison a partir des tokens
-        # Les MOT prennent leur IPA du G2P, les FORMULE de lecture.phone
-        word_entries = _build_word_entries(
-            sent_tokens, sent_mot_ipa, sent_mot_liaison, corrections,
-        )
-
-        if not word_entries:
-            continue
-
-        if _cg is not None:
-            ipa = _build_ipa_groupes(word_entries, _cg)
-        else:
-            ipa = _build_ipa_simple(word_entries)
-
-        if ipa:
-            results.append((ipa, phrase_type))
-
-    return results
-
-
-def _build_word_entries(
-    sent_tokens: list,
-    mot_ipa: list[str],
-    mot_liaison: list[str],
-    corrections: set[str] | None = None,
-) -> list[dict]:
-    """Construit la liste des entrees mot/formule/ponctuation pour une phrase.
-
-    Chaque entree est un dict avec : type, ipa, liaison, punct_before, punct_after.
-    Les FORMULE utilisent lecture.phone directement (construit composant par
-    composant), les MOT utilisent le G2P.
-    """
-    entries: list[dict] = []
-    pending_punct: str | None = None
-    mi = 0  # index dans mot_ipa
-    corr = corrections or set()
-
-    for ti, tok in enumerate(sent_tokens):
-        if tok.type.name == "MOT":
-            # Elision : si le mot suivant est un SEPARATEUR apostrophe,
-            # forcer la liaison a "none" (la consonne elidee n'/l'/j'/etc.
-            # est deja le lien phonetique, pas besoin de liaison supplementaire).
-            is_elision = (
-                ti + 1 < len(sent_tokens)
-                and sent_tokens[ti + 1].type.name == "SEPARATEUR"
-                and "'" in sent_tokens[ti + 1].text
-            )
-
-            if "-" in tok.text and tok.text.lower() in corr:
-                # Mot compose avec correction dediee — passe entier au G2P
-                if mi < len(mot_ipa):
-                    entries.append({
-                        "ipa": mot_ipa[mi],
-                        "liaison": "none" if is_elision else (mot_liaison[mi] if mi < len(mot_liaison) else "none"),
-                        "punct_before": pending_punct,
-                        "punct_after": None,
-                    })
-                    mi += 1
-                    pending_punct = None
-            else:
-                # Scinder les mots composes (tirets) — chaque partie a son IPA G2P
-                parts = [p for p in tok.text.split("-") if p]
-                for j, _part in enumerate(parts):
-                    if mi < len(mot_ipa):
-                        # Elision s'applique au dernier sous-mot du compose
-                        force_none = is_elision and j == len(parts) - 1
-                        entries.append({
-                            "ipa": mot_ipa[mi],
-                            "liaison": "none" if force_none else (mot_liaison[mi] if mi < len(mot_liaison) else "none"),
-                            "punct_before": pending_punct if j == 0 else None,
-                            "punct_after": None,
-                        })
-                        mi += 1
-                        pending_punct = None
-
-        elif tok.type.name == "FORMULE":
-            # Utiliser le phone des formules (construit morceau par morceau)
-            lecture = getattr(tok, "lecture", None)
-            if lecture and getattr(lecture, "phone", ""):
-                # phone contient des espaces entre composants : "kaʁɑ̃t dø"
-                components = lecture.phone.split()
-            else:
-                # Fallback : texte brut comme un seul mot
-                components = [tok.text]
-
-            for j, comp_ipa in enumerate(components):
-                entries.append({
-                    "ipa": comp_ipa,
-                    "liaison": "none",
-                    "punct_before": pending_punct if j == 0 else None,
-                    "punct_after": None,
-                })
-                pending_punct = None
-
-        elif tok.type.name == "PONCTUATION":
-            p = _PUNCT_MAP.get(tok.text.strip())
-            if p:
-                if entries:
-                    entries[-1]["punct_after"] = p
-                pending_punct = p
-
-    return entries
-
-
-def _build_ipa_simple(word_entries: list[dict]) -> str:
-    """Construit l'IPA sans liaisons (fallback sans aligneur).
-
-    Insere des espaces entre les mots pour marquer les frontieres
-    (utile pour les phoneme_timings et le DTW d'alignement).
-    """
-    parts: list[str] = []
-    for i, entry in enumerate(word_entries):
-        if i > 0 and not word_entries[i - 1].get("punct_after"):
-            parts.append(" ")
-        parts.append(entry["ipa"])
-        if entry["punct_after"]:
-            parts.append(entry["punct_after"])
-    return "".join(parts)
-
-
-class _MotEntryG2P:
-    """Mot duck-typed pour construire_groupes_lecture (usage TTS)."""
-    __slots__ = ("text", "phone", "liaison", "ponctuation_avant",
-                 "est_formule", "est_ponctuation")
-
-    def __init__(self, phone, liaison, ponctuation_avant):
-        self.text = ""
-        self.phone = phone
-        self.liaison = liaison
-        self.ponctuation_avant = ponctuation_avant
-        self.est_formule = False
-        self.est_ponctuation = False
-
-
-def _build_ipa_groupes(
-    word_entries: list[dict],
-    construire_groupes_lecture,
-) -> str:
-    """Construit l'IPA avec liaisons via le G2P (groupes de lecture).
-
-    Cree des mots duck-typed a partir des entrees, applique
-    construire_groupes_lecture() pour les liaisons et enchainements,
-    puis reassemble avec la ponctuation.
-    """
-    if not word_entries:
-        return ""
-
-    # Construire les mots pour le G2P
-    mots = [
-        _MotEntryG2P(
-            phone=e["ipa"],
-            liaison=e["liaison"],
-            ponctuation_avant=e["punct_before"] is not None,
-        )
-        for e in word_entries
-    ]
-
-    class _ResultProxy:
-        def __init__(self, mots_list):
-            self.mots = mots_list
-
-    # Construire les groupes de lecture (applique liaisons + enchainements)
-    groupes = construire_groupes_lecture(_ResultProxy(mots))
-
-    # Assembler l'IPA depuis les groupes + ponctuation inter-groupes
-    # NB: phone_groupe ne contient PAS les consonnes de liaison,
-    # elles sont indiquees dans jonctions ("liaison_z", "liaison_t", etc.)
-    # On insere des espaces entre les groupes pour marquer les frontieres.
-    parts: list[str] = []
-    wd_offset = 0
-    for gi, grp in enumerate(groupes):
-        # Espace entre groupes (sauf avant le premier, et sauf apres ponctuation)
-        if gi > 0 and parts and parts[-1] not in (",", ".", "?", "!", "\u2026"):
-            parts.append(" ")
-
-        # Reconstituer l'IPA du groupe avec insertions de liaison
-        grp_phones = [m.phone for m in grp.mots]
-        if grp.jonctions:
-            grp_parts = [grp_phones[0]]
-            for j, jonction in enumerate(grp.jonctions):
-                if jonction.startswith("liaison_"):
-                    grp_parts.append(jonction[len("liaison_"):])
-                grp_parts.append(grp_phones[j + 1])
-            parts.append("".join(grp_parts))
-        else:
-            parts.append(grp.phone_groupe)
-
-        last_idx = wd_offset + len(grp.mots) - 1
-        if last_idx < len(word_entries) and word_entries[last_idx]["punct_after"]:
-            parts.append(word_entries[last_idx]["punct_after"])
-        wd_offset += len(grp.mots)
-
-    return "".join(parts)
 
 
 @dataclass
@@ -529,7 +212,7 @@ class OnnxTTSEngine:
             pause_scale: Multiplicateur pour les pauses.
         """
         try:
-            from lectura_phonemiseur import creer_engine as creer_g2p
+            from lectura_g2p import creer_engine as creer_g2p
         except ImportError:
             raise ImportError(
                 "lectura-g2p requis pour synthesize(text). "
