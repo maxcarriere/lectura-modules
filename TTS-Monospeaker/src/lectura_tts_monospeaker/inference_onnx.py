@@ -26,9 +26,6 @@ SEMITONE = 0.0577622  # log(2) / 12
 _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
               "\u2026": "\u2026", "...": "\u2026"}
 
-# Ponctuation terminale (decoupe en phrases)
-_SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
-
 # Durees minimales en frames pour la ponctuation (1 frame ≈ 11.6 ms)
 _PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 25}
 
@@ -96,233 +93,19 @@ def _zero_silence_regions(
 def _text_to_sentences(text: str, g2p) -> list[tuple[str, int]]:
     """Decoupe le texte en phrases, chacune avec IPA + phrase_type.
 
-    Pipeline : Tokeniseur → (Formules) → decoupage en phrases → G2P
-               → (Aligneur/liaisons) → IPA par phrase.
-
-    Modules optionnels :
-        - lectura-formules : lecture des nombres/formules (display_fr)
-        - lectura-aligneur : liaisons et groupes de lecture
-
-    Args:
-        text: Texte francais.
-        g2p: Engine G2P (lectura_nlp).
-
-    Returns:
-        Liste de (ipa_string, phrase_type) par phrase.
+    Delegue au pipeline unifie lectura_g2p.texte_vers_phrases_ipa().
     """
     try:
-        from lectura_tokeniseur import tokenise
+        from lectura_g2p import texte_vers_phrases_ipa
+        return texte_vers_phrases_ipa(text, engine=g2p)
     except ImportError:
-        log.warning("lectura-tokeniseur non installe — ponctuation ignoree")
+        # Fallback minimal sans le pipeline complet
+        log.warning("lectura-g2p non installe — liaisons et formules ignorees")
         words = text.split()
         if not words:
             return []
         result = g2p.analyser(words)
         return [("".join(result.get("g2p", [])), 0)]
-
-    all_tokens = tokenise(text)
-
-    # Enrichir les formules si le module est disponible
-    try:
-        from lectura_formules import enrichir_formules
-        enrichir_formules(all_tokens)
-    except ImportError:
-        pass
-
-    # Grouper les tokens en phrases (decoupage a la ponctuation terminale)
-    sentences: list[list] = []
-    current: list = []
-    for token in all_tokens:
-        current.append(token)
-        if token.type.name == "PONCTUATION" and token.text.strip() in _SENTENCE_PUNCT:
-            sentences.append(current)
-            current = []
-    if current and any(t.type.name in ("MOT", "FORMULE") for t in current):
-        sentences.append(current)
-
-    if not sentences:
-        return []
-
-    # Expandre les formules et collecter tous les mots pour G2P
-    all_words: list[str] = []
-    word_counts: list[int] = []
-    for sent_tokens in sentences:
-        words: list[str] = []
-        for tok in sent_tokens:
-            if tok.type.name == "MOT":
-                words.append(tok.text)
-            elif tok.type.name == "FORMULE":
-                display = getattr(tok, "display_fr", "") or tok.text
-                words.extend(display.split())
-        word_counts.append(len(words))
-        all_words.extend(words)
-
-    if not all_words:
-        return []
-
-    # Un seul appel G2P pour tous les mots
-    g2p_result = g2p.analyser(all_words)
-    all_ipa = g2p_result.get("g2p", [])
-    all_liaison = g2p_result.get("liaison", [])
-
-    # Importer l'aligneur si disponible (pour les liaisons)
-    _cg = None
-    _MA = None
-    try:
-        from lectura_aligneur import construire_groupes as _cg_fn
-        from lectura_aligneur import MotAnalyse as _MA_cls
-        _cg = _cg_fn
-        _MA = _MA_cls
-    except ImportError:
-        pass
-
-    # Construire l'IPA par phrase
-    results: list[tuple[str, int]] = []
-    ipa_idx = 0
-
-    for sent_tokens, n_words in zip(sentences, word_counts):
-        sent_ipa = all_ipa[ipa_idx:ipa_idx + n_words]
-        sent_liaison = (
-            all_liaison[ipa_idx:ipa_idx + n_words]
-            if all_liaison else ["none"] * n_words
-        )
-        ipa_idx += n_words
-
-        # Detecter phrase_type depuis la ponctuation terminale
-        phrase_type = 0
-        for tok in reversed(sent_tokens):
-            if tok.type.name == "PONCTUATION":
-                p = tok.text.strip()
-                if p == "?":
-                    phrase_type = 1
-                elif p == "!":
-                    phrase_type = 2
-                elif p in ("\u2026", "..."):
-                    phrase_type = 3
-                break
-
-        if _cg is not None and _MA is not None and sent_ipa:
-            ipa = _build_ipa_groupes(
-                sent_tokens, sent_ipa, sent_liaison, _cg, _MA,
-            )
-        else:
-            ipa = _build_ipa_simple(sent_tokens, sent_ipa)
-
-        if ipa:
-            results.append((ipa, phrase_type))
-
-    return results
-
-
-def _build_ipa_simple(sent_tokens: list, sent_ipa: list[str]) -> str:
-    """Construit l'IPA sans liaisons (fallback sans aligneur)."""
-    parts: list[str] = []
-    word_idx = 0
-    for tok in sent_tokens:
-        if tok.type.name == "MOT":
-            if word_idx < len(sent_ipa):
-                parts.append(sent_ipa[word_idx])
-                word_idx += 1
-        elif tok.type.name == "FORMULE":
-            display = getattr(tok, "display_fr", "") or tok.text
-            n = len(display.split())
-            for _ in range(n):
-                if word_idx < len(sent_ipa):
-                    parts.append(sent_ipa[word_idx])
-                    word_idx += 1
-        elif tok.type.name == "PONCTUATION":
-            punct = _PUNCT_MAP.get(tok.text.strip())
-            if punct:
-                parts.append(punct)
-    return "".join(parts)
-
-
-def _build_ipa_groupes(
-    sent_tokens: list,
-    sent_ipa: list[str],
-    sent_liaison: list[str],
-    construire_groupes,
-    MotAnalyse,
-) -> str:
-    """Construit l'IPA avec liaisons via l'aligneur.
-
-    Cree des MotAnalyse a partir des resultats G2P, applique
-    construire_groupes() pour obtenir phone_groupe avec liaisons,
-    puis reassemble avec la ponctuation.
-    """
-    # Construire la liste de mots avec info ponctuation
-    words_info: list[dict] = []
-    pending_punct: str | None = None
-    word_idx = 0
-
-    for tok in sent_tokens:
-        if tok.type.name in ("MOT", "FORMULE"):
-            if tok.type.name == "FORMULE":
-                display = getattr(tok, "display_fr", "") or tok.text
-                n = len(display.split())
-            else:
-                n = 1
-            for j in range(n):
-                if word_idx < len(sent_ipa):
-                    words_info.append({
-                        "ipa": sent_ipa[word_idx],
-                        "liaison": (
-                            sent_liaison[word_idx]
-                            if word_idx < len(sent_liaison)
-                            else "none"
-                        ),
-                        "punct_before": pending_punct if j == 0 else None,
-                        "punct_after": None,
-                    })
-                    word_idx += 1
-                    pending_punct = None
-        elif tok.type.name == "PONCTUATION":
-            p = _PUNCT_MAP.get(tok.text.strip())
-            if p:
-                if words_info:
-                    words_info[-1]["punct_after"] = p
-                pending_punct = p
-
-    if not words_info:
-        return ""
-
-    # Construire les MotAnalyse
-    mots = [
-        MotAnalyse(
-            phone=wi["ipa"],
-            liaison=wi["liaison"],
-            ponctuation_avant=wi["punct_before"] is not None,
-        )
-        for wi in words_info
-    ]
-
-    # Construire les groupes de lecture (applique liaisons + enchainements)
-    groupes = construire_groupes(mots)
-
-    # Assembler l'IPA depuis les groupes + ponctuation inter-groupes
-    # NB: phone_groupe ne contient PAS les consonnes de liaison,
-    # elles sont indiquees dans jonctions ("liaison_z", "liaison_t", etc.)
-    parts: list[str] = []
-    wd_offset = 0
-    for grp in groupes:
-        # Reconstituer l'IPA du groupe avec insertions de liaison
-        grp_phones = [m.phone for m in grp.mots]
-        if grp.jonctions:
-            grp_parts = [grp_phones[0]]
-            for j, jonction in enumerate(grp.jonctions):
-                if jonction.startswith("liaison_"):
-                    grp_parts.append(jonction[len("liaison_"):])
-                grp_parts.append(grp_phones[j + 1])
-            parts.append("".join(grp_parts))
-        else:
-            parts.append(grp.phone_groupe)
-
-        last_idx = wd_offset + len(grp.mots) - 1
-        if last_idx < len(words_info) and words_info[last_idx]["punct_after"]:
-            parts.append(words_info[last_idx]["punct_after"])
-        wd_offset += len(grp.mots)
-
-    return "".join(parts)
 
 
 @dataclass
@@ -412,6 +195,7 @@ class OnnxTTSEngine:
         pitch_range: float = 1.3,
         energy_scale: float = 1.0,
         pause_scale: float = 1.0,
+        variability: bool = False,
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
@@ -428,7 +212,7 @@ class OnnxTTSEngine:
             pause_scale: Multiplicateur pour les pauses.
         """
         try:
-            from lectura_nlp import creer_engine as creer_g2p
+            from lectura_g2p import creer_engine as creer_g2p
         except ImportError:
             raise ImportError(
                 "lectura-g2p requis pour synthesize(text). "
@@ -449,7 +233,7 @@ class OnnxTTSEngine:
 
         prosody = dict(duration_scale=duration_scale, pitch_shift=pitch_shift,
                        pitch_range=pitch_range, energy_scale=energy_scale,
-                       pause_scale=pause_scale)
+                       pause_scale=pause_scale, variability=variability)
 
         # Phrase unique — pas de concatenation
         if len(sentences) == 1:
@@ -499,6 +283,7 @@ class OnnxTTSEngine:
         pitch_range: float = 1.3,
         energy_scale: float = 1.0,
         pause_scale: float = 1.0,
+        variability: bool = False,
     ) -> TTSResult:
         """Synthetise une sequence de phonemes IPA.
 
@@ -521,6 +306,17 @@ class OnnxTTSEngine:
 
         # Convertir IPA → phone IDs
         phones = ipa_to_phones(phonemes_ipa)
+
+        # Reperer les frontieres de mots (espaces dans l'IPA) pour les timings
+        space_after: list[int] = []
+        segments = phonemes_ipa.split(" ")
+        phone_count = 0
+        for seg_idx, segment in enumerate(segments):
+            if segment:
+                phone_count += len(ipa_to_phones(segment))
+            if seg_idx < len(segments) - 1 and phone_count > 0:
+                space_after.append(phone_count - 1)
+
         sil_id = self._phone2id["#"]
         unk_id = self._phone2id.get("<UNK>", 1)
 
@@ -548,6 +344,12 @@ class OnnxTTSEngine:
 
         durations = np.maximum(1, np.round(dur_raw * duration_scale)).astype(np.int64)
 
+        if variability:
+            rng = np.random.default_rng()
+            dur_noise = rng.normal(1.0, 0.10, size=durations.shape)
+            dur_noise[pause_mask] = 1.0
+            durations = np.maximum(1, np.round(durations * dur_noise)).astype(np.int64)
+
         # Durees minimales pour la ponctuation
         for idx, phone in enumerate(phones):
             min_frames = _PUNCT_MIN_FRAMES.get(phone)
@@ -562,8 +364,14 @@ class OnnxTTSEngine:
             + pitch_shift * SEMITONE
         )
 
+        if variability:
+            pitch_values *= rng.normal(1.0, 0.03, size=pitch_values.shape)
+
         # Energy
         energy_values = energy_pred[0] * energy_scale
+
+        if variability:
+            energy_values *= rng.normal(1.0, 0.02, size=energy_values.shape)
 
         # 3. Embeddings (matmul simple — poids Conv1d(1, D, 1))
         emb = self._config["embeddings"]
@@ -617,8 +425,8 @@ class OnnxTTSEngine:
         max_val = max(abs(audio.max()), abs(audio.min()), 1e-8)
         audio = np.clip(audio / max_val, -1.0, 1.0).astype(np.float32)
 
-        # 9. Construire les timings phonemes
-        timings = self._build_timings(phones, durations, hop_length)
+        # 9. Construire les timings phonemes (avec espaces aux frontieres de mots)
+        timings = self._build_timings(phones, durations, hop_length, space_after)
 
         return TTSResult(
             samples=audio,
@@ -631,10 +439,14 @@ class OnnxTTSEngine:
         phones: list[str],
         durations: np.ndarray,
         hop_length: int,
+        space_after: list[int] | None = None,
     ) -> list[PhonemeTiming]:
-        """Construit les timings phonemes depuis les durees predites."""
+        """Construit les timings phonemes depuis les durees predites.
+
+        Si space_after est fourni, insere des PhonemeTiming(ipa=" ")
+        aux frontieres de mots pour le DTW d'alignement.
+        """
         timings: list[PhonemeTiming] = []
-        sample_pos = 0
 
         # durations correspond a [SIL, ...phones..., SIL]
         # on skip le premier SIL
@@ -647,5 +459,15 @@ class OnnxTTSEngine:
             end_ms = (offset + dur_samples) / self._sample_rate * 1000
             timings.append(PhonemeTiming(ipa=phone, start_ms=start_ms, end_ms=end_ms))
             offset += dur_samples
+
+        # Inserer les espaces aux frontieres de mots (du dernier au premier)
+        if space_after:
+            sa = set(space_after)
+            for idx in sorted(sa, reverse=True):
+                if 0 <= idx < len(timings):
+                    boundary_ms = timings[idx].end_ms
+                    timings.insert(idx + 1, PhonemeTiming(
+                        ipa=" ", start_ms=boundary_ms, end_ms=boundary_ms,
+                    ))
 
         return timings
