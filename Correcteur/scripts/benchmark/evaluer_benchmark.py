@@ -202,11 +202,11 @@ class AdaptateurLectura(Adaptateur):
         # G2P optionnel pour suggestions phonetiques d<=1
         g2p = None
         try:
-            from lectura_nlp.inference_numpy import NumpyInferenceEngine
+            from lectura_phonemiseur.inference_numpy import NumpyInferenceEngine
             import pathlib
             g2p_dir = pathlib.Path(__file__).resolve().parents[3] / "G2P"
             weights = g2p_dir / "modeles_numpy" / "unifie_weights.json"
-            vocab = g2p_dir / "src" / "lectura_nlp" / "modeles" / "unifie_vocab.json"
+            vocab = g2p_dir / "src" / "lectura_phonemiseur" / "modeles" / "unifie_vocab.json"
             if weights.exists() and vocab.exists():
                 _engine = NumpyInferenceEngine(
                     weights_path=str(weights), vocab_path=str(vocab),
@@ -249,11 +249,11 @@ class AdaptateurLecturaScoring(Adaptateur):
 
         g2p = None
         try:
-            from lectura_nlp.inference_numpy import NumpyInferenceEngine
+            from lectura_phonemiseur.inference_numpy import NumpyInferenceEngine
             import pathlib
             g2p_dir = pathlib.Path(__file__).resolve().parents[3] / "G2P"
             weights = g2p_dir / "modeles_numpy" / "unifie_weights.json"
-            vocab = g2p_dir / "src" / "lectura_nlp" / "modeles" / "unifie_vocab.json"
+            vocab = g2p_dir / "src" / "lectura_phonemiseur" / "modeles" / "unifie_vocab.json"
             if weights.exists() and vocab.exists():
                 _engine = NumpyInferenceEngine(
                     weights_path=str(weights), vocab_path=str(vocab),
@@ -300,11 +300,11 @@ class AdaptateurLecturaScoringAzerty(Adaptateur):
 
         g2p = None
         try:
-            from lectura_nlp.inference_numpy import NumpyInferenceEngine
+            from lectura_phonemiseur.inference_numpy import NumpyInferenceEngine
             import pathlib
             g2p_dir = pathlib.Path(__file__).resolve().parents[3] / "G2P"
             weights = g2p_dir / "modeles_numpy" / "unifie_weights.json"
-            vocab = g2p_dir / "src" / "lectura_nlp" / "modeles" / "unifie_vocab.json"
+            vocab = g2p_dir / "src" / "lectura_phonemiseur" / "modeles" / "unifie_vocab.json"
             if weights.exists() and vocab.exists():
                 _engine = NumpyInferenceEngine(
                     weights_path=str(weights), vocab_path=str(vocab),
