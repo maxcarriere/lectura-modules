@@ -17,7 +17,6 @@ from lectura_aligneur._types import (
     GroupePhonologique,
     Syllabe,
     ResultatAnalyse,
-    MotAnalyse,
     EventFormule,
     LectureFormule,
     OptionsGroupes,
@@ -26,6 +25,23 @@ from lectura_aligneur._types import (
     ResultatSyllabation,
     Span,
 )
+
+
+class _MotAnalyseProxy:
+    """Objet duck-typed remplacant MotAnalyse pour le mode API."""
+
+    def __init__(self, text="", phone="", liaison="none", pos="",
+                 ponctuation_avant=False, elision_avant=False,
+                 est_formule=False, est_ponctuation=False, span=(0, 0)):
+        self.text = text
+        self.phone = phone
+        self.liaison = liaison
+        self.pos = pos
+        self.ponctuation_avant = ponctuation_avant
+        self.elision_avant = elision_avant
+        self.est_formule = est_formule
+        self.est_ponctuation = est_ponctuation
+        self.span = span
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +104,7 @@ class LecturaSyllabeur:
 
     def analyser_complet(
         self,
-        mots: list[MotAnalyse],
+        mots: list,
         lectures_formules: dict[int, LectureFormule] | None = None,
         options: OptionsGroupes | None = None,
     ) -> ResultatSyllabation:
@@ -113,7 +129,7 @@ class LecturaSyllabeur:
 
     def construire_groupes(
         self,
-        mots: list[MotAnalyse],
+        mots: list,
         options: OptionsGroupes | None = None,
     ) -> list[GroupeLecture]:
         """E1 seul : construit les groupes de lecture."""
@@ -177,16 +193,16 @@ class LecturaSyllabeur:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _serialiser_mot_analyse(m: MotAnalyse) -> dict:
+def _serialiser_mot_analyse(m) -> dict:
     return {
-        "text": m.text,
-        "phone": m.phone,
-        "liaison": m.liaison,
-        "pos": m.pos,
-        "ponctuation_avant": m.ponctuation_avant,
-        "elision_avant": m.elision_avant,
-        "est_formule": m.est_formule,
-        "span": list(m.span),
+        "text": getattr(m, "text", ""),
+        "phone": getattr(m, "phone", ""),
+        "liaison": getattr(m, "liaison", "none"),
+        "pos": getattr(m, "pos", ""),
+        "ponctuation_avant": getattr(m, "ponctuation_avant", False),
+        "elision_avant": getattr(m, "elision_avant", False),
+        "est_formule": getattr(m, "est_formule", False),
+        "span": list(getattr(m, "span", (0, 0))),
     }
 
 
@@ -276,15 +292,16 @@ def _deserialiser_lecture_formule(d: dict | None) -> LectureFormule | None:
     )
 
 
-def _deserialiser_mot_analyse(d: dict) -> MotAnalyse:
-    return MotAnalyse(
-        token=None,
+def _deserialiser_mot_analyse(d: dict) -> _MotAnalyseProxy:
+    return _MotAnalyseProxy(
+        text=d.get("text", ""),
         phone=d.get("phone", ""),
         liaison=d.get("liaison", "none"),
         pos=d.get("pos", ""),
         ponctuation_avant=d.get("ponctuation_avant", False),
         elision_avant=d.get("elision_avant", False),
         est_formule=d.get("est_formule", False),
+        span=tuple(d.get("span", [0, 0])),
     )
 
 

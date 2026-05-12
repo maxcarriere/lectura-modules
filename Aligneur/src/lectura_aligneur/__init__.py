@@ -1,9 +1,11 @@
 """Lectura Aligneur-Syllabeur — Aligneur grapheme-phoneme et syllabeur phonologique du francais.
 
 Pivot central du pipeline Lectura. Realise l'alignement lettre-par-lettre
-entre orthographe et phonetique, construit les groupes de lecture (elisions,
-liaisons, enchainements), et decompose chaque syllabe en attaque/noyau/coda
-avec correspondance grapheme-phoneme.
+entre orthographe et phonetique, et decompose chaque syllabe en
+attaque/noyau/coda avec correspondance grapheme-phoneme.
+
+La construction des groupes de lecture (E1 : elisions, liaisons,
+enchainements) est desormais dans le module G2P (lectura_phonemiseur.groupes_lecture).
 
 Mode bi-modal :
   - Local : si l'algo et les donnees sont disponibles (installation complete)
@@ -21,7 +23,6 @@ from lectura_aligneur._types import (
     GroupePhonologique,
     Syllabe,
     ResultatAnalyse,
-    MotAnalyse,
     EventFormule,
     LectureFormule,
     OptionsGroupes,
@@ -44,13 +45,10 @@ try:
         # Protocoles
         Phonemizer,
         EspeakPhonemizer,
-        # Fonctions E1/E2
-        construire_groupes,
+        # Fonctions E2
         lecture_depuis_g2p,
         syllabifier_groupes,
         _valider_spans_formule,
-        # Schwas pedagogiques
-        ajouter_schwa_final,
         # Classe principale (version locale)
         LecturaSyllabeur,
     )
@@ -66,12 +64,6 @@ except ImportError:
     # Stubs pour les fonctions non disponibles en mode API
     Phonemizer = None  # type: ignore[assignment,misc]
     EspeakPhonemizer = None  # type: ignore[assignment,misc]
-
-    def construire_groupes(*args, **kwargs):  # type: ignore[misc]
-        raise RuntimeError(
-            "construire_groupes() n'est pas disponible en mode API. "
-            "Utilisez LecturaSyllabeur().construire_groupes() a la place."
-        )
 
     def syllabifier_groupes(*args, **kwargs):  # type: ignore[misc]
         raise RuntimeError(
@@ -89,10 +81,25 @@ except ImportError:
             "_valider_spans_formule() n'est pas disponible en mode API."
         )
 
+# Re-export depuis le G2P pour retrocompatibilite
+try:
+    from lectura_phonemiseur.groupes_lecture import (
+        construire_groupes_lecture,
+        OptionsGroupes as _G2POptionsGroupes,
+        ajouter_schwa_final,
+    )
+except ImportError:
+    def construire_groupes_lecture(*args, **kwargs):  # type: ignore[misc]
+        raise RuntimeError(
+            "construire_groupes_lecture() requiert le module lectura_phonemiseur. "
+            "Installez-le : pip install lectura-phonemiseur"
+        )
+
     def ajouter_schwa_final(*args, **kwargs):  # type: ignore[misc]
         raise RuntimeError(
-            "ajouter_schwa_final() n'est pas disponible en mode API."
+            "ajouter_schwa_final() requiert le module lectura_phonemiseur. "
+            "Installez-le : pip install lectura-phonemiseur"
         )
 
 
-__version__ = "3.0.0"
+__version__ = "4.0.0"
