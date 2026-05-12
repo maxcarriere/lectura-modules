@@ -267,9 +267,15 @@ register(EngineInfo(
     factory=lambda p: MbrolaTTSEngine(**p),
     params=[
         EngineParam("voice", "Voix", "choice", _DEFAULT_VOICE,
-                     choices=["fr1", "fr2", "fr4"]),
-        EngineParam("pitch_hz", "Pitch (Hz)", "float", 180.0, min_val=80, max_val=350),
-        EngineParam("duration_scale", "Facteur durée", "float", 1.0,
-                     min_val=0.3, max_val=5.0),
+                     choices=["fr1", "fr2", "fr4"], role="voice"),
+        EngineParam("duration_scale", "Vitesse", "float", 1.0,
+                     min_val=0.3, max_val=5.0, role="speed"),
+        EngineParam("pitch_hz", "Pitch (Hz)", "float", 180.0, min_val=80, max_val=350,
+                     role="pitch"),
     ],
+    category="builtin",
+    license_notice=(
+        "MBROLA est sous licence AGPL-3.0. Les voix françaises (fr1-fr7) "
+        "sont distribuées sous licence non-commerciale."
+    ),
 ))

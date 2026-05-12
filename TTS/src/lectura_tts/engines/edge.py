@@ -89,13 +89,24 @@ register(EngineInfo(
     supports_text=True,
     requires_internet=True,
     requires_api_key=False,
-    install_instructions="pip install lectura-tts[edge]",
+    install_instructions="pip install edge-tts soundfile",
     check_available=_check,
     factory=lambda p: EdgeTtsTTSEngine(**p),
     params=[
         EngineParam("voice", "Voix", "choice", "fr-FR-DeniseNeural",
-                     choices=["fr-FR-DeniseNeural", "fr-FR-HenriNeural"]),
+                     choices=["fr-FR-DeniseNeural", "fr-FR-HenriNeural"],
+                     role="voice"),
         EngineParam("rate", "Vitesse", "choice", "+0%",
-                     choices=["-50%", "-20%", "+0%", "+20%", "+50%"]),
+                     choices=["-50%", "-20%", "+0%", "+20%", "+50%"],
+                     role="speed"),
     ],
+    category="extension",
+    install_command="pip install edge-tts soundfile",
+    uninstall_packages=["edge-tts"],
+    pip_packages=["edge-tts", "soundfile"],
+    check_modules=["edge_tts"],
+    license_notice=(
+        "Edge TTS utilise les services Microsoft Edge. "
+        "L'usage commercial est interdit par les conditions d'utilisation de Microsoft."
+    ),
 ))

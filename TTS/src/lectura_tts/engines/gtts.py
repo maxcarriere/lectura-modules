@@ -60,10 +60,19 @@ register(EngineInfo(
     supports_text=True,
     requires_internet=True,
     requires_api_key=False,
-    install_instructions="pip install lectura-tts[gtts]",
+    install_instructions="pip install gTTS soundfile",
     check_available=_check,
     factory=lambda p: GTtsTTSEngine(**p),
     params=[
-        EngineParam("slow", "Parole lente", "bool", False),
+        EngineParam("slow", "Parole lente", "bool", False, role="speed"),
     ],
+    category="extension",
+    install_command="pip install gTTS soundfile",
+    uninstall_packages=["gTTS"],
+    pip_packages=["gTTS", "soundfile"],
+    check_modules=["gtts"],
+    license_notice=(
+        "gTTS utilise l'API Google Translate. "
+        "L'usage commercial est interdit par les conditions d'utilisation de Google."
+    ),
 ))

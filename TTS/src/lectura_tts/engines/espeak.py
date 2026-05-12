@@ -187,7 +187,10 @@ register(EngineInfo(
     check_available=_check,
     factory=lambda p: EspeakTTSEngine(**p),
     params=[
-        EngineParam("speed", "Vitesse (mots/min)", "int", 130, min_val=80, max_val=450),
-        EngineParam("pitch", "Hauteur (0-99)", "int", 50, min_val=0, max_val=99),
+        EngineParam("speed", "Vitesse (mots/min)", "int", 130, min_val=80, max_val=450,
+                     role="speed"),
+        EngineParam("pitch", "Hauteur (0-99)", "int", 50, min_val=0, max_val=99,
+                     role="pitch"),
     ],
+    category="builtin",
 ))

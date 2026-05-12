@@ -35,12 +35,14 @@ class InputType(Enum):
 
     ORTHOGRAPHE = "orthographe"
     PHONEMIQUE = "phonemique"
+    PSEUDO_ORTHOGRAPHE = "pseudo_orthographe"
 
 
 class Granularity(Enum):
     """Granularité de la lecture."""
 
     FLUIDE = "fluide"
+    DICTEE = "dictee"
     MOT_A_MOT = "mot_a_mot"
     SYLLABES = "syllabes"
 

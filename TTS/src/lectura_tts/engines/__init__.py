@@ -11,10 +11,15 @@ _ENGINE_MODULES = [
     "lectura_tts.engines.mbrola",
     "lectura_tts.engines.piper",
     "lectura_tts.engines.kokoro",
+    "lectura_tts.engines.monospeaker",
+    "lectura_tts.engines.multispeaker",
+    "lectura_tts.engines.diphone",
     "lectura_tts.engines.gtts",
     "lectura_tts.engines.edge",
     "lectura_tts.engines.cloud_google",
     "lectura_tts.engines.cloud_aws",
+    "lectura_tts.engines.cloud_azure",
+    "lectura_tts.engines.elevenlabs",
 ]
 
 for _mod in _ENGINE_MODULES:
