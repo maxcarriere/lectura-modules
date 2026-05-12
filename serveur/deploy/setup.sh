@@ -36,6 +36,12 @@ pip install -r requirements.txt
 # pip install ./lectura_p2g_complet-*.whl
 # pip install ./lectura_aligneur_complet-*.whl
 # pip install lectura-formules lectura-tokeniseur lectura-lexique
+pip install lectura-tts-monospeaker[onnx,g2p]
+pip install lectura-tts-diphone[all]
+mkdir -p /home/lectura/.lectura/models/tts_mono
+cp /opt/lectura/modeles/tts_mono/* /home/lectura/.lectura/models/tts_mono/
+mkdir -p /home/lectura/.lectura/models/tts_diphone
+cp /opt/lectura/modeles/tts_diphone/* /home/lectura/.lectura/models/tts_diphone/
 "
 
 # 6. Nginx

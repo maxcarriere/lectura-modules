@@ -88,23 +88,33 @@ class SyllabifierGroupesRequest(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
-def _mot_in_to_analyse(m: MotAnalyseIn):
-    """Convertit un MotAnalyseIn en MotAnalyse."""
-    from lectura_aligneur._types import MotAnalyse
+class _MotProxy:
+    """Objet duck-typed compatible avec construire_groupes_lecture et le Syllabeur."""
 
-    class _FakeToken:
-        def __init__(self, text: str, span: tuple):
-            self.text = text
-            self.span = span
+    def __init__(self, text, phone, liaison, pos, ponctuation_avant,
+                 elision_avant, est_formule, span):
+        self.text = text
+        self.phone = phone
+        self.liaison = liaison
+        self.pos = pos
+        self.ponctuation_avant = ponctuation_avant
+        self.elision_avant = elision_avant
+        self.est_formule = est_formule
+        self.est_ponctuation = False
+        self.span = span
 
-    return MotAnalyse(
-        token=_FakeToken(m.text, tuple(m.span)),
+
+def _mot_in_to_proxy(m: MotAnalyseIn) -> _MotProxy:
+    """Convertit un MotAnalyseIn en objet duck-typed."""
+    return _MotProxy(
+        text=m.text,
         phone=m.phone,
         liaison=m.liaison,
         pos=m.pos,
         ponctuation_avant=m.ponctuation_avant,
         elision_avant=m.elision_avant,
         est_formule=m.est_formule,
+        span=tuple(m.span),
     )
 
 
@@ -125,8 +135,21 @@ def _lecture_in_to_formule(lf: LectureFormuleIn):
     )
 
 
-def _options_in_to_options(o: OptionsGroupesIn | None):
-    """Convertit OptionsGroupesIn en OptionsGroupes."""
+def _options_in_to_g2p_options(o: OptionsGroupesIn | None):
+    """Convertit OptionsGroupesIn en OptionsGroupes du G2P."""
+    if o is None:
+        return None
+    from lectura_phonemiseur.groupes_lecture import OptionsGroupes
+    return OptionsGroupes(
+        gerer_elisions=o.gerer_elisions,
+        gerer_liaisons=o.gerer_liaisons,
+        gerer_enchainement=o.gerer_enchainement,
+        ajouter_schwas_finaux=o.ajouter_schwas_finaux,
+    )
+
+
+def _options_in_to_aligneur_options(o: OptionsGroupesIn | None):
+    """Convertit OptionsGroupesIn en OptionsGroupes de l'aligneur."""
     if o is None:
         return None
     from lectura_aligneur._types import OptionsGroupes
@@ -139,8 +162,30 @@ def _options_in_to_options(o: OptionsGroupesIn | None):
 
 
 def _serialiser_resultat(obj) -> dict:
-    """Serialise un objet dataclass en dict JSON-safe."""
-    return asdict(obj)
+    """Serialise un objet dataclass ou duck-typed en dict JSON-safe."""
+    try:
+        return asdict(obj)
+    except TypeError:
+        # Fallback pour les objets non-dataclass
+        result = {}
+        for key in ("mots", "phone_groupe", "span", "jonctions",
+                     "est_formule", "lecture", "text"):
+            if hasattr(obj, key):
+                val = getattr(obj, key)
+                if isinstance(val, list):
+                    val = [_serialiser_mot(m) if hasattr(m, "phone") else m for m in val]
+                result[key] = val
+        return result
+
+
+def _serialiser_mot(m) -> dict:
+    """Serialise un mot duck-typed en dict."""
+    result = {}
+    for key in ("text", "phone", "liaison", "pos", "ponctuation_avant",
+                 "elision_avant", "est_formule", "est_ponctuation", "span"):
+        if hasattr(m, key):
+            result[key] = getattr(m, key)
+    return result
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────
@@ -170,27 +215,33 @@ async def syllabify_ipa(req: SyllabifyIpaRequest):
 
 @router.post("/analyser_complet")
 async def analyser_complet(req: AnalyserCompletRequest):
-    """Analyse complete E1 + E2."""
+    """Analyse complete : groupes de lecture (G2P) + syllabation (Aligneur)."""
     syl = _get_syllabeur()
-    mots = [_mot_in_to_analyse(m) for m in req.mots]
+    mots = [_mot_in_to_proxy(m) for m in req.mots]
     lectures = None
     if req.lectures_formules:
         lectures = {
             int(k): _lecture_in_to_formule(v)
             for k, v in req.lectures_formules.items()
         }
-    options = _options_in_to_options(req.options)
+    options = _options_in_to_aligneur_options(req.options)
     result = syl.analyser_complet(mots, lectures, options)
     return _serialiser_resultat(result)
 
 
 @router.post("/construire_groupes")
-async def construire_groupes(req: ConstruireGroupesRequest):
-    """E1 seul : construire les groupes de lecture."""
-    syl = _get_syllabeur()
-    mots = [_mot_in_to_analyse(m) for m in req.mots]
-    options = _options_in_to_options(req.options)
-    groupes = syl.construire_groupes(mots, options)
+async def construire_groupes_endpoint(req: ConstruireGroupesRequest):
+    """E1 seul : construire les groupes de lecture (via G2P)."""
+    from lectura_phonemiseur.groupes_lecture import construire_groupes_lecture
+
+    mots = [_mot_in_to_proxy(m) for m in req.mots]
+    options = _options_in_to_g2p_options(req.options)
+
+    class _ResultProxy:
+        def __init__(self, mots_list):
+            self.mots = mots_list
+
+    groupes = construire_groupes_lecture(_ResultProxy(mots), options)
     return [_serialiser_resultat(g) for g in groupes]
 
 

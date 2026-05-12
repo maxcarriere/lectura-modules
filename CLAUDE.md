@@ -17,41 +17,48 @@ Chaque module est un package Python autonome dans son propre dossier :
 
 ```
 Modules/
-├── Tokeniseur/    pip install lectura-tokeniseur
-├── G2P/           pip install lectura-g2p
-├── P2G/           pip install lectura-p2g
-├── Syllabeur/     pip install lectura-syllabeur
-├── Formules/      pip install lectura-formules
-├── Correcteur/    pip install lectura-correcteur  (en cours)
-├── Lexique/       donnees linguistiques partagees
-├── pyproject.toml meta-package "lectura" (installe tout)
-└── exporter.py    script d'export vers output/
+├── Tokeniseur/      pip install lectura-tokeniseur
+├── Formules/        pip install lectura-formules
+├── Phonemiseur/     pip install lectura-phonemiseur  (ex G2P)
+├── Graphemiseur/    pip install lectura-graphemiseur (ex P2G)
+├── Aligneur/        pip install lectura-aligneur
+├── Correcteur/      pip install lectura-correcteur
+├── Lexique/         donnees linguistiques partagees
+├── G2P-Pipeline/    pip install lectura-g2p (pipeline couche 2)
+├── pyproject.toml   meta-package "lectura" (installe tout)
+└── exporter.py      script d'export vers output/
 ```
 
 Installation en mode dev (editable) :
 ```bash
 pip install -e Tokeniseur/
-pip install -e G2P/[onnx]
+pip install -e Phonemiseur/[onnx]
 ```
 
 Tests :
 ```bash
 cd Tokeniseur && python -m pytest tests/
-cd G2P && python -m pytest tests/
+cd Phonemiseur && python -m pytest tests/
 ```
 
 ### Etape 2 — Export (workspace → output)
 
 ```bash
-python exporter.py           # copie fichiers git + modeles numpy
-python exporter.py --dry-run # apercu sans copie
+python exporter.py                        # export public + prive
+python exporter.py --mode public          # public uniquement
+python exporter.py --mode private         # prive uniquement
+python exporter.py --dry-run              # apercu sans copie
 ```
 
-L'export copie les fichiers git-tracked + les modeles numpy (trop lourds pour le
-git du workspace mais necessaires pour GitHub/PyPI). Le dossier `output/Modules/`
-a son propre repo git (remote : `lectura-modules` sur GitHub).
+Deux exports :
 
-Fichiers exclus de l'export : `exporter.py`
+| Mode | Destination | Contenu |
+|------|-------------|---------|
+| public | `output/Modules/` | Code AGPL, sans modeles ni serveur → GitHub + PyPI |
+| private | `output/Modules-private/` | Tout : code + modeles + serveur → VPS / client |
+
+`output/Modules/` a son propre repo git (remote : `lectura-modules` sur GitHub).
+`output/Modules-private/` n'a pas de repo git (copie autonome).
 
 ### Etape 3 — Push GitHub
 
@@ -73,8 +80,8 @@ twine upload dist/*
 
 Packages PyPI :
 - `lectura` (meta-package)
-- `lectura-tokeniseur`, `lectura-g2p`, `lectura-p2g`
-- `lectura-syllabeur`, `lectura-formules`
+- `lectura-tokeniseur`, `lectura-phonemiseur`, `lectura-graphemiseur`
+- `lectura-aligneur`, `lectura-formules`, `lectura-g2p` (pipeline)
 
 ### Etape 5 — Mettre a jour le site
 
@@ -94,20 +101,23 @@ git push origin main
 
 ### Backends d'inference (G2P, P2G)
 
-Trois backends disponibles, du plus rapide au zero-dependance :
+Quatre backends disponibles :
 
 | Backend | Dependance | Vitesse | Fichier poids |
 |---------|-----------|---------|---------------|
-| ONNX Runtime | `onnxruntime` | ~2 ms/phrase | `*_int8.onnx` (inclus dans pip) |
+| API | aucune | ~100 ms/phrase | aucun (serveur Lectura) |
+| ONNX Runtime | `onnxruntime` | ~2 ms/phrase | `*_int8.onnx` (serveur) |
 | NumPy | `numpy` | ~50 ms/phrase | `*_weights.json` (modeles_numpy/) |
 | Pure Python | aucune | ~200 ms/phrase | `*_weights.json` (modeles_numpy/) |
 
-Les modeles ONNX sont inclus dans le package pip.
-Les poids JSON (numpy/pure) sont dans `modeles_numpy/` et copies par l'exporter.
+Factory `creer_engine(mode, models_dir)` : cascade de detection des modeles
+(parametre > env var > ~/.lectura/models/ > site-packages > API).
+Les modeles ONNX ne sont PAS dans le wheel PyPI — produit payant a part.
+L'utilisateur installe les modeles dans `~/.lectura/models/` ou utilise l'API.
 
 ### Zero dependance
 
-Tokeniseur, Formules et Syllabeur n'ont aucune dependance Python.
+Tokeniseur, Formules et Aligneur n'ont aucune dependance Python.
 G2P et P2G fonctionnent sans dependance via le backend pur Python.
 
 ### Conventions

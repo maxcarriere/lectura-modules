@@ -18,7 +18,7 @@ _engine = None
 def _get_engine():
     global _engine
     if _engine is None:
-        from lectura_p2g import creer_engine
+        from lectura_graphemiseur import creer_engine
         _engine = creer_engine(mode="local")
         logger.info("P2G engine charge (mode local)")
     return _engine

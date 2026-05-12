@@ -51,7 +51,11 @@ PUBLIC_EXCLUDE_PATTERNS = [
     "LICENCE-COMMERCIALE.md",
     "editeur_weights.json.gz",
     "ngram.db",
+    "lexique_lectura.db",
+    "lexique_lectura_v4.db",
     "Correcteur/src/lectura_correcteur/data/g2p_v2/",
+    "lexique_correcteur.csv.gz",
+    "lexique_correcteur.db",
     "Correcteur/scripts/",
     "Correcteur/benchmark/",
     "Correcteur/checkpoints/",
@@ -71,6 +75,8 @@ PRIVATE_EXCLUDE_DIRS = [
 
 PRIVATE_EXCLUDE_PATTERNS = [
     "LICENCE.txt",
+    "lexique_lectura.db",
+    "lexique_lectura_v4.db",
 ]
 
 

@@ -103,11 +103,16 @@ async def convert(
 
     # Lire la reference si fournie
     ref_audio = None
+    ref_tmp = None  # garder une reference pour eviter suppression prematuree
     if reference is not None and reference.filename and reference.filename != "":
         try:
+            # Sauver en fichier temporaire WAV — l'engine attend un path ou
+            # un array+sr, et _resolve_reference_se() ne transmet pas le sr.
+            # Passer un path permet a librosa de resampler correctement a 22050.
             ref_np, ref_sr = await _read_audio_upload(reference)
-            # Sauver en fichier temporaire (l'engine attend un path ou array+sr)
-            ref_audio = ref_np
+            ref_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            sf.write(ref_tmp.name, ref_np, ref_sr, format="WAV", subtype="FLOAT")
+            ref_audio = ref_tmp.name
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Erreur lecture reference: {e}")
 
@@ -132,6 +137,14 @@ async def convert(
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Supprimer le fichier temporaire de reference
+        if ref_tmp is not None:
+            import os
+            try:
+                os.unlink(ref_tmp.name)
+            except OSError:
+                pass
 
     # Encoder le resultat en WAV base64
     audio_b64 = _encode_wav_base64(result_audio, result_sr)
