@@ -48,7 +48,6 @@ class EntreeLemme(TypedDict, total=False):
     lemme: str
     cgram: str
     genre: str
-    contrainte_nombre: str
     sous_type: str
     etymologie: str
     freq_opensubs: float
@@ -66,6 +65,7 @@ class Concept(TypedDict, total=False):
     id: int
     lemme_id: int
     sens_num: int
+    label: str
     definition: str
     registre: str
     theme: str
@@ -73,6 +73,13 @@ class Concept(TypedDict, total=False):
     synset_id: str
     qid: str
     source: str
+
+
+class ConceptPropriete(TypedDict):
+    """Entree de la table concept_proprietes (schema v4)."""
+
+    cle: str
+    valeur: str
 
 
 class Categorie(TypedDict, total=False):

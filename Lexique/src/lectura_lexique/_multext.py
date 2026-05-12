@@ -32,7 +32,7 @@ _POS = {
 
 # Position 1 : Sous-type (depend de la categorie)
 _SUBTYPE = {
-    "N": {"c": "commun", "p": "propre"},
+    "N": {"c": "commun", "p": "propre", "p-p": "prénom", "p-f": "patronyme"},
     "V": {"m": "principal", "a": "auxiliaire"},
     "A": {"f": "qualificatif", "o": "ordinal", "i": "indefini",
            "p": "possessif", "d": "demonstratif"},
@@ -111,14 +111,22 @@ def decoder_multext(tag: str) -> dict[str, str]:
 
     elif cat == "N":
         # Nom : N type genre nombre
+        # Extended: Np-p (prénom), Np-f (patronyme)
         if len(tag) > 1 and tag[1] != "-":
-            st = _SUBTYPE.get("N", {}).get(tag[1])
-            if st:
+            # Check for extended subtypes (Np-p, Np-f)
+            if tag[1] == "p" and len(tag) > 3 and tag[2] == "-" and tag[3] in ("p", "f"):
+                ext_key = f"p-{tag[3]}"
+                st = _SUBTYPE.get("N", {}).get(ext_key, "propre")
                 result["sous_type"] = st
-        if len(tag) > 2 and tag[2] != "-":
-            result["genre"] = _GENRE.get(tag[2], tag[2])
-        if len(tag) > 3 and tag[3] != "-":
-            result["nombre"] = _NOMBRE.get(tag[3], tag[3])
+                # No genre/nombre after extended NP tags
+            else:
+                st = _SUBTYPE.get("N", {}).get(tag[1])
+                if st:
+                    result["sous_type"] = st
+                if len(tag) > 2 and tag[2] != "-":
+                    result["genre"] = _GENRE.get(tag[2], tag[2])
+                if len(tag) > 3 and tag[3] != "-":
+                    result["nombre"] = _NOMBRE.get(tag[3], tag[3])
 
     elif cat == "A":
         # Adjectif : A type degre genre nombre
