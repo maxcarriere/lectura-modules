@@ -386,7 +386,9 @@ class OnnxTTSEngine:
         """
         self._ensure_loaded()
 
-        from lectura_tts_multispeaker.phonemes import ipa_to_phones
+        from lectura_tts_multispeaker.phonemes import (
+            ipa_to_phones, get_phone_min_frames, _PHONE_FALLBACKS,
+        )
         from lectura_tts_multispeaker._enhance import enhance_mel, noise_gate, fade_out
 
         # Convertir IPA -> phone IDs
@@ -405,7 +407,16 @@ class OnnxTTSEngine:
         sil_id = self._phone2id["#"]
         unk_id = self._phone2id.get("<UNK>", 1)
 
-        phone_ids = [sil_id] + [self._phone2id.get(p, unk_id) for p in phones] + [sil_id]
+        def _resolve(p: str) -> int:
+            pid = self._phone2id.get(p)
+            if pid is not None:
+                return pid
+            fb = _PHONE_FALLBACKS.get(p)
+            if fb is not None:
+                return self._phone2id.get(fb, unk_id)
+            return unk_id
+
+        phone_ids = [sil_id] + [_resolve(p) for p in phones] + [sil_id]
         phone_ids_np = np.array([phone_ids], dtype=np.int64)
         phrase_type_np = np.array([phrase_type], dtype=np.int64)
 
@@ -451,6 +462,12 @@ class OnnxTTSEngine:
             min_frames = _PUNCT_MIN_FRAMES.get(phone)
             if min_frames is not None:
                 durations[idx + 1] = max(durations[idx + 1], min_frames)
+
+        # Duration floor par type de phone (evite les phones tronques)
+        for idx, phone in enumerate(phones):
+            frame_idx = idx + 1  # +1 pour le SIL initial
+            min_dur = get_phone_min_frames(phone)
+            durations[frame_idx] = max(durations[frame_idx], min_dur)
 
         # Pitch avec shift et range
         pitch_mean = pitch_pred[0].mean()

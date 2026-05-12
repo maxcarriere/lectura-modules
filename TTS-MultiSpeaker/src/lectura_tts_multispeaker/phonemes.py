@@ -93,6 +93,43 @@ def ipa_to_phones(ipa: str) -> list[str]:
     return phones
 
 
+# Fallback mapping for phones not in the vocab (robustesse inference)
+_PHONE_FALLBACKS: dict[str, str] = {
+    "c": "k", "\u025f": "\u0261", "ts": "t",
+    "x": "k", "\u0263": "\u0261", "\u0279": "\u0281",
+    "m\u02b2": "m", "\u028e": "l", "r": "\u0281", "\u027e": "\u0281",
+    "h": "#", "\u0294": "#",
+}
+
+# Voyelles pour le duration floor
+_VOWELS = frozenset({
+    "a", "e", "i", "o", "u", "y",
+    "\u025b", "\u0254", "\u00f8", "\u0153", "\u0259", "\u0251",
+    "\u025b\u0303", "\u0254\u0303", "\u0251\u0303", "\u0153\u0303",
+})
+
+
+def _resolve_phone_id(phone: str, phone2id: dict[str, int], unk_id: int) -> int:
+    """Resolve a phone to its ID, applying fallbacks if needed."""
+    pid = phone2id.get(phone)
+    if pid is not None:
+        return pid
+    fallback = _PHONE_FALLBACKS.get(phone)
+    if fallback is not None:
+        return phone2id.get(fallback, unk_id)
+    return unk_id
+
+
+def get_phone_min_frames(phone: str) -> int:
+    """Return minimum duration in frames for a phone.
+
+    Vowels: 5 frames (~58 ms), consonants/other: 3 frames (~35 ms).
+    """
+    if phone in _VOWELS:
+        return 5
+    return 3
+
+
 def ipa_to_phone_ids(ipa: str, add_silence: bool = True) -> list[int]:
     """Convertit une chaine IPA en sequence de phone IDs.
 
@@ -108,7 +145,7 @@ def ipa_to_phone_ids(ipa: str, add_silence: bool = True) -> list[int]:
     unk_id = phone2id.get("<UNK>", 1)
 
     phones = ipa_to_phones(ipa)
-    ids = [phone2id.get(p, unk_id) for p in phones]
+    ids = [_resolve_phone_id(p, phone2id, unk_id) for p in phones]
 
     if add_silence:
         ids = [sil_id] + ids + [sil_id]
@@ -120,4 +157,4 @@ def phones_to_ids(phones: list[str]) -> list[int]:
     """Convertit une liste de phones en IDs."""
     phone2id = get_phone2id()
     unk_id = phone2id.get("<UNK>", 1)
-    return [phone2id.get(p, unk_id) for p in phones]
+    return [_resolve_phone_id(p, phone2id, unk_id) for p in phones]
