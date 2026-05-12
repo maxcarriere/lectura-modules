@@ -1,0 +1,27 @@
+{
+  "version": "2.0",
+  "lex_dropout": 0.15,
+  "lex_feature_dim": 24,
+  "dev_with_lex": {
+    "pos_accuracy": 0.9845189104448364,
+    "morpho_accuracies": {
+      "Number": 0.9617675876935137,
+      "Gender": 0.9817950225357632,
+      "VerbForm": 0.9956104252400548,
+      "Mood": 0.9981187536743092,
+      "Tense": 0.9978835978835979,
+      "Person": 0.9973544973544973
+    }
+  },
+  "dev_without_lex": {
+    "pos_accuracy": 0.9789535567313346,
+    "morpho_accuracies": {
+      "Number": 0.9611796982167352,
+      "Gender": 0.9794630609445424,
+      "VerbForm": 0.9943366647070351,
+      "Mood": 0.9974524789339604,
+      "Tense": 0.9971977268273564,
+      "Person": 0.9961787184009406
+    }
+  }
+}
