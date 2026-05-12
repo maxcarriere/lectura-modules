@@ -4,7 +4,7 @@ Convertit du texte en groupes prosodiques avec phones IPA.
 
 Backends (ordre de detection) :
   1. LecturaLocalG2P : lecteur_syllabique.Pipeline (Lectura Edition)
-  2. LecturaNlpG2P : lectura_nlp + lectura_tokeniseur (pip install)
+  2. LecturaNlpG2P : lectura_g2p (pipeline unifie, pip install)
   3. LecturaApiG2P : POST /g2p/analyser (urllib, zero deps)
   4. CallableG2P : wraps any callable(text) → list[dict]
 
@@ -28,11 +28,6 @@ _PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation", "suspensive"}
 
 # Ponctuation terminale de phrase
 _SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
-
-# Liaisons francaises : label G2P → consonne IPA
-_LIAISON_MAP = {"Lz": "z", "Lt": "t", "Ln": "n", "Lr": "\u0281", "Lp": "p"}
-# Phones IPA vocaliques (debut de mot suivant)
-_VOWEL_INITIALS = set("aeiouy\u00f8\u0153\u0251\u0254\u0259\u025b")
 
 
 @runtime_checkable
@@ -151,140 +146,86 @@ class LecturaLocalG2P:
 
 
 class LecturaNlpG2P:
-    """G2P via lectura_nlp + lectura_tokeniseur (modules PyPI standards)."""
+    """G2P via lectura_g2p (pipeline unifie PyPI).
+
+    Utilise le pipeline complet : tokeniseur → formules → phonemiseur
+    → groupes de lecture avec liaisons et enchainements.
+    """
 
     def __init__(self) -> None:
-        self._g2p = None
+        self._engine = None
 
     def _ensure_loaded(self) -> None:
-        if self._g2p is not None:
+        if self._engine is not None:
             return
-        from lectura_nlp import creer_engine
-        self._g2p = creer_engine(mode="auto")
+        from lectura_g2p import creer_engine
+        self._engine = creer_engine(mode="auto")
 
     def phonemize(self, text: str) -> list[dict]:
-        """Texte → groupes prosodiques via tokeniseur + G2P + formules."""
+        """Texte → groupes prosodiques via le pipeline G2P unifie."""
         self._ensure_loaded()
-        from lectura_tokeniseur import tokenise
+        from lectura_g2p import texte_vers_phrases_ipa
         from lectura_tts_diphone.phonemes import ipa_to_phones
 
         input_text = text.strip()
         if not input_text:
             return []
 
-        # Garantir un espace avant la ponctuation de phrase pour que le
-        # tokeniseur ne colle pas "mot!" en une seule formule (factorielle).
-        # Exception pour "!" : garder colle apres chiffre ou lettre-variable
-        # isolee (p,k,n,x,y,z) qui signifie factorielle.
-        import re
-        input_text = re.sub(r'(?<!\d)(?<!\b[pknxyz])(?<!\s)!', ' !', input_text)
-        input_text = re.sub(r'(?<!\s)([?;:])', r' \1', input_text)
+        phrases = texte_vers_phrases_ipa(input_text, engine=self._engine)
 
-        tokens_raw = tokenise(input_text)
+        # Convertir les phrases IPA au format diphone (groupes prosodiques)
+        # Chaque phrase IPA contient des espaces (frontieres de mots) et
+        # de la ponctuation (,  .  ?  !  …) comme separateurs de groupes.
+        _boundary_map = {
+            ",": "comma", ".": "period", "?": "question",
+            "!": "exclamation", "\u2026": "suspensive",
+        }
 
-        # Enrichir les formules si le module est disponible
-        try:
-            from lectura_formules import enrichir_formules
-            enrichir_formules(tokens_raw)
-        except ImportError:
-            pass
-
-        # Extraire mots, formules et ponctuation dans l'ordre
-        # entries : liste ordonnee de {"type": "mot"/"formule", ...}
-        entries: list[dict] = []
-        punct_after: dict[int, str] = {}
-
-        for tok in tokens_raw:
-            ttype = tok.type.value if hasattr(tok.type, "value") else tok.type.name
-            if ttype in ("mot", "MOT"):
-                entries.append({"type": "mot", "text": tok.text})
-            elif ttype in ("formule", "FORMULE"):
-                lecture = getattr(tok, "lecture", None)
-                if lecture and getattr(lecture, "phone", ""):
-                    # IPA pre-calculee par lectura_formules
-                    for comp_ipa in lecture.phone.split():
-                        entries.append({"type": "formule", "ipa": comp_ipa})
-                else:
-                    # Pas de lecture dispo — traiter comme mot
-                    entries.append({"type": "mot", "text": tok.text})
-            elif ttype in ("ponctuation", "PONCTUATION"):
-                bnd = _PUNCT_MAP.get(tok.text.strip())
-                if bnd and entries:
-                    punct_after[len(entries) - 1] = bnd
-
-        if not entries:
-            return []
-
-        # G2P batch pour les mots uniquement
-        mot_indices = [i for i, e in enumerate(entries) if e["type"] == "mot"]
-        mot_words = [entries[i]["text"] for i in mot_indices]
-
-        if mot_words:
-            result = self._g2p.analyser(mot_words)
-            ipas = result.get("g2p", [])
-            liaisons = result.get("liaison", [])
-            for j, idx in enumerate(mot_indices):
-                if j < len(ipas):
-                    entries[idx]["ipa"] = ipas[j]
-                if j < len(liaisons):
-                    entries[idx]["liaison"] = liaisons[j]
-
-        # Construire groupes prosodiques
         groups: list[dict] = []
-        current_phones: list[str] = []
-        current_word_boundaries: list[int] = []
 
-        for i, entry in enumerate(entries):
-            ipa = entry.get("ipa", "")
-            if not ipa:
-                continue
-            phones = ipa_to_phones(ipa)
-            if not phones:
-                continue
+        for ipa_str, _phrase_type in phrases:
+            current_phones: list[str] = []
+            current_word_boundaries: list[int] = []
 
-            # Inserer la liaison du mot precedent si applicable
-            # La liaison est portee par le mot *precedent* et s'active si
-            # le mot courant commence par une voyelle et qu'il n'y a pas
-            # de ponctuation entre les deux.
-            if current_phones and i > 0:
-                prev_entry_idx = i - 1
-                # Trouver l'entree precedente qui avait du contenu
-                while prev_entry_idx >= 0 and not entries[prev_entry_idx].get("ipa"):
-                    prev_entry_idx -= 1
-                if prev_entry_idx >= 0:
-                    prev_liaison = entries[prev_entry_idx].get("liaison", "")
-                    liaison_phone = _LIAISON_MAP.get(prev_liaison)
-                    if liaison_phone and phones[0][0] in _VOWEL_INITIALS:
-                        # Pas de ponctuation entre les deux mots
-                        has_punct = any(
-                            j in punct_after
-                            for j in range(prev_entry_idx, i)
-                        )
-                        if not has_punct:
-                            current_phones.append(liaison_phone)
+            # Parcourir les caracteres de l'IPA
+            i = 0
+            while i < len(ipa_str):
+                ch = ipa_str[i]
 
-            # Marquer la frontiere de mot pour micro-pauses
+                if ch in _boundary_map:
+                    # Ponctuation → fermer le groupe
+                    if current_phones:
+                        groups.append({
+                            "phones": current_phones,
+                            "boundary": _boundary_map[ch],
+                            "word_boundaries": current_word_boundaries,
+                        })
+                        current_phones = []
+                        current_word_boundaries = []
+                    i += 1
+                elif ch == " ":
+                    # Espace → frontiere de mot
+                    if current_phones:
+                        current_word_boundaries.append(len(current_phones))
+                    i += 1
+                else:
+                    # Phone IPA — extraire via ipa_to_phones sur le segment
+                    # jusqu'au prochain espace ou ponctuation
+                    end = i
+                    while end < len(ipa_str) and ipa_str[end] not in (" ", ",", ".", "?", "!", "\u2026"):
+                        end += 1
+                    segment = ipa_str[i:end]
+                    phones = ipa_to_phones(segment)
+                    current_phones.extend(phones)
+                    i = end
+
+            # Dernier groupe de la phrase
             if current_phones:
-                current_word_boundaries.append(len(current_phones))
-            current_phones.extend(phones)
-
-            bnd = punct_after.get(i)
-            if bnd:
                 groups.append({
                     "phones": current_phones,
-                    "boundary": bnd,
+                    "boundary": "period",
                     "word_boundaries": current_word_boundaries,
                 })
-                current_phones = []
-                current_word_boundaries = []
-
-        # Dernier groupe sans ponctuation finale
-        if current_phones:
-            groups.append({
-                "phones": current_phones,
-                "boundary": "period",
-                "word_boundaries": current_word_boundaries,
-            })
 
         return groups
 
@@ -382,7 +323,7 @@ def auto_detect_g2p(
 
     Cascade :
       1. lecteur_syllabique (Lectura Edition complet)
-      2. lectura_nlp + lectura_tokeniseur (modules PyPI)
+      2. lectura_phonemiseur + lectura_tokeniseur (modules PyPI)
       3. API Lectura (zero deps)
 
     Args:
@@ -404,11 +345,10 @@ def auto_detect_g2p(
         except ImportError:
             pass
 
-        # 2. lectura_nlp + lectura_tokeniseur (modules PyPI)
+        # 2. lectura_g2p (pipeline unifie PyPI)
         try:
-            import lectura_nlp  # noqa: F401
-            import lectura_tokeniseur  # noqa: F401
-            log.debug("G2P disponible (lectura_nlp + lectura_tokeniseur)")
+            import lectura_g2p  # noqa: F401
+            log.debug("G2P disponible (lectura_g2p)")
             return LecturaNlpG2P()
         except ImportError:
             if preference == "local":

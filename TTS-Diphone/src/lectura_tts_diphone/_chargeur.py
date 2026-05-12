@@ -22,7 +22,7 @@ REQUIRED_FILES = [
     "diphones.dpk.gz",
 ]
 
-# Fichier optionnel (statistiques prosodiques corpus)
+# Fichiers optionnels
 OPTIONAL_FILES = [
     "diphone_statistics.pkl",
 ]

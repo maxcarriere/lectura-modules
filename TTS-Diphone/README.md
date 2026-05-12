@@ -17,7 +17,7 @@ pip install "lectura-tts-diphone[all]"
 
 ## Utilisation
 
-### Depuis du texte (necessite lectura-g2p)
+### Depuis du texte (necessite lectura-phonemiseur)
 
 ```python
 from lectura_tts_diphone import synthetiser
