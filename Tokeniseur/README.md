@@ -47,5 +47,6 @@ Paris                 MOT
 
 ## Licence
 
-AGPL-3.0-or-later — voir [LICENCE.txt](LICENCE.txt)
-Licence commerciale disponible — voir [LICENCE-COMMERCIALE.md](LICENCE-COMMERCIALE.md)
+Ce module est distribue sous licence **AGPL-3.0** (non commerciale) — voir [LICENCE.txt](LICENCE.txt).
+
+Pour un usage commercial, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com).
