@@ -37,6 +37,7 @@ from lectura_correcteur._utils import PUNCT_RE, LexiqueNormalise, reconstruire_p
 from lectura_correcteur.grammaire import appliquer_grammaire
 from lectura_correcteur.orthographe import VerificateurOrthographe
 from lectura_correcteur.orthographe._resegmentation import resegmenter
+from lectura_correcteur.orthographe._suggestions import _variantes_accents
 from lectura_correcteur.orthographe._sms import expander_sms
 from lectura_correcteur.syntaxe import appliquer_syntaxe
 
@@ -121,6 +122,10 @@ class Correcteur:
         self._lm = None
         if self._config.activer_lm:
             self._init_lm()
+        # Charger le LM trigramme specialise homophones
+        self._lm_homophones = None
+        if self._config.activer_lm_homophones:
+            self._init_lm_homophones()
 
     def _init_viterbi(self) -> None:
         """Charge la matrice de transition si le fichier existe."""
@@ -151,6 +156,16 @@ class Correcteur:
             chemin = str(Path(__file__).parent / "data" / "ngram.db")
         if Path(chemin).exists():
             self._lm = ScorerNgram(chemin)
+
+    def _init_lm_homophones(self) -> None:
+        """Charge le LM trigramme specialise homophones."""
+        from pathlib import Path
+        from lectura_correcteur._lm_homophones import LMHomophones
+        chemin = self._config.chemin_lm_homophones
+        if not chemin:
+            chemin = str(Path(__file__).parent / "data" / "homophones_trigrams.db")
+        if Path(chemin).exists():
+            self._lm_homophones = LMHomophones(chemin, lexique=self._lexique)
 
     @property
     def lexique(self):
@@ -523,7 +538,14 @@ class Correcteur:
         else:
             after_rules = decided_words
 
-        # 6c. Detection confusions phonetiques par LM (si active)
+        # 6c-bis. LM trigramme specialise homophones (couvre tous les mots)
+        if self._lm_homophones is not None:
+            corr_lm_homo = self._verifier_homophones_trigram(analyses)
+            all_corrections.extend(corr_lm_homo)
+            for j in range(min(len(analyses), len(after_rules))):
+                after_rules[j] = analyses[j].corrige
+
+        # 6c. Detection confusions phonetiques par LM generique (si active)
         # Place apres les regles de grammaire pour ne pas interferer
         if self._lm is not None:
             corr_lm = self._verifier_homophones_lm(analyses)
@@ -553,6 +575,263 @@ class Correcteur:
 
         return after_rules, all_corrections
 
+
+    def _verifier_homophones_trigram(
+        self,
+        analyses: list[MotAnalyse],
+    ) -> list[Correction]:
+        """Desambiguise les homophones via le LM trigramme specialise.
+
+        Contrairement au LM ngram generique, ce LM peut toucher les
+        homophones grammaticaux (a/à, est/et, etc.) car il est specialise
+        et tres precis sur ces cas. Il n'intervient que si :
+        - le mot n'a PAS deja ete corrige par une regle de grammaire
+        - le LM trigramme propose une variante differente avec un score > 0
+        - le score du candidat est strictement superieur au score du mot actuel
+
+        Scoring conjoint : pour chaque homophone, on genere aussi des variantes
+        accent du contexte (mot precedent/suivant) et on score toutes les
+        combinaisons. Si la meilleure combinaison implique un changement
+        d'homophone ET un changement d'accent sur le contexte, on applique
+        les deux (ex: "on prepare" → "ont préparé").
+        """
+        corrections: list[Correction] = []
+        lm = self._lm_homophones
+
+        # Suffixes de participe passe (pour guard a/à + PP)
+        _PP_SUFFIXES = (
+            "é", "és", "ée", "ées",
+            "i", "is", "ie", "ies",
+            "u", "us", "ue", "ues",
+            "it", "ite", "ites",
+        )
+
+        # Positions deja corrigees par scoring conjoint (ne pas re-traiter)
+        _joint_corrected: set[int] = set()
+
+        for j, analysis in enumerate(analyses):
+            if j in _joint_corrected:
+                continue
+
+            # Ne pas re-corriger un mot deja touche par les regles
+            if analysis.type_correction != TypeCorrection.AUCUNE:
+                continue
+
+            mot = analysis.corrige.lower()
+
+            # Verifier si c'est un homophone connu
+            if not lm.est_homophone(mot):
+                continue
+
+            # Contexte
+            ctx_gauche = (
+                analyses[j - 1].corrige if j > 0 else None
+            )
+            ctx_droite = (
+                analyses[j + 1].corrige if j + 1 < len(analyses) else None
+            )
+
+            # --- Scoring conjoint : tester variantes accent du contexte ---
+            homo_candidates = lm.candidats(mot)
+            if homo_candidates and len(homo_candidates) >= 2:
+                joint_result = self._scorer_conjoint(
+                    j, mot, homo_candidates, analyses, lm, _PP_SUFFIXES,
+                )
+                if joint_result is not None:
+                    best_homo, ctx_changes, total_score = joint_result
+                    # Appliquer la correction homophone
+                    if best_homo.lower() != mot:
+                        _best_h = best_homo
+                        if analysis.corrige[0].isupper():
+                            _best_h = _best_h[0].upper() + _best_h[1:]
+                        analysis.corrige = _best_h
+                        analysis.type_correction = TypeCorrection.GRAMMAIRE
+                        corrections.append(Correction(
+                            index=j,
+                            original=analysis.original,
+                            corrige=_best_h,
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="lm_homophones.trigram",
+                            explication=(
+                                f"Homophone trigram conjoint : '{mot}' -> '{best_homo}' "
+                                f"(score conjoint {total_score})"
+                            ),
+                        ))
+                    # Appliquer les corrections de contexte
+                    for ctx_idx, ctx_new in ctx_changes:
+                        ctx_analysis = analyses[ctx_idx]
+                        if ctx_analysis.corrige[0].isupper():
+                            ctx_new = ctx_new[0].upper() + ctx_new[1:]
+                        ctx_analysis.corrige = ctx_new
+                        if ctx_analysis.type_correction == TypeCorrection.AUCUNE:
+                            ctx_analysis.type_correction = TypeCorrection.GRAMMAIRE
+                        _joint_corrected.add(ctx_idx)
+                        corrections.append(Correction(
+                            index=ctx_idx,
+                            original=ctx_analysis.original,
+                            corrige=ctx_new,
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="lm_homophones.conjoint",
+                            explication=(
+                                f"Correction conjointe accent : "
+                                f"'{ctx_analysis.original}' -> '{ctx_new}'"
+                            ),
+                        ))
+                    continue
+
+            # --- Scoring simple (fallback) ---
+            best, source = lm.meilleur_homophone(mot, ctx_gauche, ctx_droite)
+
+            if source == "PASS" or best.lower() == mot:
+                continue
+
+            # Verifier que le LM est strictement meilleur pour le candidat
+            score_best = lm.scorer(best, ctx_gauche, ctx_droite)
+            score_current = lm.scorer(mot, ctx_gauche, ctx_droite)
+
+            if score_best <= score_current:
+                continue
+
+            # Guard a/à + PP : ne pas changer "a" → "à" si le mot suivant
+            # est un participe passe (pattern "a + PP" = auxiliaire avoir)
+            if mot == "a" and best.lower() == "\xe0":
+                next_low = ctx_droite.lower() if ctx_droite else ""
+                if next_low.endswith(_PP_SUFFIXES) and not next_low.endswith(
+                    ("er", "ir", "re", "oir")
+                ):
+                    continue
+
+            # Preserver la casse
+            if analysis.corrige[0].isupper():
+                best = best[0].upper() + best[1:]
+
+            analysis.corrige = best
+            analysis.type_correction = TypeCorrection.GRAMMAIRE
+            corrections.append(Correction(
+                index=j,
+                original=analysis.original,
+                corrige=best,
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle="lm_homophones.trigram",
+                explication=(
+                    f"Homophone trigram : '{mot}' -> '{best}' "
+                    f"(score {score_best} vs {score_current})"
+                ),
+            ))
+
+        return corrections
+
+    def _scorer_conjoint(
+        self,
+        j: int,
+        mot: str,
+        homo_candidates: list[tuple[str, float]],
+        analyses: list[MotAnalyse],
+        lm,
+        pp_suffixes: tuple[str, ...],
+    ) -> tuple[str, list[tuple[int, str]], int] | None:
+        """Score conjoint : homophone × variantes accent du contexte.
+
+        Retourne (best_homo, [(ctx_idx, ctx_new), ...], score) si une
+        combinaison conjointe gagne, None sinon.
+        """
+        # Generer les variantes accent pour le contexte gauche et droit
+        # Ne pas generer de variantes qui sont des homophones grammaticaux
+        # (ex: "a" → "à" doit etre gere par les regles, pas par le scoring)
+        _grammar_homos = self._GRAMMAR_HOMOPHONES
+        ctx_left_variants: list[str] = []
+        ctx_right_variants: list[str] = []
+
+        if j > 0:
+            left_word = analyses[j - 1].corrige.lower()
+            ctx_left_variants = [left_word]
+            # Ne generer des variantes que si le mot de contexte n'a pas
+            # deja ete corrige et n'est pas un homophone grammatical
+            if (
+                analyses[j - 1].type_correction == TypeCorrection.AUCUNE
+                and left_word not in _grammar_homos
+            ):
+                for forme, _freq in _variantes_accents(left_word, self._lexique):
+                    if forme not in ctx_left_variants and forme not in _grammar_homos:
+                        ctx_left_variants.append(forme)
+        else:
+            ctx_left_variants = [None]
+
+        if j + 1 < len(analyses):
+            right_word = analyses[j + 1].corrige.lower()
+            ctx_right_variants = [right_word]
+            if (
+                analyses[j + 1].type_correction == TypeCorrection.AUCUNE
+                and right_word not in _grammar_homos
+            ):
+                for forme, _freq in _variantes_accents(right_word, self._lexique):
+                    if forme not in ctx_right_variants and forme not in _grammar_homos:
+                        ctx_right_variants.append(forme)
+        else:
+            ctx_right_variants = [None]
+
+        # Si aucun contexte n'a de variantes accent, pas besoin de scoring conjoint
+        has_left_variants = len(ctx_left_variants) > 1
+        has_right_variants = len(ctx_right_variants) > 1
+        if not has_left_variants and not has_right_variants:
+            return None
+
+        # Scorer toutes les combinaisons
+        best_score = -1
+        best_homo = mot
+        best_ctx_left = ctx_left_variants[0]
+        best_ctx_right = ctx_right_variants[0]
+
+        for ortho, _freq in homo_candidates:
+            ortho_low = ortho.lower()
+            # Filtre same_lemma (coherent avec meilleur_homophone)
+            if (mot, ortho_low) in lm._same_lemma_pairs:
+                continue
+            for cl in ctx_left_variants:
+                for cr in ctx_right_variants:
+                    score = lm.scorer(ortho_low, cl, cr)
+                    if score > best_score:
+                        best_score = score
+                        best_homo = ortho_low
+                        best_ctx_left = cl
+                        best_ctx_right = cr
+
+        if best_score <= 0:
+            return None
+
+        # Score du mot actuel avec contexte actuel
+        baseline_score = lm.scorer(
+            mot,
+            ctx_left_variants[0],
+            ctx_right_variants[0],
+        )
+
+        if best_score <= baseline_score:
+            return None
+
+        # Determiner les changements
+        has_homo_change = (best_homo != mot)
+        ctx_changes: list[tuple[int, str]] = []
+
+        if j > 0 and best_ctx_left != ctx_left_variants[0]:
+            ctx_changes.append((j - 1, best_ctx_left))
+        if j + 1 < len(analyses) and best_ctx_right != ctx_right_variants[0]:
+            ctx_changes.append((j + 1, best_ctx_right))
+
+        # Ne retourner que si au moins un changement (homophone ou contexte)
+        if not has_homo_change and not ctx_changes:
+            return None
+
+        # Guard a/à + PP conjoint : ne pas changer "a" → "à" si le
+        # contexte droit (potentiellement corrige) finit en PP
+        if mot == "a" and best_homo == "\xe0":
+            right_check = best_ctx_right if best_ctx_right else ""
+            if isinstance(right_check, str) and right_check.endswith(
+                pp_suffixes
+            ) and not right_check.endswith(("er", "ir", "re", "oir")):
+                return None
+
+        return best_homo, ctx_changes, best_score
 
     # Paires d'homophones deja traitees par les regles de grammaire.
     # Le LM ne doit pas toucher ces mots (les regles sont plus precises).

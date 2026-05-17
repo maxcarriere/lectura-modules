@@ -87,12 +87,12 @@ def analyser_phrase(
         Resultat avec mots analyses et groupes de lecture.
         Si ``syllabifier=True``, retourne un ResultatSyllabation.
     """
-    from lectura_tokeniseur import tokenise
+    from lectura_tokeniseur import normalise, tokenise
 
     if engine is None:
         engine = creer_engine()
 
-    tokens = tokenise(texte)
+    tokens = tokenise(normalise(texte))
     result = analyser_phrase_complete(tokens, engine=engine)
 
     # Construire les groupes de lecture
@@ -200,12 +200,12 @@ def texte_vers_phrases_ipa(
     >>> texte_vers_phrases_ipa("Les enfants jouent.")
     [('lez‿ɑ̃fɑ̃ ʒu.', 0)]
     """
-    from lectura_tokeniseur import tokenise
+    from lectura_tokeniseur import normalise, tokenise
 
     if engine is None:
         engine = creer_engine()
 
-    all_tokens = tokenise(texte)
+    all_tokens = tokenise(normalise(texte))
 
     # Enrichir les formules
     try:

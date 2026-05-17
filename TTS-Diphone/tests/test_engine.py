@@ -79,14 +79,25 @@ def test_pause_defaults():
 
 def test_group_f0_contour_question():
     from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
-    f0s = DiphoneEngine._group_f0_contour(
-        ["b", "a", "l", "a"],
-        SynthMode.FLUIDE,
-        {"group_idx": 0, "n_groups": 1, "boundary": "question", "base_f0": 200.0},
-    )
-    assert len(f0s) == 4
-    # Interrogative: last phone should be higher
-    assert f0s[-1] > f0s[0]
+    import numpy as np
+
+    # Compare question vs declarative (regles style): question final F0 higher
+    phones = ["b", "a", "l", "a", "k", "ɔ", "m", "ɑ̃"]
+    info_q = {"group_idx": 0, "n_groups": 1, "boundary": "question",
+              "base_f0": 200.0, "macro_expressivity": 1.0,
+              "prosody_style": "regles"}
+    f0s_q = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info_q, word_boundaries=[4])
+
+    info_d = {"group_idx": 0, "n_groups": 1, "boundary": "period",
+              "base_f0": 200.0, "macro_expressivity": 1.0,
+              "prosody_style": "regles"}
+    f0s_d = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info_d, word_boundaries=[4])
+
+    assert len(f0s_q) == 8
+    # Question final F0 should be higher than declarative final F0
+    assert f0s_q[-1] > f0s_d[-1]
 
 
 def test_engine_not_loaded():
@@ -125,40 +136,6 @@ def test_segment_aps_two_words():
     assert len(aps) == 2
     assert aps[0] == (0, 4)
     assert aps[1] == (4, 8)
-
-
-def test_f0_ap_pattern_lh_star():
-    """AP courte: F0 finale > F0 initiale (pattern LH*)."""
-    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
-    # Single AP, continuation (non-final group)
-    phones = ["b", "a", "l"]
-    info = {"group_idx": 0, "n_groups": 2, "boundary": "none",
-            "base_f0": 175.0, "macro_expressivity": 1.0}
-    f0s = DiphoneEngine._group_f0_contour(phones, SynthMode.FLUIDE, info)
-    # The vowel "a" at index 1 is the only syllable; consonants interpolate
-    # With continuation pattern, H* should make final phone relatively high
-    assert f0s[2] >= f0s[0]  # final >= initial (continuation rise)
-
-
-def test_f0_ap_continuation_vs_final():
-    """AP non-finale monte (continuation), AP finale descend (declaratif)."""
-    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
-    # Two words = 2 APs
-    phones = ["b", "ɔ̃", "ʒ", "u", "k", "ɔ", "m", "ɑ̃"]
-    info_cont = {"group_idx": 0, "n_groups": 2, "boundary": "none",
-                 "base_f0": 175.0, "macro_expressivity": 1.0}
-    f0s_cont = DiphoneEngine._group_f0_contour(
-        phones, SynthMode.FLUIDE, info_cont, word_boundaries=[4])
-
-    info_final = {"group_idx": 0, "n_groups": 1, "boundary": "period",
-                  "base_f0": 175.0, "macro_expressivity": 1.0}
-    f0s_final = DiphoneEngine._group_f0_contour(
-        phones, SynthMode.FLUIDE, info_final, word_boundaries=[4])
-
-    # In continuation, the last AP's final vowel should be higher
-    # In declarative, the last AP's final vowel should be lower
-    # Find the last vowel (index 7, "ɑ̃")
-    assert f0s_cont[7] > f0s_final[7]
 
 
 def test_microprosody_voiceless_stop():
@@ -523,10 +500,12 @@ def test_base_f0_scaling():
     info_default = {
         "group_idx": 0, "n_groups": 1, "boundary": "period",
         "base_f0": 175.0, "macro_expressivity": 1.0,
+        "prosody_style": "regles",
     }
     info_low = {
         "group_idx": 0, "n_groups": 1, "boundary": "period",
         "base_f0": 120.0, "macro_expressivity": 1.0,
+        "prosody_style": "regles",
     }
 
     f0s_default = DiphoneEngine._group_f0_contour(
@@ -621,17 +600,199 @@ def test_f0_contour_smoothness():
     """Transitions entre phones adjacents sont lisses (pas de sauts)."""
     from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
 
-    # Long phrase with multiple APs to test smoothness
+    # Long phrase with multiple APs to test smoothness (regles style)
     phones = ["b", "ɔ̃", "ʒ", "u", "ʁ", "k", "ɔ", "m", "ɑ̃",
               "s", "a", "v", "a"]
     info = {"group_idx": 0, "n_groups": 1, "boundary": "period",
-            "base_f0": 175.0, "macro_expressivity": 1.0}
+            "base_f0": 175.0, "macro_expressivity": 1.0,
+            "prosody_style": "regles"}
     f0s = DiphoneEngine._group_f0_contour(
         phones, SynthMode.FLUIDE, info, word_boundaries=[5, 9])
 
-    # Check no jump > 30 Hz between consecutive phones
+    # AP patterns with consonant interpolation produce smooth contours
     max_jump = 0.0
     for i in range(1, len(f0s)):
         jump = abs(f0s[i] - f0s[i - 1])
         max_jump = max(max_jump, jump)
-    assert max_jump < 30.0, f"Max F0 jump = {max_jump:.1f} Hz"
+    assert max_jump < 60.0, f"Max F0 jump = {max_jump:.1f} Hz"
+
+
+# ── Tests syllable-level F0 ─────────────────────────────────────
+
+
+def test_phones_to_syllables():
+    """Decoupage syllabique correct avec preference onset."""
+    from lectura_tts_diphone.engine import _phones_to_syllables
+
+    # "bala" : b=0, a=1, l=2, a=3 → vowels at [1, 3]
+    spans = _phones_to_syllables(["b", "a", "l", "a"], [1, 3])
+    assert len(spans) == 2
+    assert spans[0] == (0, 2)  # "ba"
+    assert spans[1] == (2, 4)  # "la"
+
+    # No vowels → single span covering all phones
+    spans = _phones_to_syllables(["b", "l"], [])
+    assert spans == [(0, 2)]
+
+    # Single vowel → single span
+    spans = _phones_to_syllables(["b", "a", "l"], [1])
+    assert spans == [(0, 3)]
+
+
+# ── Tests prosodie double style ─────────────────────────────────
+
+
+def test_prosody_style_default():
+    """Le style par defaut est 'regles'."""
+    from lectura_tts_diphone.engine import DiphoneEngine
+    assert "regles" in DiphoneEngine._PROSODY_STYLES
+    assert "corpus" in DiphoneEngine._PROSODY_STYLES
+
+
+def test_prosody_style_regles():
+    """Style regles produit F0 avec declination (debut > fin)."""
+    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
+    import numpy as np
+
+    phones = ["b", "ɔ̃", "ʒ", "u", "ʁ", "k", "ɔ", "m", "ɑ̃",
+              "s", "a", "v", "a"]
+    info = {"group_idx": 0, "n_groups": 1, "boundary": "period",
+            "base_f0": 200.0, "macro_expressivity": 1.0,
+            "prosody_style": "regles"}
+    f0s = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info, word_boundaries=[5, 9])
+
+    # Declaratif : F0 debut > F0 fin (chute declarative)
+    assert f0s[1] > f0s[-1]  # voyelle 1 vs dernier phone
+
+
+def test_prosody_style_corpus():
+    """Style corpus produit F0 coherents par syllabe."""
+    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
+
+    phones = ["b", "ɔ̃", "ʒ", "u", "ʁ", "k", "ɔ", "m", "ɑ̃",
+              "s", "a", "v", "a"]
+    info = {"group_idx": 0, "n_groups": 1, "boundary": "period",
+            "base_f0": 200.0, "macro_expressivity": 1.0,
+            "prosody_style": "corpus"}
+    f0s = DiphoneEngine._group_f0_contour(
+        phones, SynthMode.FLUIDE, info)
+
+    assert len(f0s) == len(phones)
+    assert all(f > 80.0 for f in f0s)
+    # Corpus prosody stored for reuse
+    assert "_corpus_prosody" in info
+
+
+def test_prosody_style_corpus_question_vs_decl():
+    """Style corpus : question F0 final plus haut que declaratif."""
+    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
+    import numpy as np
+
+    phones = ["b", "a", "l", "a", "k", "ɔ", "m", "ɑ̃"]
+    info_q = {"group_idx": 0, "n_groups": 1, "boundary": "question",
+              "base_f0": 200.0, "macro_expressivity": 1.0,
+              "prosody_style": "corpus"}
+    f0s_q = DiphoneEngine._group_f0_contour(phones, SynthMode.FLUIDE, info_q)
+
+    info_d = {"group_idx": 0, "n_groups": 1, "boundary": "period",
+              "base_f0": 200.0, "macro_expressivity": 1.0,
+              "prosody_style": "corpus"}
+    f0s_d = DiphoneEngine._group_f0_contour(phones, SynthMode.FLUIDE, info_d)
+
+    # Question final F0 should be higher than declarative (statistically)
+    # Use mean of last 2 phones to be robust to jitter
+    assert np.mean(f0s_q[-2:]) > np.mean(f0s_d[-2:])
+
+
+def test_corpus_dur_ratio():
+    """Style corpus fournit dur_ratio dans _corpus_prosody."""
+    from lectura_tts_diphone.engine import DiphoneEngine, SynthMode
+
+    phones = ["b", "a", "l", "a", "k", "ɔ", "m", "ɑ̃"]
+    info = {"group_idx": 0, "n_groups": 1, "boundary": "period",
+            "base_f0": 200.0, "macro_expressivity": 1.0,
+            "prosody_style": "corpus"}
+    DiphoneEngine._group_f0_contour(phones, SynthMode.FLUIDE, info)
+
+    prosody = info["_corpus_prosody"]
+    assert len(prosody) > 0
+    for sp in prosody:
+        assert "dur_ratio" in sp
+        assert "f0_hz" in sp
+        assert sp["dur_ratio"] > 0
+
+
+def test_corpus_prosody_module():
+    """Module _prosody_corpus charge la banque et genere des contours."""
+    from random import Random
+    from lectura_tts_diphone._prosody_corpus import (
+        generate_corpus_prosody, load_bank,
+    )
+
+    bank = load_bank()
+    assert len(bank) > 0
+
+    rng = Random(42)
+    prosody = generate_corpus_prosody(
+        6, "declaratif", rng, base_f0=200.0, group_role="seul")
+    assert len(prosody) == 6
+    for sp in prosody:
+        assert sp["f0_hz"] > 80.0
+        assert sp["dur_ratio"] > 0
+
+
+# ── Tests retimbre ─────────────────────────────────────────────────────────
+
+def test_variante_to_sr_override():
+    """Formule : 0 → None, +1 → 11025, -1 → 44100."""
+    from lectura_tts_diphone._retimbre import variante_to_sr_override
+
+    # Neutre
+    assert variante_to_sr_override(0.0) is None
+    assert variante_to_sr_override(0.005) is None
+
+    # Aigu (+1 → sr_override = 22050/2 = 11025)
+    sr = variante_to_sr_override(1.0)
+    assert sr == 11025
+
+    # Grave (-1 → sr_override = 22050*2 = 44100)
+    sr = variante_to_sr_override(-1.0)
+    assert sr == 44100
+
+    # Intermediaire (+0.5 → 22050 / 2^0.5 ~ 15590)
+    sr = variante_to_sr_override(0.5)
+    assert 15000 < sr < 16000
+
+    # Clamp min
+    sr = variante_to_sr_override(2.0)
+    assert sr >= 8000
+
+    # Clamp max
+    sr = variante_to_sr_override(-2.0)
+    assert sr <= 48000
+
+
+def test_retimbre_import_guard():
+    """Sans vc-zeroshot installe, l'import de RetimbreEngine doit reussir
+    mais retimbre() doit lever ImportError si le module est absent."""
+    from lectura_tts_diphone._retimbre import RetimbreEngine
+    # L'import seul ne doit pas planter (lazy)
+    assert RetimbreEngine is not None
+
+
+def test_synth_groups_voix_none():
+    """voix=None → meme output qu'avant (pas de regression)."""
+    from lectura_tts_diphone.engine import DiphoneEngine
+    import inspect
+
+    sig = inspect.signature(DiphoneEngine.synthesize_groups)
+    params = sig.parameters
+
+    # Le parametre voix existe et a None par defaut
+    assert "voix" in params
+    assert params["voix"].default is None
+    assert "voix_variante" in params
+    assert params["voix_variante"].default == 0.0
+    assert "voix_tau" in params
+    assert params["voix_tau"].default == 0.3

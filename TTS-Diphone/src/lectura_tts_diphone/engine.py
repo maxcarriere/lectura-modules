@@ -9,8 +9,8 @@ Modes : FLUIDE, MOT_A_MOT, SYLLABES
 from __future__ import annotations
 
 import logging
-import math
 import pickle
+import random
 import time
 from enum import Enum
 from pathlib import Path
@@ -18,11 +18,6 @@ from pathlib import Path
 import numpy as np
 
 from lectura_tts_diphone._compression import load_compressed
-from lectura_tts_diphone._fujisaki import (
-    BETA_DEFAULT as _FUJI_BETA,
-    accent_peak as _fujisaki_accent_peak,
-    generate_contour as _fujisaki_contour,
-)
 from lectura_tts_diphone._world import (
     FRAME_PERIOD, OVERLAP_FRAMES, SIWIS_SR,
     apply_timbre, compress_aperiodicity, concat_diphones,
@@ -85,6 +80,39 @@ def _smooth_noise(n: int, amplitude: float, sigma: float = 3.5) -> np.ndarray:
         return np.array([np.random.randn() * amplitude * 0.3])
     raw = np.random.randn(n) * amplitude
     return gaussian_filter1d(raw, sigma=min(sigma, max(1.0, n / 2)))
+
+
+def _phones_to_syllables(
+    phones: list[str], vowel_positions: list[int],
+) -> list[tuple[int, int]]:
+    """Decouper les phones en syllabes (une voyelle = un noyau).
+
+    Chaque consonne inter-vocalique va en onset de la syllabe suivante
+    (preference syllabe ouverte, typique du francais).
+    """
+    n = len(phones)
+    if not vowel_positions:
+        return [(0, n)]
+    spans: list[tuple[int, int]] = []
+    for si, vi in enumerate(vowel_positions):
+        if si == 0:
+            start = 0
+        else:
+            prev_vi = vowel_positions[si - 1]
+            # Consonants entre deux voyelles : split au milieu
+            # avec preference onset (ceil)
+            gap = vi - prev_vi - 1
+            split = prev_vi + 1 + gap // 2
+            start = split
+        if si == len(vowel_positions) - 1:
+            end = n
+        else:
+            next_vi = vowel_positions[si + 1]
+            gap = next_vi - vi - 1
+            split = vi + 1 + gap // 2
+            end = split
+        spans.append((start, end))
+    return spans
 
 
 class SynthMode(str, Enum):
@@ -360,6 +388,17 @@ class DiphoneEngine:
                            info: dict,
                            word_boundaries: list[int] | None = None,
                            ) -> list[float]:
+        """Dispatch vers le style prosodique demande."""
+        style = info.get("prosody_style", "regles")
+        if style == "corpus":
+            return cls._group_f0_contour_corpus(phones, mode, info)
+        return cls._group_f0_contour_regles(phones, mode, info, word_boundaries)
+
+    @classmethod
+    def _group_f0_contour_regles(cls, phones: list[str], mode: SynthMode,
+                                  info: dict,
+                                  word_boundaries: list[int] | None = None,
+                                  ) -> list[float]:
         """French prosodic F0 contour based on Accentual Phrases (AP).
 
         Uses the LHiLH* model: each AP gets a tonal pattern with
@@ -415,10 +454,6 @@ class DiphoneEngine:
                 continue
 
             # Build tonal targets per syllable (in semitones relative to ap_base)
-            # Values calibrated for k=1.0 (macro_expressivity=1, normal)
-            #   LH*:    short AP (1-2 syl) — rise to final
-            #   LLH*:   medium AP (3-4 syl) — low then rise
-            #   LHiLH*: long AP (5+ syl) — initial accent + final rise
             syl_targets_st: list[float] = []
             if n_syl <= 2:
                 # LH*: L=-1.5st, H*=+2st
@@ -449,19 +484,14 @@ class DiphoneEngine:
             # Terminal contour on the last AP
             if is_last_ap and is_sentence_final:
                 if is_question:
-                    # Question: rise — override last syllable to +4st above base
                     syl_targets_st[-1] = 4.0 * k
                     if n_syl >= 2:
-                        # Penultimate stays low to create contrast
                         syl_targets_st[-2] = min(syl_targets_st[-2], -0.5 * k)
                 elif is_exclamation:
-                    # Exclamation: high attack, moderate fall on last
-                    # (base_f0 already boosted +20% in synthesize_groups)
                     if n_syl >= 2:
-                        syl_targets_st[0] = max(syl_targets_st[0], 1.5 * k)
-                    syl_targets_st[-1] = -2.0 * k
+                        syl_targets_st[0] = max(syl_targets_st[0], 2.0 * k)
+                    syl_targets_st[-1] = -3.0 * k
                 elif is_suspensive:
-                    # Suspensive: mid-level final (no strong fall)
                     syl_targets_st[-1] = -0.5 * k
                 else:
                     # Declarative: fall on last syllable(s)
@@ -469,69 +499,91 @@ class DiphoneEngine:
                     if n_syl >= 2:
                         syl_targets_st[-2] = min(syl_targets_st[-2], -0.5 * k)
 
-            # Map syllable targets to phone positions via Fujisaki model
-            # Estimate temporal positions (~80ms per phone)
-            _PHONE_DUR_S = 0.08
-            ap_len = ap_end - ap_start
-            phone_times = [i * _PHONE_DUR_S for i in range(ap_len)]
+            # Map syllable targets to phone positions
+            for j in range(ap_start, ap_end):
+                base_ch = phones[j][0] if phones[j] else ""
+                is_vowel = base_ch in _VOWELS
 
-            # Fb = ap_base shifted to the lowest target in this AP
-            min_st = min(syl_targets_st)
-            fb = ap_base * (2.0 ** (min_st / 12.0))
+                if is_vowel and j in vowel_positions:
+                    si = vowel_positions.index(j)
+                    st = syl_targets_st[si]
+                    f0s[j] = cls._st_to_hz(ap_base, st)
+                else:
+                    # Consonant: interpolate from surrounding vowels
+                    prev_vi = None
+                    next_vi = None
+                    for vi_idx, vp in enumerate(vowel_positions):
+                        if vp <= j:
+                            prev_vi = vi_idx
+                        if vp > j and next_vi is None:
+                            next_vi = vi_idx
+                    if prev_vi is not None and next_vi is not None:
+                        vp_prev = vowel_positions[prev_vi]
+                        vp_next = vowel_positions[next_vi]
+                        t = (j - vp_prev) / max(1, vp_next - vp_prev)
+                        st = (syl_targets_st[prev_vi] * (1 - t)
+                              + syl_targets_st[next_vi] * t)
+                    elif next_vi is not None:
+                        st = syl_targets_st[next_vi]
+                    elif prev_vi is not None:
+                        st = syl_targets_st[prev_vi]
+                    else:
+                        st = 0.0
+                    f0s[j] = cls._st_to_hz(ap_base, st)
 
-            # Build accent commands for each syllable above the floor.
-            # Duration = 2 phones (~syllable).  Onset placed so that
-            # offset (= Ga peak) falls on the vowel — negative onset
-            # allowed (command "started before the AP").
-            # Amplitude compensated so Ga_peak * aa == target.
-            accent_cmds: list[tuple[float, float, float]] = []
-            cmd_dur = 2.0 * _PHONE_DUR_S       # ~160ms, full syllable
-            peak_ga = _fujisaki_accent_peak(cmd_dur, _FUJI_BETA)
-            for si, vp in enumerate(vowel_positions):
-                delta_st = syl_targets_st[si] - min_st
-                if delta_st < 0.01:
-                    continue
-                aa_raw = delta_st * math.log(2.0) / 12.0
-                aa = aa_raw / max(peak_ga, 0.1)
-                t_vowel = (vp - ap_start) * _PHONE_DUR_S
-                # Allow negative onset so peak always lands on vowel
-                t_onset = t_vowel - cmd_dur
-                accent_cmds.append((t_onset, cmd_dur, aa))
+        return f0s
 
-            # Optional phrase command for long APs (4+ syllables)
-            phrase_cmds: list[tuple[float, float]] = []
-            if n_syl >= 4:
-                phrase_cmds.append((0.0, 0.02 * k))
+    @classmethod
+    def _group_f0_contour_corpus(cls, phones: list[str], mode: SynthMode,
+                                  info: dict) -> list[float]:
+        """F0 contour depuis les clusters corpus SIWIS."""
+        from lectura_tts_diphone._prosody_corpus import generate_corpus_prosody
 
-            # Evaluate Fujisaki at each phone position
-            eval_times = [phone_times[j - ap_start]
-                          for j in range(ap_start, ap_end)]
-            contour_hz = _fujisaki_contour(
-                fb, phrase_cmds, accent_cmds, eval_times)
+        n = len(phones)
+        base_f0 = info.get("base_f0", 200.0)
+        k = info.get("macro_expressivity", 1.0)
+        boundary = info.get("boundary", "none")
+        gi = info.get("group_idx", 0)
+        n_groups = info.get("n_groups", 1)
 
-            for idx, j in enumerate(range(ap_start, ap_end)):
-                f0s[j] = contour_hz[idx]
+        # Determiner role et mode
+        mode_map = {"period": "declaratif", "question": "question",
+                    "exclamation": "exclamation", "suspensive": "suspensif",
+                    "comma": "declaratif", "none": "declaratif"}
+        mode_str = mode_map.get(boundary, "declaratif")
 
-        # Cross-AP boundary blending: smooth the transition between
-        # consecutive APs over a ±2 phone window to avoid F0 jumps.
-        for ai in range(len(aps) - 1):
-            end_a = aps[ai][1]       # first phone of next AP
-            start_b = aps[ai + 1][0]
-            # Boundary value: average of the two meeting phones
-            left = end_a - 1
-            right = start_b
-            if left < 0 or right >= n:
-                continue
-            avg = (f0s[left] + f0s[right]) / 2.0
-            # Blend weights: boundary phones 50%, ±1 phone 25%
-            f0s[left] = 0.5 * f0s[left] + 0.5 * avg
-            f0s[right] = 0.5 * f0s[right] + 0.5 * avg
-            # ±1: soften neighbours
-            if left - 1 >= aps[ai][0]:
-                f0s[left - 1] = 0.75 * f0s[left - 1] + 0.25 * avg
-            if right + 1 < aps[ai + 1][1]:
-                f0s[right + 1] = 0.75 * f0s[right + 1] + 0.25 * avg
+        if n_groups == 1:
+            group_role = "seul"
+        elif gi == 0:
+            group_role = "initial"
+        elif gi == n_groups - 1:
+            group_role = "terminal"
+        else:
+            group_role = "medial"
 
+        # Compter syllabes
+        vowel_positions = [j for j in range(n)
+                           if phones[j] and phones[j][0] in _VOWELS]
+        n_syl = len(vowel_positions)
+        if n_syl == 0:
+            return [base_f0] * n
+
+        rng = random.Random(hash((gi, n_groups, n)))
+        prosody = generate_corpus_prosody(
+            n_syl, mode_str, rng, base_f0,
+            group_role=group_role, expressivity=k,
+        )
+
+        # Stocker pour reutiliser dans synthesize_phones (dur_ratio, energy)
+        info["_corpus_prosody"] = prosody
+
+        # Assigner F0 par syllabe (plat par syllabe)
+        syllable_spans = _phones_to_syllables(phones, vowel_positions)
+        f0s = [base_f0] * n
+        for si, (syl_start, syl_end) in enumerate(syllable_spans):
+            if si < len(prosody):
+                for j in range(syl_start, syl_end):
+                    f0s[j] = prosody[si]["f0_hz"]
         return f0s
 
     def apply_f0_contour(self, f0_s: np.ndarray, di_key: str,
@@ -560,7 +612,7 @@ class DiphoneEngine:
                 f0_ratio = f0_ratio_med
 
             corpus_f0 = current_mean * f0_ratio
-            blended_f0 = 0.6 * corpus_f0 + 0.4 * f0_target
+            blended_f0 = 0.45 * corpus_f0 + 0.55 * f0_target
             f0_out[voiced] *= blended_f0 / current_mean
 
             slope_med = stats["f0_slope_median"]
@@ -601,8 +653,7 @@ class DiphoneEngine:
     # ── Main synthesis ─────────────────────────────────────────────────
 
     # Styles prosodiques valides pour prosody_style
-    _PROSODY_STYLES = {"auto", "declaratif", "question", "exclamation",
-                       "suspensif", "neutre"}
+    _PROSODY_STYLES = {"regles", "corpus"}
 
     def synthesize_groups(
         self,
@@ -614,13 +665,18 @@ class DiphoneEngine:
         macro_expressivity: float = 1.0,
         micro_expressivity: float = 1.0,
         seed: int | None = None,
-        prosody_style: str = "auto",
+        prosody_style: str = "regles",
         spectral_contrast: float = 1.3,
         ap_cleanup: float = 1.5,
         formant_sharpening: float = 1.3,
         vtln_alpha: float = 1.0,
         timbre: str | None = None,
         base_f0: float = 175.0,
+        # -- Retimbre (OpenVoice zero-shot) --
+        voix: str | Path | None = None,
+        voix_variante: float = 0.0,
+        voix_tau: float = 0.3,
+        vc_models_dir: str | Path | None = None,
     ) -> np.ndarray:
         """Synthesize multiple prosodic groups with inter-group pauses.
 
@@ -639,9 +695,15 @@ class DiphoneEngine:
                 Actif en mode FLUIDE uniquement.
             seed: graine aleatoire pour la micro-prosodie. None = aleatoire
                 a chaque appel. Meme seed = meme resultat reproductible.
-            prosody_style: style prosodique force. "auto" = determine par la
-                ponctuation. Autres valeurs : "declaratif", "question",
-                "exclamation", "suspensif", "neutre".
+            prosody_style: style prosodique a utiliser.
+                "regles" (defaut) : Prosodie a base de regles.
+                    Modele LHiLH* avec phrases accentuelles (AP), declination
+                    lineaire, contours terminaux par type de phrase.
+                    Prosodie stable et previsible.
+                "corpus" : Prosodie extraite du corpus SIWIS.
+                    Clusters multi-parametres (F0 + duree + energie) issus de
+                    9750 phrases. Gestion des groupes prosodiques (virgules).
+                    Prosodie plus variee et naturelle.
             spectral_contrast: compensation de variance spectrale (GV).
                 1.0=pas de changement, 1.3=naturel, 2.0=fort. Restaure le
                 detail spectral perdu par le moyennage des diphones.
@@ -656,6 +718,14 @@ class DiphoneEngine:
             base_f0: pitch de base en Hz (defaut 175.0). Ajuste le F0 de
                 reference pour toute la synthese (homme ~120, femme ~200,
                 enfant ~280).
+            voix: chemin vers un audio de reference pour retimbre OpenVoice
+                (ex: "siwis.wav"). None = pas de retimbre.
+                Requires: pip install 'lectura-tts-diphone[vc]'
+            voix_variante: curseur de variante vocale (-1 a +1).
+                -1 = grave/masculin, 0 = neutre, +1 = aigu/enfant.
+                Decale les formants via le trick SR OpenVoice.
+            voix_tau: parametre tau d'OpenVoice (0 = deterministe).
+            vc_models_dir: repertoire des modeles VC (defaut: auto-detection).
 
         Returns:
             np.float32 audio array at 44100 Hz
@@ -675,15 +745,6 @@ class DiphoneEngine:
                 f"Valeurs possibles: {sorted(self._PROSODY_STYLES)}"
             )
 
-        # Mapping prosody_style → boundary override
-        _STYLE_TO_BOUNDARY = {
-            "declaratif": "period",
-            "question": "question",
-            "exclamation": "exclamation",
-            "suspensif": "suspensive",
-            "neutre": "none",
-        }
-
         # Charger la signature de timbre si demandee
         timbre_signature = None
         if timbre is not None:
@@ -702,10 +763,7 @@ class DiphoneEngine:
             if not phones:
                 continue
 
-            if prosody_style == "auto":
-                boundary = group.get("boundary", "none")
-            else:
-                boundary = _STYLE_TO_BOUNDARY[prosody_style]
+            boundary = group.get("boundary", "none")
 
             group_pos = gi / max(1, n_groups - 1)
             base_f0 = base_f0_start - 10.0 * group_pos
@@ -724,6 +782,7 @@ class DiphoneEngine:
                 "base_f0": base_f0,
                 "macro_expressivity": macro_expressivity,
                 "micro_expressivity": group_micro,
+                "prosody_style": prosody_style,
             }
 
             word_boundaries = group.get("word_boundaries", [])
@@ -784,7 +843,52 @@ class DiphoneEngine:
         # Clip doux au lieu de rescaler : preserve le volume global
         combined = np.clip(combined, -0.95, 0.95)
 
+        # -- Retimbre optionnel (OpenVoice zero-shot) --
+        if voix is not None:
+            combined = self._apply_retimbre(
+                combined, SIWIS_SR, voix, voix_variante, voix_tau,
+                vc_models_dir,
+            )
+
         return combined
+
+    # -- Retimbre helper ─────────────────────────────────────────────────
+
+    _retimbre = None  # RetimbreEngine (lazy, instance-level)
+
+    def _apply_retimbre(
+        self,
+        audio: np.ndarray,
+        sr: int,
+        voix: str | Path,
+        voix_variante: float,
+        voix_tau: float,
+        vc_models_dir: str | Path | None,
+    ) -> np.ndarray:
+        """Applique le retimbre OpenVoice puis resample vers SIWIS_SR."""
+        from lectura_tts_diphone._retimbre import RetimbreEngine
+        import librosa
+
+        if self._retimbre is None:
+            self._retimbre = RetimbreEngine(vc_models_dir=vc_models_dir)
+
+        retimbre_audio, retimbre_sr = self._retimbre.retimbre(
+            audio, sr, voix,
+            variante=voix_variante, tau=voix_tau,
+        )
+
+        # Resample de OV_SR (22050) vers SIWIS_SR (44100)
+        if retimbre_sr != SIWIS_SR:
+            retimbre_audio = librosa.resample(
+                retimbre_audio, orig_sr=retimbre_sr, target_sr=SIWIS_SR,
+            )
+
+        # Re-normalize peak a 0.9
+        peak = np.max(np.abs(retimbre_audio))
+        if peak > 0:
+            retimbre_audio = (retimbre_audio * 0.9 / peak).astype(np.float32)
+
+        return retimbre_audio
 
     def synthesize_phones(
         self,
@@ -866,41 +970,6 @@ class DiphoneEngine:
                                    for d, j in zip(phone_durations, dur_jitter)]
             diphone_durations = self._phone_durs_to_diphone_durs(chain, phone_durations)
 
-        # ── Prosodic rhythm modulation ──
-        # Natural speech compresses AP-medial syllables and lengthens
-        # boundary syllables.  Depth scaled by macro_k.
-        if mode == SynthMode.FLUIDE and n > 2:
-            rhythm = [1.0] * n
-            depth = 0.15 * macro_k  # 0 = flat, 0.15 = normal, 0.30 = expressive
-            for ap_start, ap_end in aps:
-                ap_len = ap_end - ap_start
-                if ap_len < 3:
-                    continue
-                for j in range(ap_start, ap_end):
-                    pos = (j - ap_start) / max(1, ap_len - 1)
-                    # Quadratic U-shape: 1.0 at edges, (1-depth) at center
-                    rhythm[j] = 1.0 - depth * (1.0 - (2.0 * pos - 1.0) ** 2)
-                    # Schwa: naturally shorter
-                    if phones[j] == "\u0259":          # ə
-                        rhythm[j] *= 0.80
-                    # AP-final accent: slightly longer
-                    if j in accent_positions:
-                        rhythm[j] *= 1.0 + 0.1 * macro_k
-
-            # Apply per-phone rhythm to diphone durations
-            for di_idx, di_key in enumerate(chain):
-                if di_key.startswith("#-"):
-                    factor = rhythm[0]
-                elif di_key.endswith("-#"):
-                    factor = rhythm[-1]
-                else:
-                    a_idx = di_idx - 1
-                    b_idx = di_idx
-                    fa = rhythm[a_idx] if a_idx < n else 1.0
-                    fb = rhythm[b_idx] if b_idx < n else 1.0
-                    factor = (fa + fb) / 2.0
-                diphone_durations[di_idx] *= factor
-
         # Facteur de base pour vitesse naturelle + facteur utilisateur
         rate = _BASE_RATE * duration_scale
         if rate != 1.0:
@@ -917,7 +986,7 @@ class DiphoneEngine:
                 lengthen_base = 1.15
                 start_frac = 0.75
             elif boundary == "comma":
-                lengthen_base = 1.25
+                lengthen_base = 1.10
                 start_frac = 0.7
             else:
                 lengthen_base = 1.1
@@ -970,8 +1039,43 @@ class DiphoneEngine:
                 dur_s = prosody["duration_scale"]
                 diphone_durations = [d * dur_s for d in diphone_durations]
 
-        # ── Micro energy ──
-        if mode == SynthMode.FLUIDE and n > 1 and micro_k > 0:
+        # ── Corpus prosody — duration + energy ──
+        corpus_prosody = group_info.get("_corpus_prosody") if group_info else None
+        if corpus_prosody is not None and mode == SynthMode.FLUIDE:
+            vowel_positions = [j for j in range(n)
+                               if phones[j] and phones[j][0] in _VOWELS]
+            n_syl = len(vowel_positions)
+            if n_syl > 0:
+                syllable_spans = _phones_to_syllables(phones, vowel_positions)
+                # Duration: apply corpus dur_ratio per syllable
+                phone_dur_factors = [1.0] * n
+                for si, (syl_start, syl_end) in enumerate(syllable_spans):
+                    if si < len(corpus_prosody):
+                        dr = corpus_prosody[si].get("dur_ratio", 1.0)
+                        for j in range(syl_start, syl_end):
+                            phone_dur_factors[j] = dr
+                # Map phone factors to diphone durations
+                for di_idx, di_key in enumerate(chain):
+                    if di_key.startswith("#-"):
+                        diphone_durations[di_idx] *= phone_dur_factors[0]
+                    elif di_key.endswith("-#"):
+                        diphone_durations[di_idx] *= phone_dur_factors[-1]
+                    else:
+                        a_idx = di_idx - 1
+                        b_idx = di_idx
+                        fa = phone_dur_factors[a_idx] if a_idx < n else 1.0
+                        fb = phone_dur_factors[b_idx] if b_idx < n else 1.0
+                        diphone_durations[di_idx] *= (fa + fb) / 2
+                # Energy: apply corpus energy per syllable
+                energy_factors = [1.0] * n
+                for si, (syl_start, syl_end) in enumerate(syllable_spans):
+                    if si < len(corpus_prosody):
+                        e = corpus_prosody[si].get("energy", 1.0)
+                        for j in range(syl_start, syl_end):
+                            energy_factors[j] = e
+            else:
+                energy_factors = [1.0] * n
+        elif mode == SynthMode.FLUIDE and n > 1 and micro_k > 0:
             energy_noise = _smooth_noise(n, 0.5 * micro_k, sigma=2.5)
             energy_factors = [max(0.6, min(1.4, 1.0 + e)) for e in energy_noise]
         else:

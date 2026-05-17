@@ -178,27 +178,47 @@ def verifier_participes_passes(
                 if result[i] != curr:
                     continue
 
-        # --- Regle 2 : AUX + present 1er groupe (-e) -> PP (-e) ---
-        # "a sonne" -> "a sonne" (present → PP pour 1er groupe)
+        # --- Regle 2 : AUX + present 1er groupe (-e) -> PP (-é) ---
+        # "a sonne" -> "a sonné", "a prépare" -> "a préparé"
+        # Elargie : au lieu d'exclure par suffixe, verifier dans le lexique
+        # si le candidat PP existe.
         if aux_found and (pos == "VER" or curr_low.endswith(_PP_SUFFIXES)):
             if (
                 curr_low.endswith("e")
-                and not curr_low.endswith(("ee", "er", "re", "le", "ne", "se", "te", "ée", "ue", "ie"))
+                and not curr_low.endswith(("ee", "er", "ée", "ue", "ie"))
                 and len(curr_low) > 2
             ):
                 candidate = curr_low[:-1] + "é"
-                if lexique is None or lexique.existe(candidate):
-                    ancien = result[i]
-                    result[i] = transferer_casse(curr, candidate)
-                    corrections.append(Correction(
-                        index=i,
-                        original=ancien,
-                        corrige=result[i],
-                        type_correction=TypeCorrection.GRAMMAIRE,
-                        regle="participe.infinitif_vers_pp",
-                        explication="Present apres auxiliaire -> participe passe",
-                    ))
-                    continue
+                if lexique is not None and lexique.existe(candidate):
+                    # Guard : ne pas convertir si la forme -e est principalement
+                    # NOM/ADJ (ex: "une visite" = NOM, pas "visité")
+                    # On verifie que le candidat PP a une freq raisonnable
+                    _skip_r2 = False
+                    _curr_infos = lexique.info(curr_low)
+                    if _curr_infos:
+                        _curr_best = max(
+                            _curr_infos,
+                            key=lambda e: float(e.get("freq") or 0),
+                        )
+                        # Si la forme -e est principalement NOM et pas VER,
+                        # ne pas convertir (sauf si POS tagger dit VER)
+                        if (
+                            _curr_best.get("cgram") in ("NOM", "ADJ")
+                            and pos != "VER"
+                        ):
+                            _skip_r2 = True
+                    if not _skip_r2:
+                        ancien = result[i]
+                        result[i] = transferer_casse(curr, candidate)
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige=result[i],
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="participe.infinitif_vers_pp",
+                            explication="Present apres auxiliaire -> participe passe",
+                        ))
+                        continue
 
         # --- Regle 3 : Modal + PP (-e/-i/-u) -> infinitif ---
         # "faut ecoute" -> "faut ecouter", "doit fini" -> "doit finir"
