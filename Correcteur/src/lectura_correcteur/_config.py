@@ -31,5 +31,7 @@ class CorrecteurConfig:
     activer_editeur_homophones: bool = True  # BiLSTM edit tagger pour homophones
     seuil_editeur: float = 0.95  # seuil de confiance minimum pour accepter
     # une prediction du BiLSTM editeur. 0.95 = conservative (haute precision).
-    activer_lm: bool = True  # Modele de langue n-gram pour homophones phonetiques
+    activer_lm: bool = False  # Modele de langue n-gram generique (desactive, remplace par lm_homophones)
     chemin_lm: str = ""  # Chemin vers ngram.db (vide = auto-detect dans data/)
+    activer_lm_homophones: bool = True  # LM trigramme specialise homophones
+    chemin_lm_homophones: str = ""  # Chemin vers homophones_trigrams.db

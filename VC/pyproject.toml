@@ -4,17 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-vc"
-version = "1.0.0"
-description = "Module de conversion vocale Lectura (RVC + OpenVoice, ONNX pur)"
+version = "2.0.0"
+description = "Module de conversion vocale Lectura — meta-package unifie (RVC + OpenVoice)"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Lectura" }]
 
 dependencies = [
-    "onnxruntime>=1.16",
-    "numpy>=1.24",
-    "librosa>=0.10",
-    "soundfile>=0.12",
+    "lectura-vc-zeroshot>=1.0",
+    "lectura-vc-locuteurs>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +20,3 @@ dev = ["pytest>=7.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-lectura_vc = ["data/*.json", "modeles/*.enc"]

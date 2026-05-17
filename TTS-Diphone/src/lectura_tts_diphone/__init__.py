@@ -98,6 +98,11 @@ def synthetiser(
     vtln_alpha: float = 1.0,
     timbre: str | None = None,
     base_f0: float = 175.0,
+    # -- Retimbre (OpenVoice zero-shot) --
+    voix: str | None = None,
+    voix_variante: float = 0.0,
+    voix_tau: float = 0.3,
+    vc_models_dir: str | Path | None = None,
 ) -> Any:
     """Convenience : texte → numpy audio float32 @ 44100 Hz.
 
@@ -136,6 +141,17 @@ def synthetiser(
     base_f0 : float
         Pitch de base en Hz (defaut 175.0). homme ~120, femme ~200,
         enfant ~280.
+    voix : str | None
+        Chemin vers un audio de reference pour retimbre OpenVoice
+        (ex: "siwis.wav"). None = pas de retimbre.
+        Requires: pip install 'lectura-tts-diphone[vc]'
+    voix_variante : float
+        Curseur de variante vocale (-1 a +1).
+        -1 = grave/masculin, 0 = neutre, +1 = aigu/enfant.
+    voix_tau : float
+        Parametre tau d'OpenVoice (0 = deterministe, 0.3 = defaut).
+    vc_models_dir : str | Path | None
+        Repertoire des modeles VC (defaut: auto-detection).
 
     Returns
     -------
@@ -165,6 +181,10 @@ def synthetiser(
         vtln_alpha=vtln_alpha,
         timbre=timbre,
         base_f0=base_f0,
+        voix=voix,
+        voix_variante=voix_variante,
+        voix_tau=voix_tau,
+        vc_models_dir=vc_models_dir,
     )
 
 
