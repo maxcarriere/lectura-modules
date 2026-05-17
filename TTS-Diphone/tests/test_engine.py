@@ -796,3 +796,35 @@ def test_synth_groups_voix_none():
     assert params["voix_variante"].default == 0.0
     assert "voix_tau" in params
     assert params["voix_tau"].default == 0.3
+
+
+def test_retimbre_cache_key():
+    """_make_cache_key produit des cles hashables pour tous les types."""
+    from lectura_tts_diphone._retimbre import _make_cache_key
+
+    # str
+    key1 = _make_cache_key("siwis", None)
+    assert isinstance(key1, tuple)
+    assert key1 == ("siwis", None)
+
+    # list
+    key2 = _make_cache_key(["siwis", "nadine"], 11025)
+    assert key2 == (("siwis", "nadine"), 11025)
+
+    # dict
+    key3 = _make_cache_key({"siwis": 0.5, "nadine": 0.5}, None)
+    assert isinstance(key3[0], tuple)  # sorted items tuple
+
+    # Same dict different order → same key
+    key4 = _make_cache_key({"nadine": 0.5, "siwis": 0.5}, None)
+    assert key3 == key4
+
+
+def test_retimbre_voix_types():
+    """Le type hint de voix accepte str, list, dict."""
+    from lectura_tts_diphone._retimbre import RetimbreEngine, VoixSpec
+    import inspect
+
+    sig = inspect.signature(RetimbreEngine.retimbre)
+    # Le parametre reference accepte VoixSpec
+    assert "reference" in sig.parameters

@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 
 def creer_engine(
@@ -99,7 +99,7 @@ def synthetiser(
     timbre: str | None = None,
     base_f0: float = 175.0,
     # -- Retimbre (OpenVoice zero-shot) --
-    voix: str | None = None,
+    voix: str | list[str] | dict[str, float] | None = None,
     voix_variante: float = 0.0,
     voix_tau: float = 0.3,
     vc_models_dir: str | Path | None = None,
@@ -141,9 +141,14 @@ def synthetiser(
     base_f0 : float
         Pitch de base en Hz (defaut 175.0). homme ~120, femme ~200,
         enfant ~280.
-    voix : str | None
-        Chemin vers un audio de reference pour retimbre OpenVoice
-        (ex: "siwis.wav"). None = pas de retimbre.
+    voix : str | list[str] | dict[str, float] | None
+        Voix cible pour retimbre OpenVoice. Polymorphe :
+        - str : nom de preset ("siwis") ou chemin fichier audio.
+        - list[str] : plusieurs references (poids egaux).
+        - dict[str, float] : blend pondere.
+          Ex: {"siwis": 0.5, "nadine": 0.3, "ezwa": 0.2}
+        None = pas de retimbre.
+        Presets: siwis, ezwa, nadine, bernard, gilles, zeckou.
         Requires: pip install 'lectura-tts-diphone[vc]'
     voix_variante : float
         Curseur de variante vocale (-1 a +1).

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tts-diphone"
-version = "1.5.0"
+version = "1.6.0"
 description = "Synthese vocale par concatenation de diphones WORLD — francais"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,7 @@ dependencies = []
 [project.optional-dependencies]
 local = ["pyworld>=0.3.4", "numpy>=1.24", "scipy>=1.10", "soundfile>=0.12"]
 g2p = ["lectura-g2p>=4.0"]
-vc = ["lectura-vc-zeroshot>=1.0"]
+vc = ["lectura-vc-zeroshot>=1.1"]
 all = ["lectura-tts-diphone[local,g2p,vc]"]
 
 [project.urls]
