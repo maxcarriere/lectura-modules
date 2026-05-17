@@ -62,7 +62,7 @@ class VCEngine:
     def _resolve_mode(
         self,
         speaker: str | None,
-        reference: np.ndarray | str | Path | None,
+        reference: np.ndarray | str | Path | list | dict | None,
         mode: str | None,
     ) -> str:
         """Determine le mode effectif."""
@@ -88,7 +88,7 @@ class VCEngine:
         self,
         audio: np.ndarray | str | Path,
         speaker: str | None = None,
-        reference: np.ndarray | str | Path | None = None,
+        reference: np.ndarray | str | Path | list | dict | None = None,
         mode: str | None = None,
         sr_in: int | None = None,
         ref_sr: int | None = None,
@@ -102,7 +102,8 @@ class VCEngine:
         ----------
         audio : audio source (array float32 ou chemin fichier).
         speaker : voix RVC cible (ezwa, bernard, etc.).
-        reference : audio de reference pour zero-shot (array ou chemin).
+        reference : voix cible pour zero-shot. Polymorphe :
+            str (preset ou chemin), list (multi-ref), dict (blend pondere).
         mode : forcer un mode (rvc/zeroshot/cascade/auto).
         sr_in : sample rate source (auto si fichier).
         ref_sr : sample rate de la reference si c'est un ndarray.

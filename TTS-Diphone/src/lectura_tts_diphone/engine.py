@@ -673,7 +673,7 @@ class DiphoneEngine:
         timbre: str | None = None,
         base_f0: float = 175.0,
         # -- Retimbre (OpenVoice zero-shot) --
-        voix: str | Path | None = None,
+        voix: str | Path | list[str] | dict[str, float] | None = None,
         voix_variante: float = 0.0,
         voix_tau: float = 0.3,
         vc_models_dir: str | Path | None = None,
@@ -718,8 +718,12 @@ class DiphoneEngine:
             base_f0: pitch de base en Hz (defaut 175.0). Ajuste le F0 de
                 reference pour toute la synthese (homme ~120, femme ~200,
                 enfant ~280).
-            voix: chemin vers un audio de reference pour retimbre OpenVoice
-                (ex: "siwis.wav"). None = pas de retimbre.
+            voix: voix cible pour retimbre OpenVoice. Polymorphe :
+                - str : nom de preset ("siwis") ou chemin fichier audio.
+                - list[str] : plusieurs references (poids egaux).
+                - dict[str, float] : blend pondere.
+                  Ex: {"siwis": 0.5, "nadine": 0.3, "ezwa": 0.2}
+                None = pas de retimbre.
                 Requires: pip install 'lectura-tts-diphone[vc]'
             voix_variante: curseur de variante vocale (-1 a +1).
                 -1 = grave/masculin, 0 = neutre, +1 = aigu/enfant.
@@ -860,7 +864,7 @@ class DiphoneEngine:
         self,
         audio: np.ndarray,
         sr: int,
-        voix: str | Path,
+        voix: str | Path | list[str] | dict[str, float],
         voix_variante: float,
         voix_tau: float,
         vc_models_dir: str | Path | None,

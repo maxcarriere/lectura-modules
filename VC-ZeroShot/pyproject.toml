@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-vc-zeroshot"
-version = "1.0.0"
+version = "1.1.0"
 description = "Conversion vocale zero-shot via OpenVoice (ONNX pur)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,4 +37,4 @@ Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/VC-ZeroSh
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_vc_zeroshot = ["modeles/*.enc"]
+lectura_vc_zeroshot = ["modeles/*.enc", "presets/*.npy"]
