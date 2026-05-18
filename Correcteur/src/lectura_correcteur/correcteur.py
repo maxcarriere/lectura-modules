@@ -530,11 +530,41 @@ class Correcteur:
             if any(a.confiance_pos < 1.0 for a in analyses):
                 _pos_conf = [a.confiance_pos for a in analyses]
 
+            # 6-pre. Accord guide par PM n-gram
+            _accord_guidance = None
+            if self._config.activer_accord_pm and self._pos_ngram is not None:
+                from lectura_correcteur.grammaire._accord_pm import guider_accords_pm
+                _accord_guidance = guider_accords_pm(
+                    decided_words, pos_list, self._lexique, self._pos_ngram,
+                    seuil_violation=self._config.accord_pm_seuil_violation,
+                    seuil_delta=self._config.accord_pm_seuil_delta,
+                )
+                for g in _accord_guidance:
+                    if g.index < len(decided_words):
+                        ancien = decided_words[g.index]
+                        if ancien.lower() != g.forme_suggeree.lower():
+                            new_forme = g.forme_suggeree
+                            if ancien[0].isupper() and new_forme:
+                                new_forme = new_forme[0].upper() + new_forme[1:]
+                            decided_words[g.index] = new_forme
+                            analyses[g.index].corrige = new_forme
+                            if analyses[g.index].type_correction == TypeCorrection.AUCUNE:
+                                analyses[g.index].type_correction = TypeCorrection.GRAMMAIRE
+                            all_corrections.append(Correction(
+                                index=g.index,
+                                original=analyses[g.index].original,
+                                corrige=new_forme,
+                                type_correction=TypeCorrection.GRAMMAIRE,
+                                regle="accord_pm",
+                                explication=f"Accord PM: '{ancien}' -> '{new_forme}' ({g.pm_tag})",
+                            ))
+
             after_rules, corr_gram = appliquer_grammaire(
                 decided_words, pos_list, morpho_dict_lists, self._lexique,
                 originaux=word_tokens_orig if word_tokens_orig else word_tokens,
                 activer_negation=self._config.activer_negation,
                 pos_confiance=_pos_conf,
+                pm_guidance=_accord_guidance,
             )
             all_corrections.extend(corr_gram)
 
@@ -814,9 +844,10 @@ class Correcteur:
                 continue
 
             # Guard ambiguite : quand les deux formes sont vues dans ce
-            # contexte (scores tous deux > 0), exiger un ratio fort (5x)
+            # contexte (scores tous deux > 0), exiger un ratio suffisant
             # pour eviter les faux positifs sur cas ambigus (ce/se sont)
-            if score_current > 0 and score_best < score_current * 5:
+            _ratio = self._config.lm_homophones_ratio
+            if score_current > 0 and score_best < score_current * _ratio:
                 continue
 
             # Guard a/à + PP : ne pas changer "a" → "à" si le mot suivant

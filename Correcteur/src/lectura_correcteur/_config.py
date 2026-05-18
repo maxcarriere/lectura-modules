@@ -49,3 +49,7 @@ class CorrecteurConfig:
     viterbi_morpho_use_variants: bool = False  # Inclure variantes flexionnelles
     activer_tagger_hybride: bool = False  # Tagger hybride G2P+overrides (OFF par defaut)
     seuil_freq_voisin: float = 50.0  # Freq au-dela de laquelle un voisin d=1 rend le mot "ambigu"
+    lm_homophones_ratio: float = 3.0  # Ratio minimum score_best/score_current pour homophones ambigus
+    activer_accord_pm: bool = False       # Accord guide par PM n-gram (OFF par defaut)
+    accord_pm_seuil_violation: float = -10.0  # PM bigram logp en dessous = violation
+    accord_pm_seuil_delta: float = 2.0    # Delta minimum pour accepter la correction
