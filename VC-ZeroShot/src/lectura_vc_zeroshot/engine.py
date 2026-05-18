@@ -23,6 +23,7 @@ from lectura_vc_zeroshot._presets import (
     list_presets,
     load_preset,
     blend_presets,
+    get_preset_audio_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -249,6 +250,18 @@ class ZeroShotEngine:
         # str : preset ou chemin
         ref_str = str(reference)
         if has_preset(ref_str):
+            # Si sr_override demande, on re-extrait le SE depuis l'audio
+            # de reference avec le trick SR (decalage formants)
+            if sr_override is not None and sr_override != OV_SR:
+                audio_path = get_preset_audio_path(ref_str)
+                if audio_path is not None:
+                    return self._extract_se_with_sr_trick(
+                        audio_path, ref_sr, sr_override,
+                    )
+                logger.warning(
+                    "Pas d'audio de reference pour preset '%s', "
+                    "sr_override ignore", ref_str,
+                )
             return load_preset(ref_str)
 
         # Chemin fichier

@@ -49,6 +49,15 @@ _FUNCTION_WORD_POS: dict[str, str] = {
     "aux": "ART:def",
     # Verbe etre (ADJ "est"=east domine par freq egale dans v4)
     "est": "AUX",
+    # Auxiliaires etre/avoir (G2P classifie en VER)
+    "sont": "AUX",    # ils sont
+    "suis": "AUX",    # je suis
+    "es": "AUX",      # tu es
+    "sommes": "AUX",  # nous sommes
+    "êtes": "AUX",    # vous êtes
+    "ont": "AUX",     # ils ont
+    "avons": "AUX",   # nous avons
+    "avez": "AUX",    # vous avez
 }
 
 # POS grammaticaux a preferer pour les mots courts (<=3 chars)

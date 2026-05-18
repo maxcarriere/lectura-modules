@@ -22,7 +22,7 @@ from lectura_vc_zeroshot._openvoice import OV_SR
 from lectura_vc_zeroshot._presets import PRESET_SPEAKERS
 from lectura_vc_zeroshot.engine import ZeroShotEngine, blend_se
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = [
     "creer_engine",
     "convertir",
