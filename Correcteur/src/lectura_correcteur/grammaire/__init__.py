@@ -29,6 +29,7 @@ def appliquer_grammaire(
     *,
     activer_negation: bool = False,
     pos_confiance: list[float] | None = None,
+    pm_guidance=None,
 ) -> tuple[list[str], list]:
     """Applique toutes les regles grammaticales sur la phrase.
 
@@ -36,6 +37,9 @@ def appliquer_grammaire(
         pos_confiance: Confiance POS par position (optionnel).
             Si fourni, les regles homophones peuvent skip quand
             la confiance est trop faible.
+        pm_guidance: Liste d'AccordGuidance du module PM (optionnel).
+            Si fourni, les regles d'accord sautent les positions
+            deja corrigees par le module PM.
 
     Returns:
         Tuple (mots_corriges, liste_de_Correction).
@@ -58,6 +62,7 @@ def appliquer_grammaire(
     # 2. Accords (det+nom, det+adj+nom, det+nom+ver, genre)
     result_acc, corr_acc = verifier_accords(
         result, pos_tags, morpho, lexique, origs,
+        pm_guidance=pm_guidance,
     )
     result = result_acc
     corrections.extend(corr_acc)

@@ -21,7 +21,7 @@ from lectura_vc.engine import VCEngine
 from lectura_vc_locuteurs import RVC_SPEAKERS
 from lectura_vc_zeroshot import PRESET_SPEAKERS
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __all__ = [
     "creer_engine", "convertir", "VCEngine",
     "RVC_SPEAKERS", "PRESET_SPEAKERS",

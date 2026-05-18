@@ -67,6 +67,8 @@ def verifier_accords(
     morpho: dict[str, list[str]],
     lexique,
     originaux: list[str] | None = None,
+    *,
+    pm_guidance=None,
 ) -> tuple[list[str], list[Correction]]:
     """Applique les regles d'accord sur la phrase.
 
@@ -81,12 +83,19 @@ def verifier_accords(
     if not mots:
         return mots, []
 
+    # Positions deja corrigees par le module PM
+    _pm_handled: set[int] = set()
+    if pm_guidance:
+        _pm_handled = {g.index for g in pm_guidance}
+
     origs = originaux if originaux else mots
     result = list(mots)
     corrections: list[Correction] = []
     n = len(result)
 
     for i in range(n):
+        if i in _pm_handled:
+            continue
         pos = pos_tags[i] if i < len(pos_tags) else ""
         curr = result[i]
         curr_low = curr.lower()

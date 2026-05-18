@@ -95,6 +95,7 @@ class VCEngine:
         protect: float | None = None,
         pitch_modification: float | None = None,
         tau: float = 0.3,
+        sr_override: int | None = None,
     ) -> tuple[np.ndarray, int]:
         """Convertit l'audio vers la voix cible.
 
@@ -110,6 +111,7 @@ class VCEngine:
         protect : facteur de protection voix (None = auto).
         pitch_modification : shift en demi-tons (None = auto).
         tau : parametre OpenVoice (0 = deterministe).
+        sr_override : trick SR pour decaler les formants (11025=aigu, 44100=grave).
 
         Returns
         -------
@@ -129,7 +131,8 @@ class VCEngine:
             if reference is None:
                 raise ValueError("Mode 'zeroshot' necessite une 'reference'.")
             return self._get_zeroshot().convert(
-                audio, reference, sr_in=sr_in, ref_sr=ref_sr, tau=tau,
+                audio, reference, sr_in=sr_in, ref_sr=ref_sr,
+                sr_override=sr_override, tau=tau,
             )
         elif effective_mode == "cascade":
             if speaker is None:
@@ -143,7 +146,8 @@ class VCEngine:
             )
             # Phase 2: OpenVoice pour ajuster le timbre
             return self._get_zeroshot().convert(
-                rvc_audio, reference, sr_in=rvc_sr, ref_sr=ref_sr, tau=tau,
+                rvc_audio, reference, sr_in=rvc_sr, ref_sr=ref_sr,
+                sr_override=sr_override, tau=tau,
             )
         else:
             raise ValueError(f"Mode inconnu: {effective_mode}")
