@@ -35,3 +35,17 @@ class CorrecteurConfig:
     chemin_lm: str = ""  # Chemin vers ngram.db (vide = auto-detect dans data/)
     activer_lm_homophones: bool = True  # LM trigramme specialise homophones
     chemin_lm_homophones: str = ""  # Chemin vers homophones_trigrams.db
+    activer_pos_ngram: bool = True  # N-gram POS pour validation des corrections
+    chemin_pos_ngram: str = ""  # Chemin vers pos_ngram.db
+    activer_analyse_viterbi: bool = False  # Viterbi trigramme POS+forme (OFF par defaut)
+    viterbi_bonus_original: float = 2.0  # Biais conservateur forme originale
+    viterbi_bonus_lm: float = 1.0  # Poids bonus LM homophones
+    viterbi_w_emission: float = 1.0  # Poids emissions
+    viterbi_w_transition: float = 1.0  # Poids transitions POS n-gram
+    activer_viterbi_morpho: bool = False  # Viterbi POS+Morpho aval grammaire (OFF par defaut)
+    viterbi_morpho_bonus_current: float = 2.0  # Bonus PM tag concordant avec POS actuel
+    viterbi_morpho_w_emission: float = 1.0  # Poids emissions PM
+    viterbi_morpho_w_transition: float = 1.0  # Poids transitions PM n-gram
+    viterbi_morpho_use_variants: bool = False  # Inclure variantes flexionnelles
+    activer_tagger_hybride: bool = False  # Tagger hybride G2P+overrides (OFF par defaut)
+    seuil_freq_voisin: float = 50.0  # Freq au-dela de laquelle un voisin d=1 rend le mot "ambigu"

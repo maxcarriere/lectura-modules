@@ -62,6 +62,18 @@ def load_preset(name: str) -> np.ndarray:
     return se
 
 
+def get_preset_audio_path(name: str) -> Path | None:
+    """Retourne le chemin du fichier audio de reference d'un preset.
+
+    Utilise pour le trick SR (voix_variante) qui necessite l'audio brut
+    pour re-extraire le SE avec un sample rate modifie.
+
+    Returns None si le fichier audio n'existe pas.
+    """
+    path = _PRESETS_DIR / f"{name}.wav"
+    return path if path.exists() else None
+
+
 def blend_presets(specs: dict[str, float]) -> np.ndarray:
     """Melange des presets avec des poids.
 

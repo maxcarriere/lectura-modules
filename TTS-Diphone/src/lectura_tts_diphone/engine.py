@@ -655,6 +655,9 @@ class DiphoneEngine:
     # Styles prosodiques valides pour prosody_style
     _PROSODY_STYLES = {"regles", "corpus"}
 
+    # Frontieres qui marquent une fin de phrase
+    _SENTENCE_BOUNDARIES = {"period", "exclamation", "question", "suspensive"}
+
     def synthesize_groups(
         self,
         groups: list[dict],
@@ -672,6 +675,7 @@ class DiphoneEngine:
         vtln_alpha: float = 1.0,
         timbre: str | None = None,
         base_f0: float = 175.0,
+        sentence_pause_ms: float = 400.0,
         # -- Retimbre (OpenVoice zero-shot) --
         voix: str | Path | list[str] | dict[str, float] | None = None,
         voix_variante: float = 0.0,
@@ -679,6 +683,11 @@ class DiphoneEngine:
         vc_models_dir: str | Path | None = None,
     ) -> np.ndarray:
         """Synthesize multiple prosodic groups with inter-group pauses.
+
+        Le texte est decoupes en phrases aux frontieres terminales
+        (period, exclamation, question, suspensive). Chaque phrase est
+        synthetisee independamment avec sa propre prosodie, puis les
+        audios sont concatenes avec une pause inter-phrase controlee.
 
         Args:
             groups: list of dicts with keys:
@@ -718,6 +727,10 @@ class DiphoneEngine:
             base_f0: pitch de base en Hz (defaut 175.0). Ajuste le F0 de
                 reference pour toute la synthese (homme ~120, femme ~200,
                 enfant ~280).
+            sentence_pause_ms: pause inter-phrase en ms (defaut 400).
+                Controle la duree du silence entre deux phrases.
+                Les pauses intra-phrase (virgules, etc.) restent gerees
+                par pause_scale.
             voix: voix cible pour retimbre OpenVoice. Polymorphe :
                 - str : nom de preset ("siwis") ou chemin fichier audio.
                 - list[str] : plusieurs references (poids egaux).
@@ -758,6 +771,85 @@ class DiphoneEngine:
         if not groups:
             return np.array([], dtype=np.float32)
 
+        # -- Decouper les groupes en phrases --
+        sentences = self._split_into_sentences(groups)
+
+        synth_kwargs = dict(
+            mode=mode, prosody=prosody, duration_scale=duration_scale,
+            pause_scale=pause_scale, macro_expressivity=macro_expressivity,
+            micro_expressivity=micro_expressivity,
+            prosody_style=prosody_style,
+            spectral_contrast=spectral_contrast, ap_cleanup=ap_cleanup,
+            formant_sharpening=formant_sharpening, vtln_alpha=vtln_alpha,
+            timbre_signature=timbre_signature, base_f0=base_f0,
+        )
+
+        sentence_audios = []
+        for sent_groups in sentences:
+            audio = self._synthesize_sentence(sent_groups, **synth_kwargs)
+            if len(audio) > 0:
+                sentence_audios.append(audio)
+
+        if not sentence_audios:
+            return np.array([], dtype=np.float32)
+
+        # -- Concatener les phrases avec pause inter-phrase --
+        n_pause = int(sentence_pause_ms * pause_scale / 1000.0 * SIWIS_SR)
+        pause = np.zeros(n_pause, dtype=np.float32) if n_pause > 0 else None
+
+        parts = []
+        for i, audio in enumerate(sentence_audios):
+            parts.append(audio)
+            if i < len(sentence_audios) - 1 and pause is not None:
+                parts.append(pause)
+
+        combined = np.concatenate(parts)
+        combined = np.clip(combined, -0.95, 0.95)
+
+        # -- Retimbre optionnel (OpenVoice zero-shot) --
+        if voix is not None:
+            combined = self._apply_retimbre(
+                combined, SIWIS_SR, voix, voix_variante, voix_tau,
+                vc_models_dir,
+            )
+
+        return combined
+
+    def _split_into_sentences(
+        self, groups: list[dict],
+    ) -> list[list[dict]]:
+        """Decoupe les groupes en phrases aux frontieres terminales."""
+        sentences: list[list[dict]] = []
+        current: list[dict] = []
+        for group in groups:
+            current.append(group)
+            boundary = group.get("boundary", "none")
+            if boundary in self._SENTENCE_BOUNDARIES:
+                sentences.append(current)
+                current = []
+        # Groupes restants (phrase sans ponctuation finale)
+        if current:
+            sentences.append(current)
+        return sentences
+
+    def _synthesize_sentence(
+        self,
+        groups: list[dict],
+        mode: SynthMode,
+        prosody: dict | None,
+        duration_scale: float,
+        pause_scale: float,
+        macro_expressivity: float,
+        micro_expressivity: float,
+        prosody_style: str,
+        spectral_contrast: float,
+        ap_cleanup: float,
+        formant_sharpening: float,
+        vtln_alpha: float,
+        timbre_signature,
+        base_f0: float,
+    ) -> np.ndarray:
+        """Synthetise une phrase (liste de groupes prosodiques)."""
         n_groups = len(groups)
         base_f0_start = base_f0
 
@@ -770,11 +862,11 @@ class DiphoneEngine:
             boundary = group.get("boundary", "none")
 
             group_pos = gi / max(1, n_groups - 1)
-            base_f0 = base_f0_start - 10.0 * group_pos
+            cur_f0 = base_f0_start - 10.0 * group_pos
 
             # Exclamatives : base F0 relevee (+20%) + boost micro (+50%)
             if boundary == "exclamation":
-                base_f0 *= 1.20
+                cur_f0 *= 1.20
                 group_micro = micro_expressivity * 1.5
             else:
                 group_micro = micro_expressivity
@@ -783,7 +875,7 @@ class DiphoneEngine:
                 "group_idx": gi,
                 "n_groups": n_groups,
                 "boundary": boundary,
-                "base_f0": base_f0,
+                "base_f0": cur_f0,
                 "macro_expressivity": macro_expressivity,
                 "micro_expressivity": group_micro,
                 "prosody_style": prosody_style,
@@ -804,24 +896,22 @@ class DiphoneEngine:
             )
             audio_parts.append(audio)
 
+            # Pauses intra-phrase (virgules, etc.) — pas aux frontieres
+            # de fin de phrase (gerees par sentence_pause_ms)
             if gi < n_groups - 1:
-                pause_ms = self._get_pause_ms(boundary) * pause_scale
-                # Progressive lengthening: pauses grow slightly later
-                # in the utterance (natural phrasing deceleration)
-                phrase_pos = gi / max(1, n_groups - 1)
-                pause_ms *= 1.0 + 0.15 * phrase_pos * macro_expressivity
-                n_silence = int(pause_ms / 1000.0 * SIWIS_SR)
-                if n_silence > 0:
-                    audio_parts.append(np.zeros(n_silence, dtype=np.float32))
+                if boundary not in self._SENTENCE_BOUNDARIES:
+                    pause_ms = self._get_pause_ms(boundary) * pause_scale
+                    phrase_pos = gi / max(1, n_groups - 1)
+                    pause_ms *= 1.0 + 0.15 * phrase_pos * macro_expressivity
+                    n_silence = int(pause_ms / 1000.0 * SIWIS_SR)
+                    if n_silence > 0:
+                        audio_parts.append(
+                            np.zeros(n_silence, dtype=np.float32))
 
         if not audio_parts:
             return np.array([], dtype=np.float32)
 
         # ── Egalisation RMS inter-groupes ──────────────────────────
-        # Chaque groupe sort de synthesize_phones a peak=0.9.
-        # On egalise le RMS pour compenser la declination F0 qui
-        # reduit l'energie des groupes tardifs, puis on clippe
-        # a 0.95 (pas de renormalisation globale par peak).
         speech_indices = [i for i, p in enumerate(audio_parts)
                           if np.any(p != 0)]
         if len(speech_indices) > 1:
@@ -844,16 +934,6 @@ class DiphoneEngine:
                                      dtype=np.float32))
 
         combined = np.concatenate(audio_parts)
-        # Clip doux au lieu de rescaler : preserve le volume global
-        combined = np.clip(combined, -0.95, 0.95)
-
-        # -- Retimbre optionnel (OpenVoice zero-shot) --
-        if voix is not None:
-            combined = self._apply_retimbre(
-                combined, SIWIS_SR, voix, voix_variante, voix_tau,
-                vc_models_dir,
-            )
-
         return combined
 
     # -- Retimbre helper ─────────────────────────────────────────────────

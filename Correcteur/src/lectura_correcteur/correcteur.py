@@ -91,6 +91,17 @@ class Correcteur:
         self._tagger = tagger if tagger is not None else LexiqueTagger(self._lexique)
         self._tokeniseur = tokeniseur
         self._g2p = g2p
+        # Tagger hybride : G2P contextuel + overrides mots-outils
+        if self._config.activer_tagger_hybride and tagger is None:
+            from lectura_correcteur._tagger_hybride import TaggerHybride
+            from lectura_correcteur._adapter_g2p_unifie import creer_adapter_g2p_unifie
+            _g2p_adapter = creer_adapter_g2p_unifie()
+            if _g2p_adapter is not None:
+                self._tagger = TaggerHybride(
+                    _g2p_adapter, self._lexique,
+                    seuil_freq_voisin=self._config.seuil_freq_voisin,
+                )
+                self._lex_tagger = LexiqueTagger(self._lexique)
         # Reutiliser le tagger comme G2P s'il a la capacite prononcer/g2p
         if self._g2p is None and hasattr(self._tagger, "prononcer"):
             self._g2p = self._tagger
@@ -101,9 +112,11 @@ class Correcteur:
             self._g2p = _RuleBasedG2P()
         # Garder un LexiqueTagger pour les regles de grammaire
         # (regles calibrees sur ses POS, ex: est→ADJ)
-        self._lex_tagger = (
-            LexiqueTagger(self._lexique) if tagger is not None else None
-        )
+        # Ne pas ecraser _lex_tagger si deja positionne par le tagger hybride
+        if not hasattr(self, '_lex_tagger') or self._lex_tagger is None:
+            self._lex_tagger = (
+                LexiqueTagger(self._lexique) if tagger is not None else None
+            )
         self._verificateur = VerificateurOrthographe(
             self._lexique, max_suggestions=self._config.max_suggestions,
             distance=self._config.distance_suggestions,
@@ -126,6 +139,13 @@ class Correcteur:
         self._lm_homophones = None
         if self._config.activer_lm_homophones:
             self._init_lm_homophones()
+        # Injecter lm_homophones dans le tagger hybride pour le check ambiguite
+        if hasattr(self._tagger, '_lm_homophones') and self._lm_homophones is not None:
+            self._tagger._lm_homophones = self._lm_homophones
+        # Charger le n-gram POS
+        self._pos_ngram = None
+        if self._config.activer_pos_ngram:
+            self._init_pos_ngram()
 
     def _init_viterbi(self) -> None:
         """Charge la matrice de transition si le fichier existe."""
@@ -166,6 +186,16 @@ class Correcteur:
             chemin = str(Path(__file__).parent / "data" / "homophones_trigrams.db")
         if Path(chemin).exists():
             self._lm_homophones = LMHomophones(chemin, lexique=self._lexique)
+
+    def _init_pos_ngram(self) -> None:
+        """Charge le n-gram POS pour validation des corrections."""
+        from pathlib import Path
+        from lectura_correcteur._pos_ngram import PosNgram
+        chemin = self._config.chemin_pos_ngram
+        if not chemin:
+            chemin = str(Path(__file__).parent / "data" / "pos_ngram.db")
+        if Path(chemin).exists():
+            self._pos_ngram = PosNgram(chemin)
 
     @property
     def lexique(self):
@@ -287,8 +317,41 @@ class Correcteur:
                 if "divergence_pos" in mr:
                     analysis.divergence_pos = mr["divergence_pos"]
 
-        # 4c. Viterbi POS disambiguation (si matrice presente + rich tagger)
+        # 4b-bis. Analyse Viterbi trigramme POS+forme
         if (
+            self._config.activer_analyse_viterbi
+            and self._pos_ngram is not None
+        ):
+            from lectura_correcteur._analyse_viterbi import analyse_viterbi
+            viterbi_results = analyse_viterbi(
+                word_tokens,
+                self._lexique,
+                self._pos_ngram,
+                lm_homophones=self._lm_homophones,
+                bonus_original=self._config.viterbi_bonus_original,
+                bonus_lm=self._config.viterbi_bonus_lm,
+                w_emission=self._config.viterbi_w_emission,
+                w_transition=self._config.viterbi_w_transition,
+            )
+            for j, vr in enumerate(viterbi_results):
+                if j >= len(analyses):
+                    break
+                # Mettre a jour POS
+                if vr.pos:
+                    analyses[j].pos = vr.pos
+                    analyses[j].confiance_pos = vr.confiance
+                # Appliquer correction de forme (accent/homophone)
+                if vr.changed:
+                    # Preserver la casse originale
+                    new_forme = vr.forme
+                    orig = analyses[j].original
+                    if orig and orig[0].isupper() and new_forme:
+                        new_forme = new_forme[0].upper() + new_forme[1:]
+                    analyses[j].corrige = new_forme
+                    analyses[j].type_correction = TypeCorrection.GRAMMAIRE
+
+        # 4c. Viterbi POS disambiguation (si matrice presente + rich tagger)
+        elif (
             self._config.activer_viterbi
             and self._transition_matrix is not None
             and _rich_tagger
@@ -562,6 +625,72 @@ class Correcteur:
             for j in range(min(len(analyses), len(after_rules))):
                 after_rules[j] = analyses[j].corrige
 
+        # 6e. Post-validation POS n-gram : desactive car le tagger lexique
+        # donne des POS erronees pour certains mots (soir=VER, gros=ADV),
+        # ce qui cause des faux reverts sur des corrections legitimes.
+        # Les guards inline (ratio 5x, POS n-gram local) suffisent.
+        # TODO: reactiver quand le tagger est plus precis ou utiliser un
+        # tagger contextuel (CRF/BiLSTM).
+
+        # 6f. Viterbi POS+Morpho : validation/correction des traits morpho
+        if (
+            self._config.activer_viterbi_morpho
+            and self._pos_ngram is not None
+        ):
+            from lectura_correcteur._viterbi_morpho import viterbi_morpho
+            decided = [a.corrige for a in analyses]
+            pos_tags = [a.pos for a in analyses]
+            # Ne pas expanser les variantes pour les mots deja corriges
+            protected = [
+                a.type_correction != TypeCorrection.AUCUNE
+                for a in analyses
+            ]
+            vm_results = viterbi_morpho(
+                decided,
+                pos_tags,
+                self._lexique,
+                self._pos_ngram,
+                bonus_current=self._config.viterbi_morpho_bonus_current,
+                w_emission=self._config.viterbi_morpho_w_emission,
+                w_transition=self._config.viterbi_morpho_w_transition,
+                use_variants=self._config.viterbi_morpho_use_variants,
+                protected=protected,
+            )
+            for j, vmr in enumerate(vm_results):
+                if j >= len(analyses) or j >= len(after_rules):
+                    break
+                if vmr.changed:
+                    # Preserver la casse
+                    new_forme = vmr.forme
+                    orig = analyses[j].corrige
+                    if orig and orig[0].isupper() and new_forme:
+                        new_forme = new_forme[0].upper() + new_forme[1:]
+                    analyses[j].corrige = new_forme
+                    after_rules[j] = new_forme
+                    if analyses[j].type_correction == TypeCorrection.AUCUNE:
+                        analyses[j].type_correction = TypeCorrection.GRAMMAIRE
+                    all_corrections.append(Correction(
+                        index=j,
+                        original=analyses[j].original,
+                        corrige=new_forme,
+                        type_correction=TypeCorrection.GRAMMAIRE,
+                        regle="viterbi_morpho",
+                        explication=(
+                            f"Viterbi Morpho : '{orig}' -> '{new_forme}' "
+                            f"(PM: {vmr.pm_tag})"
+                        ),
+                    ))
+                # Toujours mettre a jour POS et morpho depuis le Viterbi
+                if vmr.pos:
+                    analyses[j].pos = vmr.pos
+                morpho = {}
+                if vmr.genre != "_":
+                    morpho["genre"] = vmr.genre.lower()[0] if vmr.genre in ("Masc", "Fem") else vmr.genre
+                if vmr.nombre != "_":
+                    morpho["nombre"] = vmr.nombre.lower()[0] if vmr.nombre in ("Sing", "Plur") else vmr.nombre
+                if morpho:
+                    analyses[j].morpho.update(morpho)
+
         # Couche coherence : re-verification post-corrections
         if self._config.activer_coherence:
             _retagger_coh = self._lex_tagger if self._lex_tagger is not None else self._tagger
@@ -598,14 +727,6 @@ class Correcteur:
         corrections: list[Correction] = []
         lm = self._lm_homophones
 
-        # Suffixes de participe passe (pour guard a/à + PP)
-        _PP_SUFFIXES = (
-            "é", "és", "ée", "ées",
-            "i", "is", "ie", "ies",
-            "u", "us", "ue", "ues",
-            "it", "ite", "ites",
-        )
-
         # Positions deja corrigees par scoring conjoint (ne pas re-traiter)
         _joint_corrected: set[int] = set()
 
@@ -635,7 +756,7 @@ class Correcteur:
             homo_candidates = lm.candidats(mot)
             if homo_candidates and len(homo_candidates) >= 2:
                 joint_result = self._scorer_conjoint(
-                    j, mot, homo_candidates, analyses, lm, _PP_SUFFIXES,
+                    j, mot, homo_candidates, analyses, lm,
                 )
                 if joint_result is not None:
                     best_homo, ctx_changes, total_score = joint_result
@@ -692,14 +813,41 @@ class Correcteur:
             if score_best <= score_current:
                 continue
 
+            # Guard ambiguite : quand les deux formes sont vues dans ce
+            # contexte (scores tous deux > 0), exiger un ratio fort (5x)
+            # pour eviter les faux positifs sur cas ambigus (ce/se sont)
+            if score_current > 0 and score_best < score_current * 5:
+                continue
+
             # Guard a/à + PP : ne pas changer "a" → "à" si le mot suivant
             # est un participe passe (pattern "a + PP" = auxiliaire avoir)
             if mot == "a" and best.lower() == "\xe0":
                 next_low = ctx_droite.lower() if ctx_droite else ""
-                if next_low.endswith(_PP_SUFFIXES) and not next_low.endswith(
-                    ("er", "ir", "re", "oir")
-                ):
+                if next_low and self._est_participe_passe(next_low):
                     continue
+
+            # Guard POS n-gram : verifier que la correction ameliore
+            # (ou au moins ne degrade pas) la sequence POS
+            if self._pos_ngram is not None:
+                pos_tags = [a.pos for a in analyses]
+                # POS du candidat : lookup dans le lexique
+                best_infos = self._lexique.info(best.lower())
+                if best_infos:
+                    best_pos = max(
+                        best_infos,
+                        key=lambda e: float(e.get("freq") or 0),
+                    ).get("cgram", "")
+                    if best_pos and best_pos != analysis.pos:
+                        score_pos_current = self._pos_ngram.score_position(
+                            pos_tags, j, analysis.pos,
+                        )
+                        score_pos_best = self._pos_ngram.score_position(
+                            pos_tags, j, best_pos,
+                        )
+                        # Bloquer si le POS n-gram dit que la correction
+                        # degrade la sequence POS (avec marge)
+                        if score_pos_best < score_pos_current - 0.5:
+                            continue
 
             # Preserver la casse
             if analysis.corrige[0].isupper():
@@ -728,7 +876,6 @@ class Correcteur:
         homo_candidates: list[tuple[str, float]],
         analyses: list[MotAnalyse],
         lm,
-        pp_suffixes: tuple[str, ...],
     ) -> tuple[str, list[tuple[int, str]], int] | None:
         """Score conjoint : homophone × variantes accent du contexte.
 
@@ -822,16 +969,135 @@ class Correcteur:
         if not has_homo_change and not ctx_changes:
             return None
 
-        # Guard a/à + PP conjoint : ne pas changer "a" → "à" si le
-        # contexte droit (potentiellement corrige) finit en PP
-        if mot == "a" and best_homo == "\xe0":
-            right_check = best_ctx_right if best_ctx_right else ""
-            if isinstance(right_check, str) and right_check.endswith(
-                pp_suffixes
-            ) and not right_check.endswith(("er", "ir", "re", "oir")):
+        # Guard ambiguite conjoint : quand il n'y a pas de changement
+        # de contexte (le gain vient uniquement du changement d'homophone),
+        # appliquer le meme seuil de ratio que le scoring simple (5x)
+        if not ctx_changes and baseline_score > 0:
+            if best_score < baseline_score * 5:
                 return None
 
+        # Guard a/à + PP conjoint : ne pas changer "a" → "à" si le
+        # contexte droit (potentiellement corrige) est un participe passe
+        if mot == "a" and best_homo == "\xe0":
+            right_check = best_ctx_right if best_ctx_right else ""
+            if isinstance(right_check, str) and right_check and self._est_participe_passe(right_check):
+                return None
+
+        # Guard POS n-gram conjoint : verifier que les changements de
+        # contexte n'empirent pas la sequence POS
+        if self._pos_ngram is not None and ctx_changes:
+            pos_tags = [a.pos for a in analyses]
+            for ctx_idx, ctx_new in ctx_changes:
+                new_infos = self._lexique.info(ctx_new)
+                if new_infos:
+                    new_pos = max(
+                        new_infos,
+                        key=lambda e: float(e.get("freq") or 0),
+                    ).get("cgram", "")
+                    old_pos = analyses[ctx_idx].pos
+                    if new_pos and old_pos and new_pos != old_pos:
+                        score_old = self._pos_ngram.score_position(
+                            pos_tags, ctx_idx, old_pos,
+                        )
+                        score_new = self._pos_ngram.score_position(
+                            pos_tags, ctx_idx, new_pos,
+                        )
+                        if score_new < score_old - 0.5:
+                            return None
+
         return best_homo, ctx_changes, best_score
+
+    def _est_participe_passe(self, mot: str) -> bool:
+        """Verifie si un mot est un participe passe via le lexique.
+
+        Retourne True si le mot a au moins une entree VER avec un suffixe
+        typique de PP (-é, -i, -u, -it, -is, etc.) et que le lexique le
+        confirme comme verbe.
+        """
+        mot_low = mot.lower()
+        _PP_SUFFIXES = (
+            "é", "és", "ée", "ées",
+            "i", "is", "ie", "ies",
+            "u", "us", "ue", "ues",
+            "it", "ite", "ites", "its",
+        )
+        if not mot_low.endswith(_PP_SUFFIXES):
+            return False
+        # Exclure les infinitifs et formes non-PP
+        if mot_low.endswith(("er", "ir", "re", "oir")):
+            return False
+        infos = self._lexique.info(mot_low)
+        if not infos:
+            return False
+        for entry in infos:
+            cgram = entry.get("cgram", "")
+            if cgram in ("VER", "AUX"):
+                return True
+        return False
+
+    def _post_validation_pos_ngram(
+        self,
+        analyses: list[MotAnalyse],
+        after_rules: list[str],
+        corrections: list[Correction],
+    ) -> list[int]:
+        """Post-validation : revertir les corrections qui degradent le POS n-gram.
+
+        Pour chaque correction grammaticale, retague la phrase avec et sans
+        la correction et compare les scores POS des deux sequences. Si
+        l'original donne un meilleur score, on revertit.
+
+        Returns:
+            Liste des indices revertes.
+        """
+        reverted: list[int] = []
+
+        # Identifier les positions corrigees par les regles de grammaire
+        candidates: list[int] = []
+        for j, a in enumerate(analyses):
+            if (
+                a.type_correction == TypeCorrection.GRAMMAIRE
+                and a.corrige.lower() != a.original.lower()
+            ):
+                candidates.append(j)
+
+        if not candidates:
+            return reverted
+
+        _retagger = self._lex_tagger if self._lex_tagger is not None else self._tagger
+
+        # Retagger la phrase avec les corrections
+        corrected_words = [a.corrige for a in analyses]
+        tags_corrected = _retagger.tag_words(corrected_words)
+        pos_corrected = [t.get("pos", "") for t in tags_corrected]
+
+        for j in candidates:
+            # Construire la phrase avec le mot original a la position j
+            original_words = list(corrected_words)
+            original_words[j] = analyses[j].original
+
+            # Retagger avec le mot original
+            tags_original = _retagger.tag_words(original_words)
+            pos_original = [t.get("pos", "") for t in tags_original]
+
+            # Scorer les deux sequences POS completes
+            score_corrected = self._pos_ngram.score_sequence(pos_corrected)
+            score_original = self._pos_ngram.score_sequence(pos_original)
+
+            # Si l'original a un meilleur score POS → revertir
+            if score_original > score_corrected + 0.5:
+                analyses[j].corrige = analyses[j].original
+                analyses[j].type_correction = TypeCorrection.AUCUNE
+                if j < len(after_rules):
+                    after_rules[j] = analyses[j].original
+                # Mettre a jour corrected_words et pos_corrected pour les
+                # candidats suivants
+                corrected_words[j] = analyses[j].original
+                tags_corrected = _retagger.tag_words(corrected_words)
+                pos_corrected = [t.get("pos", "") for t in tags_corrected]
+                reverted.append(j)
+
+        return reverted
 
     # Paires d'homophones deja traitees par les regles de grammaire.
     # Le LM ne doit pas toucher ces mots (les regles sont plus precises).

@@ -187,11 +187,23 @@ def _fix_yod(word: str, ipa: str) -> str:
     return "".join(result) if modified else ipa
 
 
+def _fix_schwa_guement(word: str, ipa: str) -> str:
+    """Supprimer le schwa dans -guement : ɡəmɑ̃ → ɡmɑ̃.
+
+    En francais, le 'e' dans le suffixe '-guement' est toujours muet.
+    Exemples : longuement lɔ̃ɡəmɑ̃ → lɔ̃ɡmɑ̃, vaguement vaɡəmɑ̃ → vaɡmɑ̃
+    """
+    if "guement" not in word.lower():
+        return ipa
+    return ipa.replace("ɡəmɑ̃", "ɡmɑ̃")
+
+
 def appliquer_regles_g2p(word: str, ipa: str) -> str:
     """Applique toutes les règles G2P en séquence."""
     ipa = _fix_ex_consonne(word, ipa)
     ipa = _fix_ex_voyelle(word, ipa)
     ipa = _fix_yod(word, ipa)
+    ipa = _fix_schwa_guement(word, ipa)
     return ipa
 
 
