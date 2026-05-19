@@ -186,6 +186,8 @@ class OnnxTTSEngine:
         self._sample_rate = self._config.get("audio", {}).get("sample_rate", 22050)
         log.info("OnnxTTSEngine charge depuis %s", self._models_dir)
 
+    _retimbre_engine = None  # RetimbreEngine (lazy, instance-level)
+
     def synthesize(
         self,
         text: str,
@@ -196,6 +198,10 @@ class OnnxTTSEngine:
         energy_scale: float = 1.0,
         pause_scale: float = 1.0,
         variability: bool = False,
+        voix: str | Path | list[str] | dict[str, float] | None = None,
+        voix_variante: float = 0.0,
+        voix_tau: float = 0.3,
+        vc_models_dir: str | Path | None = None,
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
@@ -210,6 +216,16 @@ class OnnxTTSEngine:
             pitch_range: Echelle de variation F0.
             energy_scale: Multiplicateur d'energie.
             pause_scale: Multiplicateur pour les pauses.
+            voix: Voix cible pour retimbre OpenVoice. Polymorphe :
+                - str : nom de preset ("siwis") ou chemin fichier audio.
+                - list[str] : plusieurs references (poids egaux).
+                - dict[str, float] : blend pondere.
+                None = pas de retimbre.
+                Requires: pip install 'lectura-tts-monospeaker[vc]'
+            voix_variante: Curseur de variante vocale (-1 a +1).
+                -1 = grave/masculin, 0 = neutre, +1 = aigu/enfant.
+            voix_tau: Parametre tau d'OpenVoice (0 = deterministe).
+            vc_models_dir: Repertoire des modeles VC (defaut: auto-detection).
         """
         try:
             from lectura_g2p import creer_engine as creer_g2p
@@ -238,41 +254,49 @@ class OnnxTTSEngine:
         # Phrase unique — pas de concatenation
         if len(sentences) == 1:
             ipa, auto_pt = sentences[0]
-            return self.synthesize_phonemes(
-                ipa,
-                phrase_type=phrase_type if phrase_type is not None else auto_pt,
-                **prosody,
-            )
-
-        # Multi-phrases : synthetiser chacune et concatener
-        all_samples: list[np.ndarray] = []
-        all_timings: list[PhonemeTiming] = []
-        time_offset_ms = 0.0
-
-        for i, (ipa, auto_pt) in enumerate(sentences):
             result = self.synthesize_phonemes(
                 ipa,
                 phrase_type=phrase_type if phrase_type is not None else auto_pt,
                 **prosody,
             )
+        else:
+            # Multi-phrases : synthetiser chacune et concatener
+            all_samples: list[np.ndarray] = []
+            all_timings: list[PhonemeTiming] = []
+            time_offset_ms = 0.0
 
-            # Decaler les timings
-            for t in result.phoneme_timings:
-                all_timings.append(PhonemeTiming(
-                    ipa=t.ipa,
-                    start_ms=t.start_ms + time_offset_ms,
-                    end_ms=t.end_ms + time_offset_ms,
-                ))
+            for i, (ipa, auto_pt) in enumerate(sentences):
+                r = self.synthesize_phonemes(
+                    ipa,
+                    phrase_type=phrase_type if phrase_type is not None else auto_pt,
+                    **prosody,
+                )
 
-            all_samples.append(result.samples)
-            time_offset_ms += len(result.samples) / self._sample_rate * 1000
+                # Decaler les timings
+                for t in r.phoneme_timings:
+                    all_timings.append(PhonemeTiming(
+                        ipa=t.ipa,
+                        start_ms=t.start_ms + time_offset_ms,
+                        end_ms=t.end_ms + time_offset_ms,
+                    ))
 
-        combined = np.concatenate(all_samples)
-        return TTSResult(
-            samples=combined,
-            sample_rate=self._sample_rate,
-            phoneme_timings=all_timings,
-        )
+                all_samples.append(r.samples)
+                time_offset_ms += len(r.samples) / self._sample_rate * 1000
+
+            combined = np.concatenate(all_samples)
+            result = TTSResult(
+                samples=combined,
+                sample_rate=self._sample_rate,
+                phoneme_timings=all_timings,
+            )
+
+        # Retimbre optionnel (OpenVoice zero-shot)
+        if voix is not None:
+            result = self._apply_retimbre(
+                result, voix, voix_variante, voix_tau, vc_models_dir,
+            )
+
+        return result
 
     def synthesize_phonemes(
         self,
@@ -488,3 +512,33 @@ class OnnxTTSEngine:
                     ))
 
         return timings
+
+    def _apply_retimbre(
+        self,
+        result: TTSResult,
+        voix: str | Path | list[str] | dict[str, float],
+        voix_variante: float,
+        voix_tau: float,
+        vc_models_dir: str | Path | None,
+    ) -> TTSResult:
+        """Applique le retimbre OpenVoice sur le resultat TTS."""
+        from lectura_tts_monospeaker._retimbre import RetimbreEngine
+
+        if self._retimbre_engine is None:
+            self._retimbre_engine = RetimbreEngine(vc_models_dir=vc_models_dir)
+
+        audio, sr = self._retimbre_engine.retimbre(
+            result.samples, self._sample_rate, voix,
+            variante=voix_variante, tau=voix_tau,
+        )
+
+        # Normaliser
+        peak = np.max(np.abs(audio))
+        if peak > 0.01:
+            audio = (audio * 0.9 / peak).astype(np.float32)
+
+        return TTSResult(
+            samples=audio,
+            sample_rate=sr,
+            phoneme_timings=result.phoneme_timings,
+        )
