@@ -320,7 +320,7 @@ class Lexique:
             multext = entry.get("multext") or ""
             if multext:
                 traits = _decoder_multext(multext)
-                entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                entry["genre"] = traits.get("genre", "") or entry.get("genre", "") or ""
                 entry["nombre"] = traits.get("nombre", "")
                 entry["mode"] = traits.get("mode", "")
                 entry["temps"] = traits.get("temps", "")
@@ -576,7 +576,7 @@ class Lexique:
             multext = entry.get("multext") or ""
             if multext:
                 traits = _decoder_multext(multext)
-                entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                entry["genre"] = traits.get("genre", "") or entry.get("genre", "") or ""
                 entry["nombre"] = traits.get("nombre", "")
                 entry["mode"] = traits.get("mode", "")
                 entry["temps"] = traits.get("temps", "")
@@ -793,7 +793,7 @@ class Lexique:
                         multext = entry.get("multext") or ""
                         if multext:
                             traits = _decoder_multext(multext)
-                            entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                            entry["genre"] = traits.get("genre", "") or entry.get("genre", "") or ""
                             entry["nombre"] = traits.get("nombre", "")
                         entry["freq"] = entry.get("freq_composite") or entry.get("freq_opensubs", 0.0) or 0.0
                         results.append(entry)
@@ -1296,7 +1296,7 @@ class Lexique:
             multext = entry.get("multext") or ""
             if multext:
                 traits = _decoder_multext(multext)
-                entry["genre"] = entry.get("genre") or traits.get("genre", "")
+                entry["genre"] = traits.get("genre", "") or entry.get("genre", "") or ""
                 entry["nombre"] = traits.get("nombre", "")
                 entry["mode"] = traits.get("mode", "")
                 entry["temps"] = traits.get("temps", "")

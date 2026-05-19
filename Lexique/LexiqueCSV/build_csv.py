@@ -30,7 +30,14 @@ COLUMNS = [
     "freq", "lemme", "multext", "is_lemme",
 ]
 
-# Extraction nombre depuis multext (position depend de la categorie)
+# Positions genre/nombre dans les tags multext (depend de la categorie)
+_GENRE_POS = {
+    "N": 2,  # Ncms → pos 2
+    "A": 3,  # Afpms → pos 3
+    "D": 3,  # Da-ms → pos 3
+    "P": 3,  # Pp3ms → pos 3
+}
+
 _NOMBRE_POS = {
     "N": 3,  # Ncms → pos 3
     "A": 4,  # Afpfs → pos 4
@@ -38,6 +45,19 @@ _NOMBRE_POS = {
     "P": 4,  # Pp3ms → pos 4
     "V": 5,  # Vmip3s → pos 5
 }
+
+
+def _genre_from_multext(multext: str) -> str:
+    """Extrait le genre (m/f) depuis un tag multext."""
+    if not multext:
+        return ""
+    cat = multext[0]
+    pos = _GENRE_POS.get(cat)
+    if pos is not None and len(multext) > pos:
+        c = multext[pos]
+        if c in ("m", "f"):
+            return c
+    return ""
 
 
 def _nombre_from_multext(multext: str) -> str:
@@ -88,8 +108,8 @@ def _iter_rows(db_path: Path):
         ortho = row["ortho"] or ""
         phone = row["phone"] or ""
         cgram = row["cgram"] or ""
-        genre = row["genre"] or ""
         multext = row["multext"] or ""
+        genre = _genre_from_multext(multext) or row["genre"] or ""
         lemme = row["lemme"] or ""
 
         freq_raw = row["freq_composite"]

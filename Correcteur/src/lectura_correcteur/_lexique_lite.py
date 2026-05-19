@@ -45,7 +45,7 @@ class LexiqueLite:
         multext = entry.get("multext") or ""
         if multext:
             traits = decoder_multext(multext)
-            entry["genre"] = entry.get("genre") or traits.get("genre", "")
+            entry["genre"] = traits.get("genre", "") or entry.get("genre", "") or ""
             entry["nombre"] = traits.get("nombre", entry.get("nombre", ""))
             entry["mode"] = traits.get("mode", "")
             entry["temps"] = traits.get("temps", "")
