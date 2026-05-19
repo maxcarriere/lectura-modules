@@ -98,6 +98,11 @@ def synthetiser(
     pitch_range: float = 1.3,
     energy_scale: float = 1.0,
     pause_scale: float = 1.0,
+    # -- Retimbre (OpenVoice zero-shot) --
+    voix: str | list[str] | dict[str, float] | None = None,
+    voix_variante: float = 0.0,
+    voix_tau: float = 0.3,
+    vc_models_dir: str | Path | None = None,
 ) -> Any:
     """Convenience : texte → numpy audio float32.
 
@@ -111,6 +116,22 @@ def synthetiser(
         Parametres de creer_engine()
     phrase_type, duration_scale, pitch_shift, pitch_range, energy_scale, pause_scale :
         Controles prosodiques
+    voix : str | list[str] | dict[str, float] | None
+        Voix cible pour retimbre OpenVoice. Polymorphe :
+        - str : nom de preset ("siwis") ou chemin fichier audio.
+        - list[str] : plusieurs references (poids egaux).
+        - dict[str, float] : blend pondere.
+          Ex: {"siwis": 0.5, "nadine": 0.3, "ezwa": 0.2}
+        None = pas de retimbre.
+        Presets: siwis, ezwa, nadine, bernard, gilles, zeckou.
+        Requires: pip install 'lectura-tts-monospeaker[vc]'
+    voix_variante : float
+        Curseur de variante vocale (-1 a +1).
+        -1 = grave/masculin, 0 = neutre, +1 = aigu/enfant.
+    voix_tau : float
+        Parametre tau d'OpenVoice (0 = deterministe, 0.3 = defaut).
+    vc_models_dir : str | Path | None
+        Repertoire des modeles VC (defaut: auto-detection).
 
     Returns
     -------
@@ -127,6 +148,10 @@ def synthetiser(
         pitch_range=pitch_range,
         energy_scale=energy_scale,
         pause_scale=pause_scale,
+        voix=voix,
+        voix_variante=voix_variante,
+        voix_tau=voix_tau,
+        vc_models_dir=vc_models_dir,
     )
     return result.samples
 
