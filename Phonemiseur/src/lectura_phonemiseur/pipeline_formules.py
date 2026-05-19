@@ -182,6 +182,24 @@ def analyser_phrase_complete(
     if not items:
         return ResultatPhraseG2P()
 
+    # ── Étape 1b : détecter les élisions (clitique + apostrophe) ──
+    # Le Tokeniseur découpe "s'est" → MOT("s") + SEP("'") + MOT("est").
+    # On doit passer "s'" au neural pour que g2p_corrections_unifie.json
+    # renvoie le son du clitique ("s") et non le nom de la lettre ("ɛs").
+    elision_indices: set[int] = set()
+    corrections = _get_compound_corrections()
+    for i, tok in enumerate(tokens):
+        ttype = getattr(tok, "type", None)
+        tname = str(getattr(ttype, "value", str(ttype))).lower() if ttype else ""
+        if tname == "mot" and i + 1 < len(tokens):
+            nxt = tokens[i + 1]
+            nt = getattr(nxt, "type", None)
+            nn = str(getattr(nt, "value", str(nt))).lower() if nt else ""
+            if nn == "separateur" and getattr(nxt, "text", "") == "'":
+                candidate = getattr(tok, "text", str(tok)).lower() + "'"
+                if candidate in corrections:
+                    elision_indices.add(i)
+
     # ── Étape 2 : préparer tokens pour le modèle neural ──
     # Seuls les mots et formules (placeholder) passent au neural.
     # La ponctuation est exclue du modèle neural.
@@ -219,7 +237,10 @@ def analyser_phrase_complete(
             else:
                 # Mot simple ou composé avec correction dédiée : passer entier
                 item_to_neural[item_idx] = len(neural_tokens)
-                neural_tokens.append(getattr(tok, "text", str(tok)))
+                tok_text = getattr(tok, "text", str(tok))
+                if orig_idx in elision_indices:
+                    tok_text = tok_text + "'"
+                neural_tokens.append(tok_text)
 
     # ── Étape 3 : exécuter le modèle neural ──
 
