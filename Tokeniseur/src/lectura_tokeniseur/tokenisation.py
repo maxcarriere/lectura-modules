@@ -15,6 +15,20 @@ _ELISION_RE = re.compile(
     r"^(?:[CcDdJjLlMmNnSsTt]|[Qq]u|[Jj]usqu|[Ll]orsqu|[Pp]uisqu|[Qq]uelqu)$"
 )
 
+# Pronoms clitiques sujets — inversion interrogative (dit-il, a-t-on, etc.)
+_PRONOMS_INVERSION = frozenset({
+    "je", "tu", "il", "elle", "on",
+    "nous", "vous",
+    "ils", "elles",
+    "ce",
+})
+
+# Composés lexicaux connus finissant par un pronom — ne pas casser
+_COMPOSES_AVEC_PRONOM = frozenset({
+    "rendez-vous", "garde-à-vous", "chez-nous", "chez-vous",
+    "entre-nous", "entre-vous",
+})
+
 # Locutions figées : élision + apostrophe + composé traités comme un seul mot
 _LOCUTIONS: frozenset[str] = frozenset({
     "c'est-à-dire",
@@ -116,16 +130,63 @@ def _merge_compounds(tokens: list[Token]) -> list[Token]:
                 children.append(inner_mot)
                 j += 2
 
-            # Construire le Mot composé
+            # Verifier inversion pronominale (dit-il, a-t-on, etc.)
             full_text = "".join(c.text for c in children)
-            compound = Mot(
-                type=TokenType.MOT,
-                text=full_text,
-                span=(children[0].span[0], children[-1].span[1]),
-                ortho=full_text.lower(),
-                children=children,
-            )
-            result.append(compound)
+            last_mot = children[-1]
+            if (
+                isinstance(last_mot, Mot)
+                and last_mot.text.lower() in _PRONOMS_INVERSION
+                and full_text.lower() not in _COMPOSES_AVEC_PRONOM
+            ):
+                # Detecter le t euphonique : ...SEP-MOT("t")-SEP-MOT(pronom)
+                has_euphonic_t = (
+                    len(children) >= 5
+                    and isinstance(children[-3], Mot)
+                    and children[-3].text.lower() == "t"
+                    and len(children[-3].text) == 1
+                    and isinstance(children[-4], Separateur)
+                )
+                split = -4 if has_euphonic_t else -2
+
+                # Partie verbe
+                verb_parts = children[:split]
+                if len(verb_parts) == 1:
+                    result.append(verb_parts[0])
+                elif len(verb_parts) > 1:
+                    vtext = "".join(c.text for c in verb_parts)
+                    result.append(Mot(
+                        type=TokenType.MOT,
+                        text=vtext,
+                        span=(verb_parts[0].span[0], verb_parts[-1].span[1]),
+                        ortho=vtext.lower(),
+                        children=verb_parts,
+                    ))
+
+                # Separateur
+                result.append(children[split])
+
+                # Partie pronom (fusionner t euphonique + pronom si besoin)
+                inv_parts = children[split + 1:]
+                if len(inv_parts) == 1:
+                    result.append(inv_parts[0])
+                else:
+                    inv_text = "".join(c.text for c in inv_parts)
+                    result.append(Mot(
+                        type=TokenType.MOT,
+                        text=inv_text,
+                        span=(inv_parts[0].span[0], inv_parts[-1].span[1]),
+                        ortho=inv_text.lower(),
+                    ))
+            else:
+                # Construire le Mot composé
+                compound = Mot(
+                    type=TokenType.MOT,
+                    text=full_text,
+                    span=(children[0].span[0], children[-1].span[1]),
+                    ortho=full_text.lower(),
+                    children=children,
+                )
+                result.append(compound)
             i = j
         else:
             result.append(tokens[i])

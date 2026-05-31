@@ -65,6 +65,7 @@ def analyser_phrase(
     engine: object | None = None,
     options_groupes: OptionsGroupes | None = None,
     syllabifier: bool = False,
+    engine_kwargs: dict | None = None,
 ) -> ResultatPhraseG2P | object:
     """Analyse G2P complete d'une phrase en francais.
 
@@ -80,6 +81,9 @@ def analyser_phrase(
         Options pour les groupes de lecture (liaisons, elisions, etc.).
     syllabifier : bool
         Si True, ajoute la syllabification (necessite lectura-aligneur).
+    engine_kwargs : dict | None
+        Kwargs supplementaires passes a ``engine.analyser()``
+        (ex: ``sep_apos=True``, ``sep_hyphen=True``).
 
     Returns
     -------
@@ -93,7 +97,9 @@ def analyser_phrase(
         engine = creer_engine()
 
     tokens = tokenise(normalise(texte))
-    result = analyser_phrase_complete(tokens, engine=engine)
+    result = analyser_phrase_complete(
+        tokens, engine=engine, engine_kwargs=engine_kwargs,
+    )
 
     # Construire les groupes de lecture
     groupes = construire_groupes_lecture(result, options_groupes)

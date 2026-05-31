@@ -146,6 +146,7 @@ def analyser_phrase_complete(
     tokens: list[Any],
     engine: Any | None = None,
     options_lecture: OptionsLecture | None = None,
+    engine_kwargs: dict | None = None,
 ) -> ResultatPhraseG2P:
     """Pipeline complet : mots via neural, formules via algo.
 
@@ -247,7 +248,8 @@ def analyser_phrase_complete(
     neural_result: dict[str, Any] = {}
     if engine is not None and neural_tokens:
         try:
-            neural_result = engine.analyser(neural_tokens)
+            _ekw = engine_kwargs or {}
+            neural_result = engine.analyser(neural_tokens, **_ekw)
         except Exception:
             neural_result = {}
 
@@ -332,5 +334,12 @@ def analyser_phrase_complete(
                 liaison=liaison,
                 morpho=word_morpho,
             ))
+
+    # ── Étape 5 : neutraliser les liaisons avant ponctuation ──
+    # Le modèle prédit les liaisons sans contexte du token suivant.
+    # Une ponctuation de fin de phrase bloque toute liaison.
+    for i in range(len(mots_resultat) - 1):
+        if mots_resultat[i + 1].est_ponctuation:
+            mots_resultat[i].liaison = ""
 
     return ResultatPhraseG2P(mots=mots_resultat)

@@ -354,11 +354,13 @@ class TestFormules:
         formules = [t for t in tokens if isinstance(t, Formule)]
         assert any(f.formule_type == FormuleType.SIGLE for f in formules)
 
-    def test_sigle_unesco(self):
-        """UNESCO est detecte comme un SIGLE."""
+    def test_acronyme_mot_unesco(self):
+        """UNESCO est un acronyme lu comme un mot, pas un sigle."""
         tokens = tokenise("UNESCO")
         formules = [t for t in tokens if isinstance(t, Formule)]
-        assert any(f.formule_type == FormuleType.SIGLE for f in formules)
+        assert not any(f.formule_type == FormuleType.SIGLE for f in formules)
+        mots = [t for t in tokens if isinstance(t, Mot)]
+        assert len(mots) == 1
 
     def test_sigle_valeur_upper(self):
         """La valeur d'un sigle est en majuscules."""
@@ -595,8 +597,8 @@ class TestTokenTypes:
         assert FormuleType.MATHS.value == "maths"
 
     def test_formule_type_all_members(self):
-        """L'enum FormuleType a exactement 15 membres."""
-        assert len(FormuleType) == 15
+        """L'enum FormuleType a exactement 16 membres."""
+        assert len(FormuleType) == 16
 
     # -- Span type alias --
 
@@ -1059,3 +1061,63 @@ class TestMathsTokenization:
         # Premier enfant = nombre "2"
         assert isinstance(children[0], Formule)
         assert children[0].formule_type == FormuleType.NOMBRE
+
+
+# ============================================================================
+# 8. Nombres romains (ROMAIN)
+# ============================================================================
+
+
+class TestRomain:
+    """Tests de la detection des nombres romains."""
+
+    def test_romain_iv(self):
+        """IV est detecte comme nombre romain."""
+        tokens = tokenise("IV")
+        formules = [t for t in tokens if isinstance(t, Formule)]
+        assert any(f.formule_type == FormuleType.ROMAIN for f in formules)
+
+    def test_romain_xv(self):
+        """XV est detecte comme nombre romain."""
+        tokens = tokenise("XV")
+        formules = [t for t in tokens if isinstance(t, Formule)]
+        assert any(f.formule_type == FormuleType.ROMAIN for f in formules)
+
+    def test_romain_xxi(self):
+        """XXI est detecte comme nombre romain."""
+        tokens = tokenise("XXI")
+        formules = [t for t in tokens if isinstance(t, Formule)]
+        assert any(f.formule_type == FormuleType.ROMAIN for f in formules)
+
+    def test_romain_pas_sigle(self):
+        """IV n'est pas un sigle."""
+        tokens = tokenise("IV")
+        sigles = [t for t in tokens if isinstance(t, Formule)
+                  and t.formule_type == FormuleType.SIGLE]
+        assert len(sigles) == 0
+
+    def test_ordinal_priorite_sur_romain(self):
+        """IVe reste un ordinal, pas un romain."""
+        tokens = tokenise("IVe")
+        formules = [t for t in tokens if isinstance(t, Formule)]
+        assert any(f.formule_type == FormuleType.ORDINAL for f in formules)
+
+    def test_romain_minuscule_pas_detecte(self):
+        """iv en minuscule n'est pas detecte comme romain."""
+        tokens = tokenise("iv")
+        formules = [t for t in tokens if isinstance(t, Formule)
+                    and t.formule_type == FormuleType.ROMAIN]
+        assert len(formules) == 0
+
+    def test_romain_i_seul_pas_detecte(self):
+        """I seul n'est pas detecte comme romain (trop ambigu)."""
+        tokens = tokenise("I")
+        formules = [t for t in tokens if isinstance(t, Formule)
+                    and t.formule_type == FormuleType.ROMAIN]
+        assert len(formules) == 0
+
+    def test_romain_xxxix(self):
+        """XXXIX (39) est detecte comme nombre romain."""
+        tokens = tokenise("XXXIX")
+        formules = [t for t in tokens if isinstance(t, Formule)]
+        assert any(f.formule_type == FormuleType.ROMAIN for f in formules)
