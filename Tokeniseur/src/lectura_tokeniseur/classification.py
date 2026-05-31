@@ -12,7 +12,7 @@ from lectura_tokeniseur.models import (
 from lectura_tokeniseur.detection import (
     _detect_telephone, _detect_date, _detect_scientifique,
     _detect_fraction, _detect_ordinal, _detect_maths, _detect_sigle,
-    _detect_numero, _detect_nombre, _is_roman,
+    _detect_numero, _detect_nombre, _is_roman, _detect_romain,
     _detect_heure, _detect_monnaie, _detect_pourcentage,
     _detect_intervalle, _detect_gps, _detect_page_chapitre,
     _TEL_CLEAN_RE, _FRACTION_RE, _NUMERO_SPLIT_RE,
@@ -68,7 +68,11 @@ def _classify_formule_single(text: str) -> FormuleType | None:
     if _detect_ordinal(text):
         return FormuleType.ORDINAL
 
-    # 7. POURCENTAGE
+    # 7. ROMAIN
+    if _detect_romain(text):
+        return FormuleType.ROMAIN
+
+    # 8. POURCENTAGE
     if _detect_pourcentage(text):
         return FormuleType.POURCENTAGE
 
@@ -707,6 +711,20 @@ def _classify_and_merge(tokens: list[Token]) -> list[Token]:
                 i += 1
                 continue
 
+        # Classifie les MOT qui sont des nombres romains (IV, XV, XXI)
+        if isinstance(tok, Mot) and _detect_romain(tok.text):
+            formule = Formule(
+                type=TokenType.FORMULE,
+                text=tok.text,
+                span=tok.span,
+                formule_type=FormuleType.ROMAIN,
+                children=[],
+                valeur=tok.text,
+            )
+            result.append(formule)
+            i += 1
+            continue
+
         # Classifie les MOT qui sont en fait des sigles (2+ majuscules)
         if isinstance(tok, Mot) and _detect_sigle(tok.text):
             formule = Formule(
@@ -1196,4 +1214,6 @@ def _extract_valeur(text: str, ftype: FormuleType) -> str:
         # Extraire le numéro
         m = re.search(r"\d+", text)
         return m.group(0) if m else text
+    if ftype == FormuleType.ROMAIN:
+        return text
     return text

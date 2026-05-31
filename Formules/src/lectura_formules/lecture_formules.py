@@ -3567,6 +3567,28 @@ def lire_page_chapitre(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Romain (nombre romain nu, sans suffixe ordinal)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def lire_romain(
+    text: str,
+    span: Span = (0, 0),
+    children: list[object] | None = None,
+    **_kw: object,
+) -> LectureFormuleResult:
+    """Lit un nombre romain comme un nombre cardinal (IV -> quatre)."""
+    from lectura_formules.romains import roman_to_int
+    try:
+        n = roman_to_int(text)
+    except (ValueError, KeyError):
+        return _epeler_texte(text, span)
+    result = lire_nombre(str(n), span=span)
+    result.display_rom = text
+    result.display_num = text
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # API publique
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -3589,6 +3611,7 @@ _LECTEURS: dict[str, object] = {
     "intervalle":      lire_intervalle,
     "gps":             lire_gps,
     "page_chapitre":   lire_page_chapitre,
+    "romain":          lire_romain,
 }
 
 

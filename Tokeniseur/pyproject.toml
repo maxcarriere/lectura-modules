@@ -34,4 +34,4 @@ Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_tokeniseur = []
+lectura_tokeniseur = ["data/*.json"]

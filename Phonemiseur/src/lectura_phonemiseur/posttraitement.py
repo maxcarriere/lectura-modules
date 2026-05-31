@@ -223,6 +223,27 @@ def charger_corrections(path: str | Path) -> None:
         _CORRECTIONS_TABLE = None
 
 
+def charger_corrections_supplementaires(path: str | Path) -> None:
+    """Charge des corrections supplementaires sans ecraser les existantes.
+
+    Les corrections deja presentes dans la table ne sont PAS remplacees
+    (priorite aux corrections manuelles chargees par ``charger_corrections``).
+    """
+    global _CORRECTIONS_TABLE
+    p = Path(path)
+    if not p.exists():
+        return
+    with open(p, encoding="utf-8") as f:
+        extra = json.load(f)
+    if _CORRECTIONS_TABLE is None:
+        _CORRECTIONS_TABLE = extra
+    else:
+        # Ajouter uniquement les mots absents de la table existante
+        for mot, ipa in extra.items():
+            if mot not in _CORRECTIONS_TABLE:
+                _CORRECTIONS_TABLE[mot] = ipa
+
+
 # ── Table d'homographes (POS-aware) ───────────────────────────────────
 
 _HOMOGRAPHES_TABLE: dict[str, dict[str, str]] | None = None
@@ -244,17 +265,46 @@ def charger_homographes(path: str | Path) -> None:
         _HOMOGRAPHES_TABLE = None
 
 
-def corriger_g2p(word: str, ipa: str, pos: str | None = None) -> str:
-    """Pipeline complet : 1) homographes  2) table plate  3) règles."""
+def corriger_g2p(
+    word: str, ipa: str, pos: str | None = None, *, keep_sep: bool = False,
+) -> str:
+    """Pipeline complet : 1) homographes  2) table plate  3) règles.
+
+    Heuristique noms propres : si le mot commence par une majuscule,
+    est etiquete NOM et qu'une entree ``"NOM PROPRE"`` existe dans la
+    table d'homographes, on utilise NOM PROPRE (ex. Jean=ʒɑ̃ vs jean=dʒin).
+    Sinon, le POS predit a toujours priorite.
+
+    Parameters
+    ----------
+    keep_sep : bool
+        Si False (defaut), les separateurs ``-`` et ``'`` sont retires
+        de l'IPA retourne par les tables de corrections. Si True, ils
+        sont conserves (utile quand sep_hyphen/sep_apos sont actifs).
+    """
     w = word.lower()
+    is_proper = bool(word and word[0].isupper())
+    result: str | None = None
     # 1) Homographes (prioritaire si POS fourni)
     if _HOMOGRAPHES_TABLE and w in _HOMOGRAPHES_TABLE:
         entry = _HOMOGRAPHES_TABLE[w]
-        if pos and pos in entry:
-            return entry[pos]
+        # Majuscule + etiquete NOM → nom propre (le tagger ne distingue
+        # pas NOM de NOM PROPRE, la majuscule fait la difference)
+        if is_proper and pos == "NOM" and "NOM PROPRE" in entry:
+            result = entry["NOM PROPRE"]
+        # POS predit → utiliser l'entree correspondante
+        elif pos and pos in entry:
+            result = entry[pos]
     # 2) Table plate
-    if _CORRECTIONS_TABLE and w in _CORRECTIONS_TABLE:
-        return _CORRECTIONS_TABLE[w]
-    # 3) Règles
+    if result is None and _CORRECTIONS_TABLE and w in _CORRECTIONS_TABLE:
+        result = _CORRECTIONS_TABLE[w]
+    # 3) Correction trouvee → stripper les separateurs si necessaire
+    if result is not None:
+        if not keep_sep:
+            result = result.replace("-", "").replace("'", "")
+        return result
+    # 4) Règles
     ipa = appliquer_regles_g2p(word, ipa)
+    # Supprimer les points syllabiques residuels
+    ipa = ipa.replace('.', '')
     return ipa

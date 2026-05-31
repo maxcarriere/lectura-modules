@@ -27,6 +27,8 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+from lectura_phonemiseur.utils.g2p_labels import _SKIP_LABELS, reconstruct_ipa
+
 # POS keys for lex features (same order as training)
 ALL_LEX_POS = [
     "ADJ", "ADJ:dem", "ADJ:ind", "ADJ:int", "ADJ:num", "ADJ:pos",
@@ -103,6 +105,13 @@ class OnnxInferenceEngineV2:
 
         self.lex_feature_dim = self.config.get("lex_feature_dim", LEX_FEATURE_DIM)
 
+        # Detect word_mask support (V3 model)
+        input_names = [i.name for i in self.session.get_inputs()]
+        self.has_word_mask = "word_mask" in input_names
+
+        # UNK word embedding (pour prediction contexte seul)
+        self.unk_word_embedding = data.get("unk_word_embedding")
+
         # Load lexicon
         if lexicon is not None:
             self.lexicon = lexicon
@@ -150,13 +159,46 @@ class OnnxInferenceEngineV2:
 
         return char_ids, ws, we, lex_features, chars
 
-    def analyser(self, tokens: list[str], *, use_lex: bool = True) -> dict[str, Any]:
+    def _build_feed_dict(
+        self, char_ids, word_starts, word_ends, lex_features,
+        word_mask: np.ndarray | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Construit le feed_dict ONNX, avec word_mask si le modele le supporte."""
+        feed: dict[str, np.ndarray] = {
+            "char_ids": char_ids,
+            "word_starts": word_starts,
+            "word_ends": word_ends,
+            "lex_features": lex_features,
+        }
+        if self.has_word_mask:
+            if word_mask is not None:
+                feed["word_mask"] = word_mask
+            else:
+                # Pas de mask → zeros (comportement normal)
+                feed["word_mask"] = np.zeros(
+                    (1, word_starts.shape[1]), dtype=np.float32,
+                )
+        return feed
+
+    def analyser(
+        self, tokens: list[str], *,
+        use_lex: bool = True,
+        word_mask: list[bool] | None = None,
+        sep_apos: bool = False,
+        sep_hyphen: bool = False,
+        sep_space: bool = False,
+    ) -> dict[str, Any]:
         """API V1-compatible. Retourne le résultat standard (argmax).
 
         Args:
             tokens: Liste de tokens.
             use_lex: Si True (defaut), utilise les features lexicales.
                      Si False, envoie des zeros (comportement V1).
+            sep_apos: Si True, inclut ' dans l'IPA aux apostrophes.
+            sep_hyphen: Si True, inclut - dans l'IPA aux tirets.
+            sep_space: Si True, inclut un espace dans l'IPA aux frontieres de mot.
+            word_mask: Liste de booleans (un par token). True = mot masque
+                       (prediction contexte seul). None = pas de masque.
         """
         if not tokens:
             return {"tokens": [], "g2p": [], "pos": [], "liaison": [], "morpho": {}}
@@ -165,14 +207,14 @@ class OnnxInferenceEngineV2:
             tokens, use_lex=use_lex,
         )
 
+        wm = None
+        if word_mask is not None:
+            wm = np.array([[1.0 if m else 0.0 for m in word_mask]], dtype=np.float32)
+
         outputs = self.session.run(
-            None,
-            {
-                "char_ids": char_ids,
-                "word_starts": word_starts,
-                "word_ends": word_ends,
-                "lex_features": lex_features,
-            },
+            None, self._build_feed_dict(
+                char_ids, word_starts, word_ends, lex_features, wm,
+            ),
         )
 
         output_names = [o.name for o in self.session.get_outputs()]
@@ -188,7 +230,10 @@ class OnnxInferenceEngineV2:
             ws = word_starts[0, w]
             we = word_ends[0, w]
             word_labels = [self.idx2g2p.get(int(g2p_preds[i]), "_CONT") for i in range(ws, we + 1)]
-            ipa = "".join(lab for lab in word_labels if lab != "_CONT" and lab != "<PAD>")
+            ipa = reconstruct_ipa(
+                word_labels,
+                sep_apos=sep_apos, sep_hyphen=sep_hyphen, sep_space=sep_space,
+            )
             g2p_results.append(ipa)
 
         # POS
@@ -230,6 +275,10 @@ class OnnxInferenceEngineV2:
         candidates: dict[str, list[str]] | None = None,
         *,
         use_lex: bool = True,
+        word_mask: list[bool] | None = None,
+        sep_apos: bool = False,
+        sep_hyphen: bool = False,
+        sep_space: bool = False,
     ) -> dict[str, Any]:
         """API V2 : comme analyser() + top-K POS/Morpho avec scores de confiance.
 
@@ -239,6 +288,8 @@ class OnnxInferenceEngineV2:
             candidates: Candidats POS par mot {mot: [pos1, pos2, ...]}.
                         Si None, utilise le lexique interne.
             use_lex: Si True (defaut), utilise les features lexicales.
+            word_mask: Liste de booleans (un par token). True = mot masque
+                       (prediction contexte seul). None = pas de masque.
 
         Returns:
             Résultat standard + :
@@ -256,14 +307,14 @@ class OnnxInferenceEngineV2:
             tokens, use_lex=use_lex,
         )
 
+        wm = None
+        if word_mask is not None:
+            wm = np.array([[1.0 if m else 0.0 for m in word_mask]], dtype=np.float32)
+
         outputs = self.session.run(
-            None,
-            {
-                "char_ids": char_ids,
-                "word_starts": word_starts,
-                "word_ends": word_ends,
-                "lex_features": lex_features,
-            },
+            None, self._build_feed_dict(
+                char_ids, word_starts, word_ends, lex_features, wm,
+            ),
         )
 
         output_names = [o.name for o in self.session.get_outputs()]
@@ -278,7 +329,10 @@ class OnnxInferenceEngineV2:
             ws = word_starts[0, w]
             we = word_ends[0, w]
             word_labels = [self.idx2g2p.get(int(g2p_preds[i]), "_CONT") for i in range(ws, we + 1)]
-            ipa = "".join(lab for lab in word_labels if lab != "_CONT" and lab != "<PAD>")
+            ipa = reconstruct_ipa(
+                word_labels,
+                sep_apos=sep_apos, sep_hyphen=sep_hyphen, sep_space=sep_space,
+            )
             g2p_results.append(ipa)
 
         # Liaison (standard)

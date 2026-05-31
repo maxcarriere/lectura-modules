@@ -33,6 +33,7 @@ class FormuleType(Enum):
     INTERVALLE = "intervalle"
     GPS = "gps"
     PAGE_CHAPITRE = "page_chapitre"
+    ROMAIN = "romain"
 
 
 @dataclass

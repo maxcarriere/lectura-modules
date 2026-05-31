@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from importlib import resources
 
 # ── Nombres romains ──
 _ROMAN_RE = re.compile(r"^[IVXLCDM]+$", re.IGNORECASE)
@@ -17,6 +19,21 @@ def _is_roman(s: str) -> bool:
     if not s or not _ROMAN_RE.match(s):
         return False
     return bool(_ROMAN_VALID_RE.match(s.upper())) and len(s) > 0 and s.upper() != ""
+
+
+# ── ROMAIN (nu, sans suffixe ordinal) ──
+_ROMAIN_NUS_RE = re.compile(
+    r"^(X{0,3})(IX|IV|V?I{0,3})$"
+)
+
+
+def _detect_romain(text: str) -> bool:
+    """Detecte un nombre romain nu en majuscules (II-XXXIX)."""
+    if len(text) < 2:
+        return False
+    if text != text.upper():
+        return False
+    return bool(_ROMAIN_NUS_RE.match(text))
 
 
 # ── TELEPHONE ──
@@ -222,6 +239,18 @@ def _detect_numero(text: str) -> bool:
     return True
 
 
+# ── ACRONYMES LUS COMME DES MOTS (exclus de la détection sigle) ──
+
+def _load_acronymes_mots() -> frozenset[str]:
+    try:
+        ref = resources.files("lectura_tokeniseur.data").joinpath("acronymes_mots.json")
+        return frozenset(w.upper() for w in json.loads(ref.read_text(encoding="utf-8")))
+    except (FileNotFoundError, ModuleNotFoundError):
+        return frozenset()
+
+_ACRONYMES_MOTS = _load_acronymes_mots()
+
+
 # ── SIGLE ──
 _SIGLE_RE = re.compile(r"^[A-Za-z0-9]+$")
 
@@ -238,6 +267,9 @@ def _detect_sigle(text: str) -> bool:
         return False
     has_letter = any(c.isalpha() for c in text)
     if not has_letter:
+        return False
+    # Acronyme lu comme un mot (OTAN, UNESCO, etc.) → pas un sigle
+    if text.upper() in _ACRONYMES_MOTS:
         return False
     # Pas un nombre romain pur
     if _is_roman(text) and _ROMAN_VALID_RE.match(text.upper()):
