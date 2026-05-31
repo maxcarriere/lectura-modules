@@ -311,7 +311,9 @@ def analyser_phrase_complete(
                 sub_phones = appliquer_liaison(
                     sub_tokens, sub_phones, sub_liaisons,
                 )
-                phone = "".join(sub_phones)
+                _ekw = engine_kwargs or {}
+                compound_sep = "-" if _ekw.get("sep_hyphen") else ""
+                phone = compound_sep.join(sub_phones)
                 pos = pos_list[c_start] if c_start < len(pos_list) else ""
                 liaison = ""
                 word_morpho: dict[str, str] = {}
