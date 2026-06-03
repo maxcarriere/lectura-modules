@@ -714,6 +714,7 @@ def corriger_phrase_v3(
     freq_map: dict[str, float] | None = None,
     lex_candidates: list[list[tuple[str, float]]] | None = None,
     ipa_words: list[str] | None = None,
+    phone_lexicon: object | None = None,
 ) -> list[str]:
     """Pipeline post-traitement pour le modele P2G v6.
 
@@ -721,6 +722,7 @@ def corriger_phrase_v3(
     Etape 1  : forcer_coherence_ortho_morpho() (coherence ortho vs morpho predite)
     Etape 1b : corrections contextuelles inter-mots (det/pro pluriel)
     Etape 1c : corrections d'accent par POS (a/a, ou/ou)
+    Etape 1d : majuscules pour noms propres (via phone_lexicon cgram='NOM PROPRE')
 
     Les etapes 1b et 1c s'appliquent uniquement quand la morpho predite
     est incoherente avec le contexte (ex: morpho=Sing mais det=pluriel),
@@ -832,6 +834,56 @@ def corriger_phrase_v3(
             result[i] = "où"
         elif lower == "où" and pos == "CON":
             result[i] = "ou"
+
+    # Etape 1d : majuscules pour noms propres
+    # Si le phone_lexicon contient une entree NOM PROPRE correspondant
+    # au mot predit, on capitalise (le modele ne gere pas la casse).
+    if phone_lexicon is not None and ipa_words is not None and hasattr(phone_lexicon, "all_entries"):
+        for i in range(n):
+            if i in formule_positions:
+                continue
+            if i >= len(ipa_words):
+                continue
+            phone = ipa_words[i]
+            word = result[i]
+            # Pour les elisions (j'..., l'...), verifier la base
+            if "'" in word:
+                parts = word.split("'", 1)
+                ortho_base = parts[1]
+            else:
+                ortho_base = word
+            if "'" in phone:
+                apo_idx = phone.index("'")
+                base_phone = phone[apo_idx + 1:]
+            else:
+                base_phone = phone
+            if not base_phone or not ortho_base:
+                continue
+            entries = phone_lexicon.all_entries(base_phone)
+            if not entries:
+                continue
+            # Capitaliser si l'ortho predit correspond exclusivement a un
+            # NOM PROPRE dans le lexique (pas de sens commun pour la meme ortho).
+            # Ex: "antoine" n'existe qu'en NOM PROPRE → capitaliser.
+            # Ex: "paris" existe en NOM + NOM PROPRE → ne pas capitaliser.
+            # Ex: "appelle" existe en VER → ne pas capitaliser.
+            ortho_lower = ortho_base.lower()
+            has_propre = False
+            has_commun = False
+            for e in entries:
+                if (e.get("ortho") or "").lower() != ortho_lower:
+                    continue
+                if (e.get("cgram") or "").strip() == "NOM PROPRE":
+                    has_propre = True
+                else:
+                    has_commun = True
+            is_propre = has_propre and not has_commun
+            if is_propre:
+                if "'" in word:
+                    parts = word.split("'", 1)
+                    result[i] = parts[0] + "'" + parts[1].capitalize()
+                else:
+                    result[i] = word.capitalize()
 
     # Note: les etapes lex_cand et fallback ortho-lexique ont ete retirees.
     # Benchmark montrait des regressions nettes (-286 et -1988 respectivement) :
