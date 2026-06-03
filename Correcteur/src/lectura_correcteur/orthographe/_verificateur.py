@@ -100,6 +100,19 @@ _ACCENT_REMOVAL_SAFE = frozenset({
 })
 
 
+def _pos_match(pos: str, cgrams: set[str]) -> bool:
+    """Verifie si le POS predit est compatible avec les cgrams du lexique.
+
+    Gere les sous-types : 'ART' match 'ART:ind', 'ART:def', etc.
+    """
+    if pos in cgrams:
+        return True
+    for c in cgrams:
+        if c.startswith(pos + ":") or pos.startswith(c + ":"):
+            return True
+    return False
+
+
 # POS CRF -> cgram lexique compatibles (pour le re-ranking)
 _POS_COMPAT: dict[str, set[str]] = {
     "VER": {"VER", "AUX"},
@@ -209,7 +222,7 @@ class VerificateurOrthographe:
             if not infos:
                 continue
             cand_cgrams = {e.get("cgram", "") for e in infos}
-            if pos_cible in cand_cgrams:
+            if _pos_match(pos_cible, cand_cgrams):
                 freq = (
                     self._lexique.frequence(cand)
                     if hasattr(self._lexique, "frequence") else 0.0
@@ -233,7 +246,7 @@ class VerificateurOrthographe:
                     if not infos:
                         continue
                     cand_cgrams = {e.get("cgram", "") for e in infos}
-                    if pos_cible in cand_cgrams:
+                    if _pos_match(pos_cible, cand_cgrams):
                         freq = (
                             self._lexique.frequence(c2)
                             if hasattr(self._lexique, "frequence") else 0.0
@@ -588,7 +601,7 @@ class VerificateurOrthographe:
                         e.get("cgram", "") for e in _infos_pi
                     } if _infos_pi else set()
 
-                    if _cgrams_pi and _pos_predit not in _cgrams_pi:
+                    if _cgrams_pi and not _pos_match(_pos_predit, _cgrams_pi):
                         # Guard: skip if mot is a known NOM PROPRE
                         # (noms propres etrangers = cgram NOM PROPRE,
                         # G2P predit souvent VER/NOM par erreur)

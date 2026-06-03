@@ -53,3 +53,110 @@ class CorrecteurConfig:
     activer_accord_pm: bool = False       # Accord guide par PM n-gram (OFF par defaut)
     accord_pm_seuil_violation: float = -10.0  # PM bigram logp en dessous = violation
     accord_pm_seuil_delta: float = 2.0    # Delta minimum pour accepter la correction
+
+
+@dataclass
+class CorrecteurV2Config:
+    """Configuration du pipeline V2 a 3 passes."""
+
+    # Passe 2 — POS Viterbi
+    seuil_ancrage_pos: float = 0.90
+    seuil_correction_pos: float = 0.70
+    w_g2p_emission: float = 3.0
+    w_freq_emission: float = 0.5
+    w_conserv_emission: float = 5.0
+
+    # Passe 3 — Morpho Viterbi
+    seuil_delta_nombre: float = 3.0
+    seuil_delta_genre: float = 5.0
+    seuil_delta_personne: float = 2.0
+    seuil_delta_inf_pp: float = 2.5
+    morpho_use_variants: bool = False
+
+
+@dataclass
+class CorrecteurV3Config:
+    """Configuration du pipeline V3 (Ortho + G2P/P2G).
+
+    Le V3 remplace les passes 2+3 du V2 par un roundtrip G2P→P2G.
+    La passe 1 (orthographe) est identique au V2.
+    """
+
+    # Passe 2 — Ancrage (memes semantiques que V2)
+    seuil_ancrage_pos: float = 0.90  # confiance G2P pour ancrer un mot
+
+    # Passe 2 — P2G roundtrip
+    seuil_confiance_p2g: float = 0.70   # confiance P2G minimum pour corriger
+    bonus_forme_originale: float = 0.15  # bonus de confiance ajoute a la forme originale
+    activer_guard_pos_ngram: bool = True  # cross-check POS n-gram
+    activer_guard_lm_homo: bool = True    # cross-check LM homophones
+
+    # Fallback V2 si P2G indisponible
+    fallback_v2: bool = True
+
+
+@dataclass
+class CorrecteurV4Config:
+    """Configuration du pipeline V4 (Ortho + P2G sans ortho_words).
+
+    Le V4 remplace les passes 2+3 du V2 par un P2G sans ortho_words,
+    qui fournit un meilleur tagging POS/Morpho sur texte fautif.
+    La passe 1 (orthographe) est identique au V2/V3.
+    """
+
+    seuil_confiance_p2g: float = 0.60     # plus bas que V3 (0.70) car P2G pur est plus fiable
+    bonus_forme_originale: float = 0.10   # bonus conservateur pour la forme d'entree
+    fallback_v2: bool = True              # fallback si P2G indisponible
+
+
+@dataclass
+class CorrecteurV5Config(CorrecteurConfig):
+    """Configuration V5 : V1 + P2G comme etiqueteur POS/MORPHO.
+
+    Herite de CorrecteurConfig (toutes les options V1 restent valables).
+    V5 desactive par defaut le LM trigramme et l'editeur BiLSTM qui
+    causent des FP (est→ait, Mes→Mais). Les homophones sont geres
+    par la detection P2G.
+    """
+
+    activer_p2g_tagger: bool = True   # utiliser P2G pour POS/Morpho
+    fallback_lexique: bool = True     # fallback LexiqueTagger si P2G indisponible
+    activer_lm_homophones: bool = False  # remplace par detection P2G
+    activer_editeur_homophones: bool = False  # remplace par detection P2G
+    activer_homophones_p2g: bool = True  # detection homophones via P2G
+
+
+@dataclass
+class CorrecteurV6Config:
+    """Configuration V6 : Pipeline dual G2P/P2G zero-FP.
+
+    Architecture en 3 etapes :
+      1. Preprocessing orthographique conservateur (OOV → candidat proche)
+      2. Analyse duale G2P + P2G (enrichissement sans correction)
+      3. Corrections ciblees (homophones, accords, participe passe)
+
+    Contrainte primaire : zero faux positif sur texte propre.
+    """
+
+    # Etape 1 — Orthographe conservatrice
+    ortho_distance_max: int = 1
+    ortho_frequence_min: int = 10
+
+    # Etape 3a — Homophones via divergence P2G
+    homophone_confiance_min: float = 0.75
+    homophone_top_k: int = 5
+
+    # Etape 3b — Accord morphologique
+    accord_fenetre: int = 2
+
+    # Etape 3c — Participe passe
+    participe_confiance_min: float = 0.90
+
+    # Preprocessing
+    bypass_markdown: bool = True  # Bypass correction sur phrases markdown/LaTeX
+
+    # Negation (insertion de ne/n')
+    activer_negation: bool = True  # True = inserer ne/n' devant verbe si absent
+
+    # Debug
+    mode_analyse: bool = False  # True = analyser() retourne les MotV6 sans corriger

@@ -1,3 +1,7 @@
+## Langue
+
+Toujours repondre en francais. L'utilisateur est francophone, le projet est francophone.
+
 # Lectura Modules — Guide de developpement
 
 ## Workflow de publication

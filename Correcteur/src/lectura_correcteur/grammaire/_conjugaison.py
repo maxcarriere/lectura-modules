@@ -11,18 +11,28 @@ from lectura_correcteur._utils import transferer_casse
 from lectura_correcteur.grammaire._donnees import (
     ALLER_FORMES,
     AUXILIAIRES,
+    COPULES_ALL,
+    COPULES_PLURIEL,
+    COPULES_SINGULIER,
     ETRE_FORMES,
+    INVARIABLES,
     IRREGULIERS_FORMES_FAUSSES,
     MODAUX_FORMES,
     PLUR_DET,
     PREPOSITIONS,
+    PRONOM_GENRE,
     PRONOM_PERSONNE,
     SING_DET,
     SUJETS_3PL,
+    analyser_inversion,
     generer_candidats_1pl,
     generer_candidats_2pl,
     generer_candidats_3pl,
+    generer_candidats_feminin,
+    generer_candidats_masculin,
+    generer_candidats_pluriel,
     generer_candidats_singulier,
+    generer_candidats_singulier_nom,
 )
 
 _TRANSPARENTS_AUX = frozenset({
@@ -66,19 +76,80 @@ def _est_infinitif(mot: str, lexique) -> bool:
 def _conjuguer_via_lexique(
     lemme: str, personne: str, nombre: str, lexique,
 ) -> str | None:
-    """Conjugue un verbe au present indicatif via le lexique."""
+    """Conjugue un verbe au present indicatif via le lexique.
+
+    Gere les cas ou formes_de ne retourne pas toutes les personnes
+    (ex: P3s absent quand P1s a la meme ortho).
+    """
     if lexique is None or not hasattr(lexique, "formes_de"):
         return None
     nb_key = "singulier" if nombre != "p" else "pluriel"
     nb_key_s = "s" if nombre != "p" else "p"
+
+    # Collecter toutes les formes present indicatif
+    present_forms: list[dict] = []
     for f in lexique.formes_de(lemme):
+        if f.get("temps") == "present" and f.get("mode") == "indicatif":
+            present_forms.append(f)
+
+    # Step 1: exact match
+    for f in present_forms:
         if (
             str(f.get("personne")) == personne
             and f.get("nombre") in (nb_key, nb_key_s)
-            and f.get("temps") == "present"
-            and f.get("mode") == "indicatif"
         ):
             return f.get("ortho", "")
+
+    # Step 2: P3s/P2s manquants — verifier via info() sur les formes P1s
+    # (P1s et P3s partagent la meme forme pour les -er et certains -ir)
+    # (P1s et P2s partagent la meme forme pour pouvoir/vouloir)
+    if nombre != "p":
+        for f in present_forms:
+            if (
+                f.get("nombre") in (nb_key, nb_key_s)
+                and str(f.get("personne")) != personne
+            ):
+                candidate = f.get("ortho", "")
+                if not candidate:
+                    continue
+                infos = lexique.info(candidate) if hasattr(lexique, "info") else []
+                if any(
+                    e.get("cgram") in ("VER", "AUX")
+                    and e.get("mode") in ("indicatif", "ind")
+                    and e.get("temps") in ("present", "pre", "présent")
+                    and str(e.get("personne")) == personne
+                    and e.get("nombre") in (nb_key, nb_key_s)
+                    for e in infos
+                ):
+                    return candidate
+
+    return None
+
+
+def _conjuguer_via_lemme(
+    mot: str, personne: str, nombre: str, lexique,
+) -> str | None:
+    """Conjugue un verbe irregulier au present via son lemme.
+
+    1. Cherche le lemme de la forme conjuguee via info()
+    2. Appelle _conjuguer_via_lexique(lemme, personne, nombre)
+
+    Ex: "va" (P3s aller) + personne=1 → "vais"
+    """
+    if lexique is None or not hasattr(lexique, "info"):
+        return None
+    infos = lexique.info(mot.lower())
+    # Collecter les lemmes VER/AUX
+    lemmes: list[str] = []
+    for e in infos:
+        if e.get("cgram") in ("VER", "AUX"):
+            lem = e.get("lemme") or e.get("lemma") or ""
+            if lem and lem not in lemmes:
+                lemmes.append(lem)
+    for lem in lemmes:
+        result = _conjuguer_via_lexique(lem, personne, nombre, lexique)
+        if result and result.lower() != mot.lower():
+            return result
     return None
 
 
@@ -467,12 +538,20 @@ def verifier_conjugaisons(
                 # Guard: est + singular ADJ = copula (nominal subject only)
                 # "les indicateurs est complexe" → copula, not *sont
                 # But "ils est grand" → keep correction (pronoun = sure 3pl)
+                # Exception: if a PLUR_DET confirms plural subject,
+                # keep correction ("les pommes est rouge" → sont)
                 elif (
                     _next_pos_c in ("ADJ", "ADJ:pos")
                     and not _next_low_c.endswith(("s", "x", "z"))
                     and _curr_prev_low not in SUJETS_3PL
                 ):
-                    _skip_coord = True
+                    _has_plur_det_r3c = False
+                    for _k_r3c in range(max(0, i - 5), i):
+                        if result[_k_r3c].lower() in PLUR_DET:
+                            _has_plur_det_r3c = True
+                            break
+                    if not _has_plur_det_r3c:
+                        _skip_coord = True
                 # Guard: est + singular PP (VER ending in -é/-ée/-i/-ie/-u/-ue/-it/-ert)
                 # = passive voice ("est située", "est construit"), not coordination
                 # Plural PPs (-és/-ées/-is/-ies) suggest 3pl, allow correction.
@@ -557,7 +636,93 @@ def verifier_conjugaisons(
                 else:
                     candidate = None
                 if candidate is not None and result[i] != curr:
+                    # Cascade: if copule was pluralized (est→sont), also
+                    # pluralize the following singular ADJ (rouge→rouges)
+                    _new_low_r3 = result[i].lower()
+                    if _new_low_r3 in COPULES_PLURIEL and i + 1 < n:
+                        _next_pos_r3c = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                        _next_low_r3c = result[i + 1].lower()
+                        if (
+                            _next_pos_r3c in ("ADJ", "ADJ:pos", "NOM")
+                            and _next_low_r3c not in INVARIABLES
+                            and not _next_low_r3c.endswith(("s", "x", "z"))
+                        ):
+                            # Check lexique: only if the word has ADJ entries
+                            _do_plur_r3c = False
+                            if lexique is not None:
+                                _adj_infos_r3c = lexique.info(_next_low_r3c)
+                                if any(
+                                    (e.get("cgram") or "").startswith("ADJ")
+                                    for e in _adj_infos_r3c
+                                ):
+                                    _do_plur_r3c = True
+                            else:
+                                _do_plur_r3c = True
+                            if _do_plur_r3c:
+                                _plur_cands_r3c = generer_candidats_pluriel(_next_low_r3c)
+                                for _pc in _plur_cands_r3c:
+                                    if lexique is None or lexique.existe(_pc):
+                                        _anc_adj_r3c = result[i + 1]
+                                        result[i + 1] = transferer_casse(_anc_adj_r3c, _pc)
+                                        corrections.append(Correction(
+                                            index=i + 1,
+                                            original=_anc_adj_r3c,
+                                            corrige=result[i + 1],
+                                            type_correction=TypeCorrection.GRAMMAIRE,
+                                            regle="accord.attribut_pluriel",
+                                            explication="copule pluriel + ADJ -> ADJ pluriel",
+                                        ))
+                                        break
                     continue
+
+        # Regle 4b : Pronom sujet + INFINITIF -> conjuguer au present
+        # Erreur FLE typique : "il manger" -> "il mange"
+        # Guard: un auxiliaire avant = structure auxiliaire+infinitif correcte
+        # Guard: une preposition avant = structure PRE+INF correcte ("pour manger")
+        if i > 0 and _est_infinitif(curr, lexique):
+            _skip_inf_aux = False
+            _imm_prev_pos_inf = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+            _imm_prev_low_inf = result[i - 1].lower()
+            # Skip si auxiliaire/modal avant (il va manger, il peut manger)
+            for _j_inf in range(i - 1, max(-1, i - 4), -1):
+                _w_inf = result[_j_inf].lower()
+                if _w_inf in AUXILIAIRES or _w_inf in MODAUX_FORMES or _w_inf in ALLER_FORMES:
+                    _skip_inf_aux = True
+                    break
+                # Contracted auxiliaries: "t'a", "m'a", "l'a"
+                if ("'" in _w_inf or "\u2019" in _w_inf) and _w_inf.endswith("a"):
+                    _skip_inf_aux = True
+                    break
+                if _w_inf not in _TRANSPARENTS_AUX:
+                    break
+            # Skip si preposition avant (pour manger, de manger, a manger)
+            if _imm_prev_pos_inf == "PRE" or _imm_prev_low_inf in PREPOSITIONS:
+                _skip_inf_aux = True
+            # Skip si DET/ART avant (le manger = NOM usage)
+            if _imm_prev_pos_inf.startswith(("ART", "DET")):
+                _skip_inf_aux = True
+            # Skip si verbe conjugue juste avant (il mange manger = doublon bizarre)
+            if _imm_prev_pos_inf in ("VER", "AUX") and _imm_prev_low_inf not in _TRANSPARENTS_AUX:
+                _skip_inf_aux = True
+            if not _skip_inf_aux:
+                pronom_inf = _trouver_pronom_sujet(result, origs, i, pos_tags)
+                if pronom_inf is not None:
+                    personne_inf, nombre_inf = pronom_inf
+                    conjugue = _conjuguer_via_lexique(
+                        curr.lower(), personne_inf, nombre_inf, lexique,
+                    )
+                    if conjugue and conjugue.lower() != curr.lower():
+                        ancien = result[i]
+                        result[i] = transferer_casse(curr, conjugue)
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige=result[i],
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="conjugaison.infinitif",
+                            explication=f"Infinitif -> present P{personne_inf}",
+                        ))
+                        continue
 
         # Regle 5 : Pronom sujet + VER -> correction conjugaison
         # Ne pas appliquer si un auxiliaire precede (laisser la regle PP)
@@ -566,6 +731,10 @@ def verifier_conjugaisons(
             for _j in range(i - 1, max(-1, i - 4), -1):
                 _w = result[_j].lower()
                 if _w in AUXILIAIRES or _w in MODAUX_FORMES:
+                    _skip_aux = True
+                    break
+                # Contracted auxiliaries: "t'a", "m'a", "l'a", "n'a"
+                if ("'" in _w or "\u2019" in _w) and _w.endswith("a"):
                     _skip_aux = True
                     break
                 if _w not in _TRANSPARENTS_AUX:
@@ -593,6 +762,11 @@ def verifier_conjugaisons(
                     correction = _deriver_forme_nombre(
                         curr, personne, nombre, temps, lexique,
                     )
+                # Fallback: via lexique (present irregulier: va→vais)
+                if correction is None:
+                    correction = _conjuguer_via_lemme(
+                        curr, personne, nombre, lexique,
+                    )
                 # Sinon fallback sur suffixe (present)
                 if correction is None:
                     correction = _corriger_par_suffixe(
@@ -612,6 +786,7 @@ def verifier_conjugaisons(
                             e.get("cgram") in ("VER", "AUX")
                             and str(e.get("personne")) == personne
                             and e.get("nombre") in (_tgt_nb, "s" if nombre != "p" else "p")
+                            and e.get("mode") not in ("imperatif", "impératif", "imp")
                             for e in _pers_infos
                         ):
                             _already_ok = True
@@ -1156,6 +1331,101 @@ def verifier_conjugaisons(
                         f"{'s' if _nb_att == 's' else 'p'}"
                     ),
                 ))
+
+    # Regle INV : Inversion interrogative copule + ADJ → accord
+    # "Sont-ils content ?" → "Sont-ils contents ?"
+    # "Est-elle grand ?" → "Est-elle grande ?"
+    for i in range(n):
+        inv = analyser_inversion(result[i])
+        if inv is None:
+            continue
+        verbe_inv, pronom_inv, pers_inv, nb_inv = inv
+        verbe_low = verbe_inv.lower()
+        # Seulement les copules (etre + verbes d'etat)
+        if verbe_low not in COPULES_ALL:
+            continue
+        # Trouver l'ADJ/VER(PP) qui suit (en sautant adverbes)
+        _ADV_TRANSP_INV = frozenset({
+            "très", "vraiment", "aussi", "toujours", "encore",
+            "souvent", "déjà", "bien", "si", "trop", "assez",
+        })
+        j_adj = i + 1
+        while j_adj < n and result[j_adj].lower() in _ADV_TRANSP_INV:
+            j_adj += 1
+        if j_adj >= n:
+            continue
+        _adj_pos = pos_tags[j_adj] if j_adj < len(pos_tags) else ""
+        _adj_low = result[j_adj].lower()
+        # Skip si pas ADJ/NOM/VER (pas un attribut)
+        if _adj_pos not in ("ADJ", "ADJ:pos", "NOM", "VER"):
+            continue
+        # Skip si mot invariable
+        if _adj_low in INVARIABLES:
+            continue
+        # Skip si deja corrige
+        if any(c.index == j_adj for c in corrections):
+            continue
+        # Determiner genre/nombre cible via le pronom inverse
+        _gn_inv = PRONOM_GENRE.get(pronom_inv.lower())
+        if _gn_inv is None:
+            continue
+        _genre_inv, _nombre_inv = _gn_inv
+        # Override nombre avec la forme de la copule
+        if verbe_low in COPULES_PLURIEL:
+            _nombre_inv = "Plur"
+        elif verbe_low in COPULES_SINGULIER:
+            _nombre_inv = "Sing"
+        # Generer le candidat accorde
+        # Strategie : determiner genre/nombre actuels, puis appliquer
+        # genre d'abord, nombre ensuite (content → contente → contentes)
+        _candidat_inv = None
+        _curr_genre_inv = None
+        _curr_nombre_inv = None
+        if lexique is not None and hasattr(lexique, "info"):
+            _adj_infos_inv = lexique.info(_adj_low)
+            if _adj_infos_inv:
+                _adj_best_inv = max(
+                    _adj_infos_inv,
+                    key=lambda e: float(e.get("freq") or 0),
+                )
+                _g = _adj_best_inv.get("genre", "")
+                _n = _adj_best_inv.get("nombre", "")
+                _curr_genre_inv = "Fem" if _g == "f" else ("Masc" if _g == "m" else None)
+                _curr_nombre_inv = "Plur" if _n == "p" else ("Sing" if _n == "s" else None)
+        _base_inv = _adj_low
+        # Etape 1 : accord en genre si necessaire
+        if _genre_inv == "Fem" and _curr_genre_inv != "Fem":
+            for _cf in generer_candidats_feminin(_base_inv):
+                if lexique is None or lexique.existe(_cf):
+                    _base_inv = _cf
+                    break
+        # Etape 2 : accord en nombre si necessaire
+        if _nombre_inv == "Plur" and not _base_inv.endswith(("s", "x", "z")):
+            for _cp in generer_candidats_pluriel(_base_inv):
+                if lexique is None or lexique.existe(_cp):
+                    _base_inv = _cp
+                    break
+        elif _nombre_inv == "Sing" and _base_inv.endswith(("s", "x")) and len(_base_inv) > 2:
+            for _cs in generer_candidats_singulier_nom(_base_inv):
+                if lexique is None or lexique.existe(_cs):
+                    _base_inv = _cs
+                    break
+        if _base_inv != _adj_low:
+            _candidat_inv = _base_inv
+        if _candidat_inv and _candidat_inv != _adj_low:
+            ancien = result[j_adj]
+            result[j_adj] = transferer_casse(ancien, _candidat_inv)
+            corrections.append(Correction(
+                index=j_adj,
+                original=ancien,
+                corrige=result[j_adj],
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle="conjugaison.inversion_attribut",
+                explication=(
+                    f"Accord attribut avec sujet inverse"
+                    f" ({_genre_inv} {_nombre_inv})"
+                ),
+            ))
 
     return result, corrections
 

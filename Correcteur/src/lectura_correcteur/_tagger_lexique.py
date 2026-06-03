@@ -74,6 +74,7 @@ _FUNCTION_WORD_POS: dict[str, str] = {
     "toute": "ADJ:ind",
     "toutes": "ADJ:ind",
     # Prepositions / contractions
+    "de": "PRE",
     "au": "PRE",
     "aux": "ART:def",
     "dans": "PRE",
@@ -84,6 +85,9 @@ _FUNCTION_WORD_POS: dict[str, str] = {
     "pour": "PRE",
     "par": "PRE",
     "entre": "PRE",
+    # Adverbes accentues (proteger contre P2G la→là, ou→où)
+    "là": "ADV",
+    "où": "PRO:rel",
     # Verbe etre (ADJ "est"=east domine par freq egale dans v4)
     "est": "AUX",
     # Auxiliaires etre/avoir (G2P classifie en VER)

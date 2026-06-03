@@ -40,13 +40,12 @@
   "default": "siwis",
   "n_style_dims": 5,
   "style_presets": [
-    "neutral",
-    "expressive",
-    "calm",
+    "neutre",
+    "narratif",
     "dialogue",
-    "fast",
-    "slow",
-    "rising",
-    "suspense"
+    "expressif",
+    "meditatif",
+    "rapide",
+    "lent"
   ]
 }

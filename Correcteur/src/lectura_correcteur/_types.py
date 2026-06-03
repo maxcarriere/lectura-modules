@@ -101,3 +101,42 @@ class ResultatCorrection:
             1 for m in self.mots
             if m.original.lower() != m.corrige.lower()
         )
+
+
+# ---------------------------------------------------------------------------
+# V2 pipeline — structure inter-passes
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MotV2:
+    """Donnees par mot pour le pipeline V2 a 3 passes.
+
+    Chaque passe lit et enrichit cette structure. Le champ `forme` est
+    le seul mutable (mis a jour par chaque passe). `original` est immutable.
+    """
+
+    position: int               # index dans word_tokens
+    original: str               # token original (immutable)
+
+    # Passe 1
+    forme: str                  # forme courante (mise a jour par chaque passe)
+    dans_lexique: bool = False
+    source_ortho: str = ""      # "" | "accent" | "edit_d1" | "azerty" | "phone"
+
+    # Passe 2
+    phone: str = ""  # IPA du G2P (utilise par V3 pour le roundtrip P2G)
+    pos: str = ""
+    confiance_pos: float = 1.0
+    pos_scores: list[tuple[str, float]] = field(default_factory=list)
+    ancre_pos: bool = False
+
+    # Passe 3
+    pm_tag: str = ""            # POS|Number|Gender|Person
+    nombre: str = "_"
+    genre: str = "_"
+    personne: str = "_"
+    ancre_morpho: bool = False
+
+    # Tracking
+    corrections: list[tuple[int, str, str]] = field(default_factory=list)
+    # (passe, regle, explication)
