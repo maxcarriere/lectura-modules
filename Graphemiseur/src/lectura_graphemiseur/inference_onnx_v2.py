@@ -47,6 +47,40 @@ PHONE_LEX_FEATURE_DIM = 28
 CAND_FEAT_DIM = 30
 K_MAX = 20
 
+# ── Elision : decomposition des phones avec apostrophe ────────────────
+# Correspondance IPA prefix → ortho prefix pour les elisions francaises.
+# Ex: ʒ'ɑ̃kyl → prefix "ʒ" → ortho "j", base phone "ɑ̃kyl"
+_ELISION_IPA_TO_ORTHO = {
+    "ʒ": "j",      # je → j'ai
+    "l": "l",      # le/la → l'homme
+    "d": "d",      # de → d'accord
+    "n": "n",      # ne → n'est
+    "s": "s",      # se → s'en
+    "m": "m",      # me → m'appelle
+    "t": "t",      # te → t'en
+    "k": "qu",     # que → qu'il
+}
+
+
+def _split_elision(phone: str) -> tuple[str, str] | None:
+    """Decompose un phone avec apostrophe en (prefix_ortho, base_phone).
+
+    Ex: "ʒ'ɑ̃kyl" → ("j", "ɑ̃kyl")
+        "l'ɔm"   → ("l", "ɔm")
+        "bonjour" → None (pas d'elision)
+    """
+    if "'" not in phone:
+        return None
+    idx = phone.index("'")
+    ipa_prefix = phone[:idx]
+    base_phone = phone[idx + 1:]
+    if not base_phone:
+        return None
+    ortho_prefix = _ELISION_IPA_TO_ORTHO.get(ipa_prefix)
+    if ortho_prefix is None:
+        return None
+    return ortho_prefix, base_phone
+
 
 def _edit_distance(a: str, b: str) -> int:
     """Distance de Levenshtein entre deux chaines."""
@@ -95,6 +129,13 @@ def _build_phone_lex_features(phone: str, phone_lexicon) -> list[float]:
         return feats
 
     entries = phone_lexicon.all_entries(phone) if hasattr(phone_lexicon, 'all_entries') else []
+    # Fallback elision : si le phone complet n'a pas d'entrees,
+    # essayer la partie apres l'apostrophe (ex: ʒ'ɑ̃kyl → ɑ̃kyl)
+    if not entries:
+        elision = _split_elision(phone)
+        if elision is not None:
+            _, base_phone = elision
+            entries = phone_lexicon.all_entries(base_phone) if hasattr(phone_lexicon, 'all_entries') else []
     if not entries:
         return feats
 
@@ -345,6 +386,22 @@ class OnnxInferenceEngineV2:
             raw = self.phone_lexicon.all_entries(phone) if self.phone_lexicon and phone else []
             unique = _deduplicate_by_ortho(raw) if raw else []
             resolved_map = {e["ortho"].lower(): "exact" for e in unique}
+
+            # Fallback elision : si pas de resultats exacts et phone contient
+            # une apostrophe, chercher la partie base et prefixer les candidats
+            elision_prefix = None
+            if not unique and phone:
+                elision = _split_elision(phone)
+                if elision is not None:
+                    ortho_prefix, base_phone = elision
+                    elision_prefix = ortho_prefix
+                    raw_base = self.phone_lexicon.all_entries(base_phone) if self.phone_lexicon else []
+                    if raw_base:
+                        # Prefixer chaque candidat ortho avec le prefix d'elision
+                        for e in raw_base:
+                            e["ortho"] = ortho_prefix + "'" + e["ortho"]
+                        unique = _deduplicate_by_ortho(raw_base)
+                        resolved_map = {e["ortho"].lower(): "elision" for e in unique}
 
             # Enrichir avec perturbations phonétiques (tolérance o/ɔ, e/ɛ, ə, etc.)
             # Toujours enrichir (pas seulement en fallback) pour augmenter le pool
