@@ -1,0 +1,8 @@
+{
+  "siwis":   {"name": "SIWIS Female", "gender": "F", "mean_f0": 210.0},
+  "ezwa":    {"name": "Ezwa",         "gender": "F", "mean_f0": 195.0},
+  "nadine":  {"name": "Nadine",       "gender": "F", "mean_f0": 200.0},
+  "bernard": {"name": "Bernard",      "gender": "M", "mean_f0": 130.0},
+  "gilles":  {"name": "Gilles",       "gender": "M", "mean_f0": 125.0},
+  "zeckou":  {"name": "Zeckou",       "gender": "M", "mean_f0": 135.0}
+}

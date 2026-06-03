@@ -40,6 +40,25 @@ _PRESENT_ONLY_IT = frozenset({
     "revoit", "entrevoit", "prévoit", "pourvoit",
 })
 
+# Noms communs a contexte spatial/temporel (antecedents plausibles de "ou")
+_NOMS_TEMPORELS_SPATIAUX = frozenset({
+    "moment", "moments", "époque", "époques",
+    "période", "périodes", "temps", "jour", "jours",
+    "nuit", "nuits", "instant", "instants",
+    "endroit", "endroits", "lieu", "lieux",
+    "ville", "villes", "pays", "région", "régions",
+    "zone", "zones", "quartier", "quartiers",
+    "place", "coin", "coins", "site", "sites",
+    "cas", "situation", "situations",
+    "mesure", "point", "conditions",
+    "monde", "terre", "espace",
+    "année", "années", "mois", "siècle", "siècles",
+    "heure", "heures", "semaine", "semaines",
+    "saison", "saisons", "date", "dates",
+    "circonstance", "circonstances",
+    "occasion", "occasions",
+})
+
 
 def verifier_homophones(
     mots: list[str],
@@ -230,6 +249,55 @@ def verifier_homophones(
                                 explication="'et' -> 'est' (NOM singulier + _ + adjectif)",
                             ))
                             continue
+
+        # Possessif/DET + NOM + "et" + ADJ(lexique) → "est" (copule)
+        # Fonctionne quel que soit le POS de "et" (P2G peut dire VER/NOM)
+        # "sa voiture et rouge" → "est", "mon chien et gentil" → "est"
+        # Guard: possessif/DET singulier confirme la structure de clause
+        # Guard: mot suivant doit etre ADJ dans le lexique (pas NOM pur)
+        _POSS_DET_COPULE = frozenset({
+            "sa", "mon", "ton", "son", "ma", "ta",
+            "notre", "votre", "le", "la", "un", "une",
+            "ce", "cet", "cette",
+        })
+        if curr_low == "et" and i >= 2 and i + 1 < n and lexique is not None:
+            _prev_pos_ce = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+            _prev2_low_ce = result[i - 2].lower()
+            if _prev_pos_ce == "NOM" and _prev2_low_ce in _POSS_DET_COPULE:
+                _next_infos_ce = lexique.info(result[i + 1])
+                _next_has_adj = any(
+                    e.get("cgram") == "ADJ" and float(e.get("freq") or 0) > 5.0
+                    for e in _next_infos_ce
+                )
+                if _next_has_adj:
+                    # Guard: prepositional phrase (du/des + NOM + "et")
+                    _in_pp_ce = _prev2_low_ce in ("du", "des")
+                    if not _in_pp_ce and i >= 3:
+                        _p3_pos_ce = pos_tags[i - 3] if i - 3 < len(pos_tags) else ""
+                        if _p3_pos_ce == "PRE" or result[i - 3].lower() in PREPOSITIONS:
+                            _in_pp_ce = True
+                    # Guard: coordination — DET/NOM at i+2 suggests list
+                    if not _in_pp_ce and i + 2 < n:
+                        _p_i2_ce = pos_tags[i + 2] if i + 2 < len(pos_tags) else ""
+                        _l_i2_ce = result[i + 2].lower()
+                        if (
+                            _p_i2_ce in ("NOM", "NOM PROPRE")
+                            or _p_i2_ce.startswith(("ART", "DET"))
+                            or _l_i2_ce in ("et", "ou")
+                        ):
+                            _in_pp_ce = True
+                    if not _in_pp_ce:
+                        ancien = result[i]
+                        result[i] = "est"
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige="est",
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="homophone.et_est",
+                            explication="'et' -> 'est' (DET + NOM + copule + ADJ)",
+                        ))
+                        continue
 
         # "et" suivi de VER ou mot en forme de PP, quand precede d'un sujet
         # ou d'un NOM/NOM PROPRE (passif: "le tournage et arrete" -> "est arrete")
@@ -840,6 +908,21 @@ def verifier_homophones(
                         "le", "la", "l'", "l\u2019", "l",
                     ):
                         _next_is_coord = False
+                # Guard: NOM + est + NOM-qui-peut-etre-ADJ = copule attributive
+                # "Marie est contente" — P2G peut tagger "contente" comme NOM
+                # alors que c'est un ADJ attribut. Si le lexique confirme que
+                # la forme a une entree ADJ, c'est probablement une copule.
+                if (
+                    next_pos == "NOM"
+                    and prev_pos in ("NOM", "NOM PROPRE")
+                    and lexique is not None
+                    and not next_low.endswith(("s", "x", "z"))
+                ):
+                    _next_infos_adj = lexique.info(next_low)
+                    if _next_infos_adj and any(
+                        e.get("cgram") == "ADJ" for e in _next_infos_adj
+                    ):
+                        _next_is_coord = False
                 # Guard: DET_def_sg + NOM(sg) + est + VER = copula
                 # "la mort est conforment" → copula (la = singular subject)
                 # Conjugated verb after copula is likely a misspelling
@@ -884,7 +967,15 @@ def verifier_homophones(
                     and i + 2 < n
                 ):
                     _n2p_inf = pos_tags[i + 2] if i + 2 < len(pos_tags) else ""
+                    _n2_low_inf = result[i + 2].lower() if i + 2 < n else ""
                     if _n2p_inf in ("VER", "AUX"):
+                        _next_is_coord = False
+                    # "est d'abord", "est d'ailleurs", "est d'autre part"
+                    # d' + adverbe/nom = locution adverbiale, pas coordination
+                    if _n2_low_inf in (
+                        "abord", "ailleurs", "autre", "autant",
+                        "ordinaire", "habitude",
+                    ):
                         _next_is_coord = False
                 # Guard: common NOM(singular) + est + NOM PROPRE = copula
                 # "famille est zhang" (freq=269) → copula
@@ -988,8 +1079,25 @@ def verifier_homophones(
                 _prev_low_pa = result[i - 1].lower()
                 _next_pos_pa = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _next_low_pa = result[i + 1].lower()
+                # Guard: skip invariable forms (heureux, doux, etc.)
+                # that have both singular and plural entries
+                _is_invar_pa = False
+                if lexique is not None and _next_low_pa.endswith(("x", "z")):
+                    _inv_infos = lexique.info(_next_low_pa)
+                    _inv_nombres = {
+                        e.get("nombre") for e in _inv_infos
+                        if (e.get("cgram") or "").startswith("ADJ")
+                    }
+                    # Works with both raw ("singulier"/"pluriel") and
+                    # normalized ("s"/"p") nombre values
+                    if (
+                        ("singulier" in _inv_nombres and "pluriel" in _inv_nombres)
+                        or ("s" in _inv_nombres and "p" in _inv_nombres)
+                    ):
+                        _is_invar_pa = True
                 if (
-                    _prev_pos_pa in ("NOM", "ADJ", "ADJ:pos")
+                    not _is_invar_pa
+                    and _prev_pos_pa in ("NOM", "ADJ", "ADJ:pos")
                     and _prev_low_pa.endswith(("s", "x", "z"))
                     and len(_prev_low_pa) > 2
                     and _next_pos_pa in ("ADJ", "ADJ:pos")
@@ -1942,7 +2050,13 @@ def verifier_homophones(
                         "ART:def", "ART:ind", "ART", "DET",
                     ):
                         _next_is_coord = False
-                if _prev_is_nominal and _next_is_coord and not _is_relative_clause:
+                # Guard: antecedent temporel/spatial → "où" est probablement
+                # un relatif correct ("l'heure où", "l'epoque où", "le lieu où")
+                _prev_low_ou = result[i - 1].lower() if i > 0 else ""
+                _antecedent_temporal_spatial = (
+                    _prev_low_ou in _NOMS_TEMPORELS_SPATIAUX
+                )
+                if _prev_is_nominal and _next_is_coord and not _is_relative_clause and not _antecedent_temporal_spatial:
                     ancien = result[i]
                     result[i] = "ou"
                     corrections.append(Correction(
@@ -1962,8 +2076,17 @@ def verifier_homophones(
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 next_low = result[i + 1].lower()
                 prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                prev_low = result[i - 1].lower()
+                # Guard: verifier que l'antecedent est un contexte
+                # spatial/temporel plausible (NOM PROPRE = lieu probable,
+                # NOM generique = pas forcement un lieu)
+                _antecedent_plausible = (
+                    prev_pos in ("NOM PROPRE", "?", "")
+                    or prev_low in _NOMS_TEMPORELS_SPATIAUX
+                )
                 if (
-                    prev_pos in ("NOM", "NOM PROPRE", "?", "")
+                    _antecedent_plausible
+                    and prev_pos in ("NOM", "NOM PROPRE", "?", "")
                     and (
                         next_pos == "PRO:per"
                         # "un/une" after place name = relative clause
@@ -1993,6 +2116,7 @@ def verifier_homophones(
         if curr_low == "ou" and pos == "CON":
             if i > 0 and i + 1 < n:
                 _prev_pos_r = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+                _prev_low_r = result[i - 1].lower()
                 _next_pos_r = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 _next_low_r = result[i + 1].lower()
                 _is_inf_or_pp = (
@@ -2004,8 +2128,14 @@ def verifier_homophones(
                         "it", "ite", "ites",
                     ))
                 )
+                # Guard: antecedent doit etre spatial/temporel plausible
+                _antecedent_r_plausible = (
+                    _prev_pos_r == "NOM PROPRE"
+                    or _prev_low_r in _NOMS_TEMPORELS_SPATIAUX
+                )
                 if (
-                    _prev_pos_r in ("NOM", "NOM PROPRE")
+                    _antecedent_r_plausible
+                    and _prev_pos_r in ("NOM", "NOM PROPRE")
                     and _next_pos_r in ("VER", "AUX")
                     and not _is_inf_or_pp
                 ):
@@ -2353,7 +2483,7 @@ def verifier_homophones(
         # --- ce / se ---
         # "ce" (DET ou PRO:dem) + VER/AUX -> "se" (pronom reflexif)
         # Guard: ne pas convertir "ce" + copule/modal (c'est, ce peut etre, etc.)
-        if curr_low == "ce" and (pos.startswith("DET") or pos == "PRO:dem"):
+        if curr_low == "ce" and (pos.startswith(("DET", "ADJ:dem")) or pos == "PRO:dem"):
             if i + 1 < n:
                 next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                 next_low = result[i + 1].lower()
@@ -3027,4 +3157,435 @@ def verifier_homophones(
                         ))
                         continue
 
+        # --- ta / t'a  et  ma / m'a ---
+        # "elle ta appelé" → "elle t'a appelé" (pronom objet + avoir)
+        # "il ma donné" → "il m'a donné"
+        # Pattern: PRO_sujet + ta/ma + participe passe → t'a / m'a
+        # Guard: ta/ma + NOM = possessif (ne pas changer)
+        if curr_low in ("ta", "ma") and i > 0 and i + 1 < n:
+            next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+            next_low = result[i + 1].lower()
+            prev_pos = pos_tags[i - 1] if i - 1 < len(pos_tags) else ""
+            # Le mot suivant est un PP ou VER (pas NOM)
+            _is_pp = next_low.endswith(_PP_SUFFIXES) and next_low not in _PRESENT_ONLY_IT
+            _next_is_ver = next_pos in ("VER", "AUX")
+            # Le mot precedent est un sujet pronominal
+            _prev_is_subj = prev_pos.startswith(("PRO", "NOM"))
+            if _prev_is_subj and (_is_pp or _next_is_ver) and next_pos != "NOM":
+                remplacement = "t'a" if curr_low == "ta" else "m'a"
+                ancien = result[i]
+                result[i] = remplacement
+                corrections.append(Correction(
+                    index=i,
+                    original=ancien,
+                    corrige=remplacement,
+                    type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="homophone.ta_ma",
+                    explication=f"'{curr_low}' -> '{remplacement}' (pronom + avoir)",
+                ))
+                continue
+
     return result, corrections
+
+
+# -----------------------------------------------------------------------
+# Detection homophones par P2G (paradigme V5)
+# -----------------------------------------------------------------------
+
+# Paires d'homophones et POS associes.
+# Cle = forme ecrite, valeur = dict :
+#   "pos_attendu" : ensemble de POS compatibles avec cette forme
+#   "homophones" : list de (forme_cible, pos_cible_set)
+#       si le P2G predit un POS dans pos_cible_set → la forme ecrite
+#       devrait etre remplacee par forme_cible.
+_HOMOPHONES_P2G: dict[str, dict] = {
+    "et": {
+        "pos_attendu": {"CON"},
+        "homophones": [
+            ("est", {"AUX", "VER"}),
+        ],
+    },
+    "est": {
+        "pos_attendu": {"AUX", "VER"},
+        "homophones": [
+            ("et", {"CON"}),
+        ],
+    },
+    "a": {
+        "pos_attendu": {"AUX", "VER"},
+        "homophones": [
+            ("\u00e0", {"PRE"}),  # à
+        ],
+    },
+    "\u00e0": {  # à
+        "pos_attendu": {"PRE"},
+        "homophones": [
+            ("a", {"AUX", "VER"}),
+        ],
+    },
+    "son": {
+        "pos_attendu": {"ADJ:pos", "ADJ", "NOM"},
+        "homophones": [
+            ("sont", {"AUX", "VER"}),
+        ],
+    },
+    "sont": {
+        "pos_attendu": {"AUX", "VER"},
+        "homophones": [
+            ("son", {"ADJ:pos", "ADJ"}),
+        ],
+    },
+    "on": {
+        "pos_attendu": {"PRO:per", "PRO:ind", "PRO"},
+        "homophones": [
+            ("ont", {"AUX", "VER"}),
+        ],
+    },
+    "ont": {
+        "pos_attendu": {"AUX", "VER"},
+        "homophones": [
+            ("on", {"PRO:per", "PRO:ind", "PRO"}),
+        ],
+    },
+    # ou/où retires : P2G pas assez fiable pour distinguer CON/PRO:rel.
+    # Les regles V1 (verifier_homophones) gerent ces cas avec des
+    # heuristiques plus fines.
+    "ce": {
+        "pos_attendu": {"ADJ:dem", "DET:dem", "DET", "PRO:dem"},
+        "homophones": [
+            ("se", {"PRO:per", "PRO"}),
+        ],
+    },
+    "se": {
+        "pos_attendu": {"PRO:per", "PRO"},
+        "homophones": [
+            ("ce", {"ADJ:dem", "DET:dem", "DET", "PRO:dem"}),
+        ],
+    },
+}
+
+
+def detecter_homophones_p2g(
+    mots: list[str],
+    pos_p2g: list[str],
+    lexique,
+    pos_g2p: list[str] | None = None,
+) -> tuple[list[str], list[Correction]]:
+    """Detecte les homophones via la comparaison POS P2G vs forme ecrite.
+
+    Paradigme V5 : le P2G predit le POS *attendu* par le contexte phonetique.
+    Si le POS P2G correspond au POS d'un homophone de la forme ecrite,
+    c'est que l'eleve a utilise le mauvais homophone.
+
+    Des guards contextuels empechent les faux positifs (coordination
+    NOM + et + NOM, etc.).
+
+    Args:
+        mots: formes ecrites (mots decides apres ortho)
+        pos_p2g: POS bruts du P2G (avant overrides AUX→VER)
+        lexique: objet lexique pour validation
+        pos_g2p: POS predits par le G2P (optionnel, cross-check)
+
+    Returns:
+        (mots_corriges, corrections)
+    """
+    if not mots or not pos_p2g:
+        return mots, []
+
+    result = list(mots)
+    corrections: list[Correction] = []
+    n = len(result)
+
+    for i in range(n):
+        forme = result[i].lower()
+        pos_raw = pos_p2g[i] if i < len(pos_p2g) else ""
+        if not pos_raw:
+            continue
+
+        # Guard : lettre majuscule isolee (A, O, etc.) = identifiant/label
+        # "centres en O et A" → "A" n'est pas le verbe "a"
+        # Exception : position 0 = debut de phrase ("A chaque fois" → "À")
+        if len(result[i]) == 1 and result[i].isupper() and i > 0:
+            continue
+
+        entry = _HOMOPHONES_P2G.get(forme)
+        if entry is None:
+            continue
+
+        # Le POS P2G est-il dans le POS attendu de cette forme?
+        # Si oui, pas de correction.
+        if pos_raw in entry["pos_attendu"]:
+            continue
+
+        # Guard G2P cross-check pour a/a :
+        # Le P2G se trompe sur a/a quand le mot suivant est mal orthographie
+        # (ex: "a prepare" → P2G voit /a pʁəpaʁ/ → PRE au lieu de AUX).
+        # Le G2P, qui voit la forme ecrite, est plus fiable pour ce cas.
+        # On ne generalise PAS ce guard aux autres homophones (on/ont,
+        # son/sont, etc.) car le G2P predit toujours le POS de la forme
+        # ecrite, ce qui bloquerait les corrections legitimes.
+        if forme in ("a", "\u00e0") and pos_g2p is not None and i < len(pos_g2p):
+            g2p_pos = pos_g2p[i]
+            if g2p_pos and g2p_pos in entry["pos_attendu"]:
+                continue
+
+        # Le POS P2G correspond-il au POS d'un homophone?
+        for cible, pos_cible_set in entry["homophones"]:
+            if pos_raw not in pos_cible_set:
+                continue
+
+            # ---- Guards contextuels ----
+
+            # Guard et→est : coordination NOM/ADJ + et + DET/NOM/ADJ
+            # P2G confond souvent /e/ en coordination avec un copule.
+            if forme == "et" and cible == "est":
+                if not _guard_et_est_p2g(result, pos_p2g, i):
+                    continue
+
+            # Guard est→et : copule NOM/PRO + est + DET/ADJ/ADV/PP
+            # P2G confond parfois /ɛ/ copule avec une conjonction.
+            if forme == "est" and cible == "et":
+                if not _guard_est_et_p2g(result, pos_p2g, i):
+                    continue
+
+            # Guard sont→son : sujet pluriel (NOM + et + NOM + sont)
+            # P2G peut predire ADJ:pos pour "sont" quand le contexte
+            # a un sujet pluriel coordonne.
+            if forme == "sont" and cible == "son":
+                if not _guard_sont_son_p2g(result, pos_p2g, i):
+                    continue
+
+            # Guard : verifier que la forme cible existe dans le lexique
+            if lexique is not None and hasattr(lexique, "existe"):
+                if not lexique.existe(cible):
+                    continue
+
+            ancien = result[i]
+            # Preserver la casse
+            if ancien[0].isupper() and cible:
+                cible_cased = cible[0].upper() + cible[1:]
+            else:
+                cible_cased = cible
+            result[i] = cible_cased
+            corrections.append(Correction(
+                index=i,
+                original=ancien,
+                corrige=cible_cased,
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle="homophone_p2g",
+                explication=(
+                    f"P2G: '{forme}' (POS attendu: "
+                    f"{entry['pos_attendu']}) mais P2G predit "
+                    f"{pos_raw} \u2192 '{cible}'"
+                ),
+            ))
+            break  # une seule correction par position
+
+    return result, corrections
+
+
+# POS categories indiquant un GN (groupe nominal) — pour guards
+_GN_POS = frozenset({
+    "NOM", "NOM PROPRE", "ADJ", "ADJ:pos", "ADJ:dem", "ADJ:ind",
+    "ART", "ART:def", "ART:ind", "DET", "DET:dem",
+    "PRO:per", "PRO:dem", "PRO:ind", "PRO:rel",
+})
+
+# Determinants (indiquent le debut d'un GN)
+_DET_POS_PREFIX = ("ART", "DET", "ADJ:pos", "ADJ:dem", "ADJ:ind")
+
+
+def _guard_et_est_p2g(
+    mots: list[str],
+    pos_p2g: list[str],
+    i: int,
+) -> bool:
+    """Guard : retourne True si et→est est probable, False si c'est
+    probablement une coordination (= garder "et").
+
+    Patterns de coordination a bloquer :
+    - NOM/ADJ + et + DET+NOM  ("le chat et le chien")
+    - NOM/ADJ + et + NOM/ADJ  ("pain et beurre")
+    - DET + NOM + et + DET + NOM  ("du pain et du beurre")
+    """
+    n = len(mots)
+
+    prev_pos = pos_p2g[i - 1] if i > 0 and i - 1 < len(pos_p2g) else ""
+    next_pos = pos_p2g[i + 1] if i + 1 < n and i + 1 < len(pos_p2g) else ""
+    prev_low = mots[i - 1].lower() if i > 0 else ""
+    next_low = mots[i + 1].lower() if i + 1 < n else ""
+
+    # Pattern 0: mot precedent = lettre isolee (identifiant technique)
+    # "bit (s) et le Group ID" — "s" = identifiant, pas de copule
+    if len(prev_low) == 1 and prev_low.isalpha():
+        return False
+
+    # Pattern 1: NOM/ADJ + et + DET/ART → coordination
+    if prev_pos in ("NOM", "NOM PROPRE", "ADJ") and any(
+        next_pos.startswith(p) for p in _DET_POS_PREFIX
+    ):
+        return False
+
+    # Pattern 2: NOM/ADJ + et + NOM/ADJ (coordination sans DET)
+    # "pain et beurre", "Pierre et Marie"
+    if (
+        prev_pos in ("NOM", "NOM PROPRE", "ADJ")
+        and next_pos in ("NOM", "NOM PROPRE", "ADJ")
+    ):
+        return False
+
+    # Pattern 3: DET + ... + et + DET (les deux cotes ont un DET)
+    # Chercher un DET dans les 3 mots precedents
+    _has_det_before = False
+    for j in range(max(0, i - 3), i):
+        _jp = pos_p2g[j] if j < len(pos_p2g) else ""
+        if any(_jp.startswith(p) for p in _DET_POS_PREFIX):
+            _has_det_before = True
+            break
+    if _has_det_before and any(
+        next_pos.startswith(p) for p in _DET_POS_PREFIX
+    ):
+        return False
+
+    # Pattern 4: et + VER infinitif = coordination verbale
+    # "manger et dessiner" — P2G voit AUX mais c'est un infinitif coordonne.
+    # NE PAS bloquer et + PP ("il et parti" → "il est parti").
+    _INF_SUFFIXES = ("er", "ir", "re", "oir")
+    if next_pos in ("VER", "AUX") and next_low.endswith(_INF_SUFFIXES):
+        # Verifier que ce n'est pas un faux infinitif (ex: "cher" = ADJ)
+        if len(next_low) >= 4:
+            return False
+
+    # Pattern 5: sujet pronominal → probablement copule, autoriser
+    if prev_low in (
+        "il", "elle", "on", "ce", "c'", "je", "j'", "tu",
+        "nous", "vous", "tout", "qui",
+    ):
+        return True
+
+    # Pattern 6: mot precedent = pronom personnel → copule
+    if prev_pos in ("PRO:per", "PRO:dem", "PRO:rel"):
+        return True
+
+    # Default: si le contexte n'est pas clairement une coordination,
+    # autoriser la correction (le P2G a predit AUX/VER).
+    return True
+
+
+def _guard_est_et_p2g(
+    mots: list[str],
+    pos_p2g: list[str],
+    i: int,
+) -> bool:
+    """Guard : retourne True si est→et est probable, False si c'est
+    probablement une copule ou auxiliaire (= garder "est").
+
+    Patterns de copule/auxiliaire a bloquer :
+    - SUJ_PRO + est   ("il est content")
+    - NOM/NOM_PROPRE + est + DET+NOM ("Jung est la femme")
+    - NOM/NOM_PROPRE + est + ADJ/ADV  ("Marie est contente")
+    - est + PP_suffix  ("est parti", "est divisee")
+    - est + ADV  ("est d'abord", "est toujours")
+    """
+    n = len(mots)
+
+    prev_pos = pos_p2g[i - 1] if i > 0 and i - 1 < len(pos_p2g) else ""
+    next_pos = pos_p2g[i + 1] if i + 1 < n and i + 1 < len(pos_p2g) else ""
+    prev_low = mots[i - 1].lower() if i > 0 else ""
+    next_low = mots[i + 1].lower() if i + 1 < n else ""
+
+    # Pattern 1: sujet pronominal + est = copule/auxiliaire
+    if prev_low in (
+        "il", "elle", "on", "ce", "c'", "je", "j'", "tu",
+        "nous", "vous", "tout", "qui",
+    ):
+        return False
+
+    # Pattern 2: pronom personnel/demonstratif + est = copule
+    if prev_pos in ("PRO:per", "PRO:dem", "PRO:rel"):
+        return False
+
+    # Pattern 3: NOM/NOM_PROPRE + est + DET = copule attributive
+    # "Jung est la femme", "Son frere est le journaliste"
+    if prev_pos in ("NOM", "NOM PROPRE") and any(
+        next_pos.startswith(p) for p in _DET_POS_PREFIX
+    ):
+        return False
+
+    # Pattern 4: NOM/NOM_PROPRE + est + ADJ/ADV = copule
+    if prev_pos in ("NOM", "NOM PROPRE") and next_pos in ("ADJ", "ADV"):
+        return False
+
+    # Pattern 5: est + PP suffix = auxiliaire
+    # "est parti", "est divisee", "est arrive"
+    if next_low.endswith(_PP_SUFFIXES) and len(next_low) >= 3:
+        return False
+
+    # Pattern 6: est + ADV = copule avec adverbe
+    # "est d'abord", "est toujours", "est encore"
+    if next_pos == "ADV":
+        return False
+
+    # Pattern 7: est + PRE = copule + complement
+    # "est en retard", "est a la maison"
+    if next_pos == "PRE":
+        return False
+
+    # Pattern 8: est + elision (d', l') = probablement copule
+    if next_low in ("d'", "d\u2019", "d", "l'", "l\u2019", "l"):
+        return False
+
+    # Default: autoriser est→et (coordination probable)
+    return True
+
+
+def _guard_sont_son_p2g(
+    mots: list[str],
+    pos_p2g: list[str],
+    i: int,
+) -> bool:
+    """Guard : retourne True si sont→son est probable, False si "sont"
+    est probablement le verbe etre 3pl (= garder "sont").
+
+    Patterns ou "sont" est verbe (bloquer sont→son) :
+    - Sujet pluriel coordonne : NOM + et + NOM + sont
+    - Pronom pluriel : ils/elles + sont
+    - Mot precedent pluriel (-s/-x/-z) + sont (accord sujet-verbe)
+    """
+    n = len(mots)
+
+    # Sujet coordonne : chercher "et" dans les 5 mots precedents
+    # avec NOM/NOM PROPRE de part et d'autre → sujet pluriel
+    for j in range(max(0, i - 5), i):
+        if mots[j].lower() in ("et", "est"):
+            # Verifier qu'il y a un NOM avant et apres le "et"
+            _has_nom_before = any(
+                (pos_p2g[k] if k < len(pos_p2g) else "") in ("NOM", "NOM PROPRE")
+                for k in range(max(0, j - 2), j)
+            )
+            _has_nom_after = any(
+                (pos_p2g[k] if k < len(pos_p2g) else "") in ("NOM", "NOM PROPRE")
+                for k in range(j + 1, min(i, j + 3))
+            )
+            if _has_nom_before and _has_nom_after:
+                return False  # sujet coordonne → garder "sont"
+
+    # Pronom pluriel immediatement avant
+    if i > 0:
+        prev_low = mots[i - 1].lower()
+        if prev_low in ("ils", "elles", "tous", "toutes", "ceux", "celles"):
+            return False  # sujet pluriel → garder "sont"
+
+    # Mot precedent est un NOM/ADJ pluriel (-s/-x/-z)
+    if i > 0:
+        prev_low = mots[i - 1].lower()
+        prev_pos = pos_p2g[i - 1] if i - 1 < len(pos_p2g) else ""
+        if (
+            prev_pos in ("NOM", "NOM PROPRE", "ADJ")
+            and prev_low.endswith(("s", "x", "z"))
+            and len(prev_low) > 2
+        ):
+            return False  # sujet pluriel → garder "sont"
+
+    # Default: autoriser sont→son (probablement possessif mal ecrit)
+    return True

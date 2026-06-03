@@ -488,6 +488,12 @@ def generer_candidats_feminin(mot: str) -> list[str]:
         candidats.append(low[:-3] + "ouce")   # doux → douce
     if low.endswith("aux"):
         candidats.append(low[:-3] + "ausse")  # faux → fausse
+    if low.endswith("anc"):
+        candidats.append(low[:-1] + "che")    # blanc → blanche
+    if low.endswith("ec"):
+        candidats.append(low[:-2] + "èche")   # sec → sèche
+    if low.endswith("c") and not low.endswith(("anc", "ec")):
+        candidats.append(low + "he")          # franc → franche
     return candidats
 
 
@@ -564,17 +570,26 @@ def trouver_sujet_genre_nombre(
         if pos_j in pos_nominaux and lexique is not None:
             infos = lexique.info(mots[j])
             if infos:
-                best = max(infos, key=lambda e: float(e.get("freq") or 0))
+                # Preferer les entrees correspondant au POS etiquete
+                # "maison" a ADJ(m) + NOM(f), quand POS=NOM seul NOM(f) compte
+                _cgram_for_pos = "NOM" if pos_j.startswith("NOM") else "ADJ"
+                _pos_filtered = [e for e in infos if e.get("cgram") == _cgram_for_pos]
+                _pool = _pos_filtered if _pos_filtered else infos
+                best = max(_pool, key=lambda e: float(e.get("freq") or 0))
                 genre = best.get("genre", "")
                 nombre = best.get("nombre", "")
-                # Ambiguite : si les entrees ont les deux genres,
-                # skip ADJ epicenes (moderne, linéaire) et continuer
-                # vers le NOM noyau du GN
-                _genres = {e.get("genre") for e in infos if e.get("genre")}
+                # Ambiguite : si les entrees (filtrees par cgram) ont
+                # les deux genres, skip ADJ epicenes et continuer
+                _filtered_g = [e for e in _pool if e.get("genre")]
+                _genres = {e.get("genre") for e in _filtered_g}
                 if len(_genres) > 1:
                     if pos_j == "ADJ":
                         continue  # ADJ epicene, chercher le NOM derriere
                     break  # NOM ambigu, pas de detection fiable
+                if not genre:
+                    # No gender info (NOM PROPRE, VER, etc.)
+                    # → skip, don't default to Masc
+                    break
                 g = "Fem" if genre == "f" else "Masc"
                 n = "Plur" if nombre == "p" else "Sing"
                 return (g, n)
@@ -607,6 +622,49 @@ def trouver_sujet_genre_nombre(
                         )
             break
         break
+    return None
+
+
+# --- Inversion interrogative (verbe-sujet avec trait d'union) ---
+
+_PRONOMS_INVERSION: dict[str, tuple[str, str]] = {
+    "je": ("1", "s"), "tu": ("2", "s"),
+    "il": ("3", "s"), "elle": ("3", "s"), "on": ("3", "s"),
+    "nous": ("1", "p"), "vous": ("2", "p"),
+    "ils": ("3", "p"), "elles": ("3", "p"),
+    "ce": ("3", "s"),
+}
+
+
+def analyser_inversion(mot: str) -> tuple[str, str, str, str] | None:
+    """Parse un token d'inversion interrogative verbe-sujet.
+
+    Retourne (verbe, pronom, personne, nombre) ou None.
+
+    Exemples::
+
+        "Sont-ils"   -> ("Sont", "ils", "3", "p")
+        "A-t-il"     -> ("A", "il", "3", "s")
+        "Est-elle"   -> ("Est", "elle", "3", "s")
+        "Avez-vous"  -> ("Avez", "vous", "2", "p")
+    """
+    if "-" not in mot:
+        return None
+    parts = mot.split("-")
+    # VER-PRO : "Sont-ils", "Est-elle"
+    if len(parts) == 2:
+        verbe, pronom = parts
+        pronom_low = pronom.lower()
+        if pronom_low in _PRONOMS_INVERSION:
+            pers, nb = _PRONOMS_INVERSION[pronom_low]
+            return (verbe, pronom, pers, nb)
+    # VER-t-PRO (t euphonique) : "A-t-il", "Y-a-t-il"
+    if len(parts) == 3 and parts[1].lower() == "t":
+        verbe, _, pronom = parts
+        pronom_low = pronom.lower()
+        if pronom_low in _PRONOMS_INVERSION:
+            pers, nb = _PRONOMS_INVERSION[pronom_low]
+            return (verbe, pronom, pers, nb)
     return None
 
 

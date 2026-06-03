@@ -5,20 +5,22 @@
 > Anciennement `lectura-p2g` (pip) / `lectura_p2g` (import).
 > Renomme `lectura-graphemiseur` / `lectura_graphemiseur` a partir de la v4.0.0.
 
-Un seul modèle BiLSTM char-level multi-tête avec word feedback et features lexicales (ONNX INT8) qui prédit simultanément :
+Un seul modele BiLSTM char-level multi-tete V6 avec word feedback et phone_lex_features (ONNX INT8) qui predit simultanement :
 
-- **P2G** : transcription IPA vers orthographe (93.1% word accuracy, 2.2% CER)
-- **POS** : étiquetage morpho-syntaxique — 19 tags (98.3% accuracy)
+- **P2G** : transcription IPA vers orthographe (90.95% word accuracy, pipeline complet avec formules)
+- **POS** : etiquetage morpho-syntaxique — 19 tags (98.3% accuracy)
 - **Morphologie** : genre, nombre, temps, mode, personne, forme verbale (94.7-99.7%)
 
-Quatre backends d'inférence : ONNX Runtime, NumPy, pur Python (zéro dépendance), ou API serveur.
+Le score P2G inclut la reconnaissance de formules (nombres, sigles, dates) via `lectura_formules`.
 
-## Démarrage rapide
+Quatre backends d'inference : ONNX Runtime, NumPy, pur Python (zero dependance), ou API serveur.
+
+## Demarrage rapide
 
 ### Installation
 
 ```bash
-pip install lectura-graphemiseur             # zéro dépendance (backend pur Python)
+pip install lectura-graphemiseur             # zero dependance (backend pur Python)
 pip install lectura-graphemiseur[numpy]      # backend NumPy
 pip install lectura-graphemiseur[onnx]       # backend ONNX Runtime (le plus rapide)
 ```
@@ -61,7 +63,7 @@ Installez les modeles dans `~/.lectura/models/p2g/` :
 
 ```bash
 mkdir -p ~/.lectura/models/p2g
-cp unifie_p2g_v3_int8.onnx unifie_p2g_v3_vocab.json ~/.lectura/models/p2g/
+cp unifie_p2g_v6_int8.onnx unifie_p2g_v6_vocab.json phone_lexicon.db ~/.lectura/models/p2g/
 ```
 
 Ou via variable d'environnement :
@@ -70,7 +72,7 @@ Ou via variable d'environnement :
 export LECTURA_MODELS_DIR=/path/to/models
 ```
 
-`creer_engine()` detecte automatiquement les modeles locaux.
+`creer_engine()` detecte automatiquement les modeles locaux. Le fichier `phone_lexicon.db` (lexique phonetique) est utilise par le modele V6 pour les phone_lex_features et le lex_select. Sans ce fichier, le modele fonctionne en mode degrade (features = zeros).
 
 ## Poids NumPy / Pure Python (optionnel)
 
@@ -86,37 +88,44 @@ engine = creer_engine(mode="numpy")
 result = engine.analyser(["bɔ̃ʒuʁ", "lə", "mɔ̃d"])
 ```
 
-## Backends d'inférence
+## Backends d'inference
 
-| Backend | Dépendances | Vitesse | Usage |
+| Backend | Dependances | Vitesse | Usage |
 |---------|------------|---------|-------|
 | **API** | aucune | ~100 ms/phrase | Defaut (Niveau 1), zero config |
 | **ONNX Runtime** | `onnxruntime` | ~2 ms/phrase | Production locale |
 | **NumPy** | `numpy` | ~50 ms/phrase | Leger |
 | **Pur Python** | aucune | ~200 ms/phrase | Embarque, portabilite max |
 
-Les backends locaux (ONNX, NumPy, Pure) produisent des résultats identiques.
+Les backends locaux (ONNX, NumPy, Pure) produisent des resultats identiques.
 
-## Features lexicales (optionnel)
+## Pipeline V6 (raw → lex_select → post-traitement)
 
-Le modele V3 accepte en entree optionnelle un vecteur de 24 dimensions par mot, construit a partir d'un lexique de candidats POS. Cela ameliore la prediction POS et la morphologie, ce qui ameliore aussi la reconstruction orthographique via le word feedback.
+Le pipeline complet applique trois etapes successives :
 
-Le lexique est detecte automatiquement si present dans le dossier modeles (`lexique_pos_candidates.json`), ou via le parametre `lexicon_path` de `creer_engine()`. Sans lexique, le modele fonctionne normalement (features = zeros).
+1. **Raw** : prediction brute du modele BiLSTM (82.32% word accuracy)
+2. **Lex_select** : selection lexicale par phone_lexicon — le modele choisit parmi les candidats phonetiquement compatibles (87.33%)
+3. **Post-traitement** :
+   - **Formules** : reconnaissance deterministe de nombres, sigles, dates via `lectura_formules`
+   - **Coherence morpho** : accord ortho-morpho (pluriel, feminin, conjugaison)
+   - **Accents** : correction a/a, ou/ou par POS
+   - → **90.95%** word accuracy (pipeline complet)
 
-```python
-# Avec lexique (automatique si disponible)
-engine = creer_engine()
+## Phone_lex_features (V6)
 
-# Desactiver les features lexicales
-result = engine.analyser(ipa_words, use_lex=False)
-```
+Le modele V6 utilise un vecteur de 28 dimensions par mot (`phone_lex_features`), construit a partir du `phone_lexicon.db` :
 
-## Benchmarks (dev set, modele V3 avec features lexicales)
+- 19d : POS one-hot (candidats POS du lexique phonetique)
+- 3d : features morphologiques (genre, nombre)
+- 6d : features lexicales (known, n_candidates, unambiguous, top_freq, has_verb, has_nom)
 
-| Tâche | Métrique | Score |
+Le `phone_lexicon.db` est detecte automatiquement dans le dossier modeles. Sans lexique, le modele fonctionne normalement (features = zeros).
+
+## Benchmarks (dev set, modele V6 pipeline complet)
+
+| Tache | Metrique | Score |
 |-------|----------|-------|
-| **P2G** | Word Accuracy | **93.1%** |
-| **P2G** | CER (Character Error Rate) | **2.2%** |
+| **P2G** | Word Accuracy (pipeline complet) | **90.95%** |
 | **POS** | Accuracy | **98.3%** |
 | **Morpho** — Number | Accuracy | **94.7%** |
 | **Morpho** — Gender | Accuracy | **97.6%** |
@@ -125,7 +134,7 @@ result = engine.analyser(ipa_words, use_lex=False)
 | **Morpho** — Tense | Accuracy | **99.7%** |
 | **Morpho** — Person | Accuracy | **99.6%** |
 
-Voir [EVALUATION.md](EVALUATION.md) pour les résultats détaillés et la comparaison v1/v2/v3.
+Voir [EVALUATION.md](EVALUATION.md) pour les resultats detailles et la comparaison v1/v2/v3/v6.
 
 ## API
 
@@ -137,9 +146,9 @@ Factory pour creer un engine d'inference. Modes : `"auto"`, `"local"`, `"api"`, 
 ### `engine.analyser(ipa_words, *, use_lex=True) -> dict`
 
 Analyse une liste de mots IPA et retourne un dictionnaire :
-- `ipa_words` : liste des mots IPA d'entrée
+- `ipa_words` : liste des mots IPA d'entree
 - `ortho` : orthographe reconstruite par mot
-- `pos` : étiquette POS par mot
+- `pos` : etiquette POS par mot
 - `morpho` : dict de listes par trait (`Number`, `Gender`, `VerbForm`, `Mood`, `Tense`, `Person`)
 
 Le parametre `use_lex=False` desactive les features lexicales (utile pour le benchmarking).
@@ -148,18 +157,23 @@ Le parametre `use_lex=False` desactive les features lexicales (utile pour le ben
 
 Tokenise une phrase IPA (split sur espaces).
 
+### `corriger_phrase_v3(ortho_words, pos_tags, morpho_features, ..., ipa_words=None) -> list[str]`
+
+Pipeline post-traitement V6 complet : formules (via `ipa_words`) + coherence morpho + accents.
+Le parametre `ipa_words` active la reconnaissance de formules (nombres, sigles).
+
 ### `corriger_phrase_v2(ortho_words, pos_tags, lexique) -> list[str]`
 
-Post-traitement contextuel inter-mots : accord déterminant-nom, sujet-verbe.
+Post-traitement contextuel inter-mots : accord determinant-nom, sujet-verbe.
 
-## Architecture du modèle (V3)
+## Architecture du modele (V6)
 
 ```
 Phrase IPA → Char Embedding (64d) → Shared BiLSTM (2×160h → 320d)
                                           │
                   ┌───────────────────────┼────────────────────┐
                   ↓                                             ↓
-        Word representations                Word repr (320d) + Lex Features (24d)
+        Word representations                Word repr (320d) + Phone Lex Features (28d)
         (fwd[last] || bwd[first])                          │
                                                  Word BiLSTM (192h → 384d)
                                                        │
@@ -173,16 +187,17 @@ Phrase IPA → Char Embedding (64d) → Shared BiLSTM (2×160h → 320d)
                                                            char_out + word_out
 ```
 
-- **Entrée** : séquence de caractères IPA avec `<BOS>`, `<SEP>`, `<EOS>`
-- **Lex Features** : 24d par mot (21 POS one-hot + known + n_candidates + unambiguous)
-- **Word Feedback** : les représentations mot sont diffusées aux positions char correspondantes
-- **P2G** : prédiction par caractère IPA avec labels `_CONT` (continuation pour marques combinantes)
+- **Entree** : sequence de caracteres IPA avec `<BOS>`, `<SEP>`, `<EOS>`
+- **Phone Lex Features** : 28d par mot (19 POS one-hot + 3 morpho + 6 lex features)
+- **Lex Select** : selection parmi candidats phonetiques du phone_lexicon
+- **Word Feedback** : les representations mot sont diffusees aux positions char correspondantes
+- **P2G** : prediction par caractere IPA avec labels `_CONT` (continuation pour marques combinantes)
 
 ## Limites connues
 
-- Le P2G est intrinsèquement ambigu pour les homophones (est/et, a/à, ses/ces) — résolution partielle par le contexte phrastique
-- Les marques morphologiques muettes (-s pluriel, -e féminin) restent la principale source d'erreur (~30%)
-- Le modèle ne gère pas la ponctuation ni la casse (entrée = IPA pur)
+- Le P2G est intrinsequement ambigu pour les homophones (est/et, a/a, ses/ces) — resolution partielle par le contexte phrastique
+- Les marques morphologiques muettes (-s pluriel, -e feminin) restent la principale source d'erreur (~30%)
+- Le modele ne gere pas la ponctuation ni la casse (entree = IPA pur)
 - Performance sur mots hors-vocabulaire plus basse qu'en contexte
 
 ## Licence

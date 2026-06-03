@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -65,8 +66,11 @@ class Lexique:
         # Niveau 4 : index lemme -> entrees (lazy)
         self._index_lemme: dict[str, list[dict[str, Any]]] | None = None
 
-        # SQLite : connexion lazy
-        self._conn: sqlite3.Connection | None = None
+        # SQLite : une connexion par thread (thread-local)
+        self._local = threading.local()
+        self._conn: sqlite3.Connection | None = None  # compat (thread principal)
+        self._all_conns: list[sqlite3.Connection] = []
+        self._conn_lock = threading.Lock()
         self._col_mapping: dict[str, str] | None = None
 
         # Schema version (3 or 4) — detected at first SQLite access
@@ -126,13 +130,23 @@ class Lexique:
             yield from iter_csv(self._source)
 
     def _get_conn(self) -> sqlite3.Connection:
-        """Ouvre la connexion SQLite a la demande."""
-        if self._conn is None:
-            self._conn = sqlite3.connect(
-                str(self._source), check_same_thread=False,
-            )
-            self._conn.row_factory = sqlite3.Row
-        return self._conn
+        """Retourne une connexion SQLite pour le thread courant.
+
+        Chaque thread obtient sa propre connexion (thread-local) pour
+        eviter les conflits de curseurs entre threads concurrents
+        (QThread workers dans la GUI).
+        """
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(str(self._source), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self._local.conn = conn
+            with self._conn_lock:
+                self._all_conns.append(conn)
+            # Garder une reference pour le thread principal (compat)
+            if self._conn is None:
+                self._conn = conn
+        return conn
 
     def _detect_schema_version(self) -> None:
         """Detecte la version du schema BDD (3, 4 ou 5)."""
@@ -304,7 +318,8 @@ class Lexique:
         """info() pour schema v4 : JOIN formes + lemmes."""
         cur = conn.execute(
             "SELECT f.id, f.ortho, f.multext, f.phone, f.phone_reversed, "
-            "f.nb_syllabes, f.syllabes, f.freq_opensubs AS freq_opensubs, "
+            "f.nb_syllabes, f.syllabes, f.orthocode, "
+            "f.freq_opensubs AS freq_opensubs, "
             "f.freq_frantext, f.freq_lm10, f.freq_frwac, f.freq_composite, f.source, "
             "l.id AS lemme_id, l.lemme, l.cgram, l.genre, "
             "l.etymologie, l.freq_opensubs AS lemme_freq, l.age "
@@ -559,6 +574,7 @@ class Lexique:
         """formes_de() pour schema v4."""
         query = (
             "SELECT f.ortho, f.multext, f.phone, f.nb_syllabes, "
+            "f.syllabes, f.orthocode, "
             "f.freq_opensubs, l.lemme, l.cgram, l.genre "
             "FROM formes f "
             "JOIN lemmes l ON f.lemme_id = l.id "
@@ -1024,6 +1040,7 @@ class Lexique:
                 cur = conn.execute(
                     "SELECT f.ortho, f.phone, f.multext, f.nb_syllabes, "
                     "f.freq_opensubs, f.freq_composite, f.syllabes, f.orthocode, "
+                    "f.freq_frantext, f.freq_frwac, f.freq_lm10, "
                     "f.consonne_latente, "
                     "l.lemme, l.cgram, l.age "
                     "FROM formes f "
@@ -1778,6 +1795,28 @@ class Lexique:
             return None
         return dict(row)  # type: ignore[return-value]
 
+    def infos_lemmes(self, lemme: str) -> list[dict[str, Any]]:
+        """Retourne TOUTES les entrees lemmes pour un mot (homographes).
+
+        Contrairement a ``info_lemme()`` qui retourne le premier resultat,
+        cette methode retourne tous les cgram pour un meme mot
+        (ex: "est" = NOM + ADJ + AUX).
+
+        Args:
+            lemme: Le lemme a chercher
+
+        Returns:
+            Liste de dicts (peut etre vide)
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT * FROM lemmes WHERE lemme = ? COLLATE NOCASE",
+            (normaliser_ortho(lemme),),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
     def rechercher_lemmes(
         self, pattern: str, limite: int = 200,
     ) -> list[dict[str, Any]]:
@@ -1878,11 +1917,15 @@ class Lexique:
         conn = self._get_conn()
 
         if self._schema_version >= 5:
+            # Subquery pour resoudre lemme_id d'abord — evite que SQLite
+            # scanne l'index type sur des millions de lignes.
+            lemme_sub = "(SELECT id FROM lemmes WHERE lemme = ? COLLATE NOCASE"
             params: list[str | int] = [normaliser_ortho(lemme)]
-            extra = ""
             if cgram is not None:
-                extra += "AND l.cgram = ? "
+                lemme_sub += " AND cgram = ?"
                 params.append(cgram)
+            lemme_sub += ")"
+            extra = ""
             if type_lien is not None:
                 extra += "AND el.type = ? "
                 params.append(type_lien)
@@ -1894,8 +1937,7 @@ class Lexique:
                 "SELECT DISTINCT e.*, el.type AS _type, el.pertinence AS _pertinence "
                 "FROM entites e "
                 "JOIN entite_lemmes el ON el.entite_id = e.id "
-                "JOIN lemmes l ON el.lemme_id = l.id "
-                "WHERE l.lemme = ? COLLATE NOCASE "
+                f"WHERE el.lemme_id IN {lemme_sub} "
                 f"{extra}"
                 "ORDER BY el.type, el.pertinence, e.label "
                 "LIMIT ?",
@@ -1938,6 +1980,164 @@ class Lexique:
         return self.entites_associees(  # type: ignore[return-value]
             lemme, pertinence=priorite, limite=limite,
         )
+
+    def detecter_entites_texte(
+        self, lemmes: list[str], limite: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Detecte les entites du lexique presentes dans une liste de lemmes.
+
+        Pour chaque entite trouvee, retourne :
+        - id, label, definition, type_entite
+        - _positions: list[tuple[int, int]] — (debut, fin exclusive) dans la liste de lemmes
+        - _composants: liste des lemmes composants ordonnes
+
+        Seules les entites multi-composants (>= 2) sont detectees.
+        """
+        if self._schema_version < 5 or not lemmes:
+            return []
+
+        conn = self._get_conn()
+
+        # 1. Collecter les lemmes uniques normalises
+        lemmes_lower = [l.lower() for l in lemmes]
+        uniques = list(set(lemmes_lower))
+        if not uniques:
+            return []
+
+        # 2. Resoudre les lemme_ids depuis la table lemmes (rapide via index)
+        placeholders = ",".join("?" * len(uniques))
+        try:
+            cur = conn.execute(
+                "SELECT id, lemme FROM lemmes "
+                f"WHERE lemme COLLATE NOCASE IN ({placeholders})",
+                uniques,
+            )
+            all_lemme_ids: list[int] = []
+            for row in cur.fetchall():
+                all_lemme_ids.append(row[0])
+        except Exception:
+            return []
+
+        if not all_lemme_ids:
+            return []
+
+        # 3. Trouver les entites dont TOUS les composants sont dans le texte
+        #    (et qui ont au moins 2 composants)
+        id_ph = ",".join("?" * len(all_lemme_ids))
+        try:
+            cur = conn.execute(
+                "SELECT el.entite_id, count(*) AS matched, "
+                "(SELECT count(*) FROM entite_lemmes el2 "
+                " WHERE el2.entite_id = el.entite_id "
+                " AND el2.type = 'composant') AS total "
+                "FROM entite_lemmes el "
+                f"WHERE el.type = 'composant' AND el.lemme_id IN ({id_ph}) "
+                "GROUP BY el.entite_id "
+                "HAVING total >= 2 AND matched = total "
+                f"LIMIT {int(limite)}",
+                all_lemme_ids,
+            )
+            candidate_ids = [row[0] for row in cur.fetchall()]
+        except Exception:
+            return []
+
+        if not candidate_ids:
+            return []
+
+        # 4. Recuperer les composants ordonnes de chaque candidate
+        #    (pas de filtre type ici : les candidates sont deja filtrees a l'etape 3,
+        #     et retirer type= permet a SQLite d'utiliser l'index entite_id)
+        cid_ph = ",".join("?" * len(candidate_ids))
+        composants_par_entite: dict[int, list[str]] = {}
+        try:
+            cur = conn.execute(
+                "SELECT el.entite_id, l.lemme "
+                "FROM entite_lemmes el "
+                "JOIN lemmes l ON el.lemme_id = l.id "
+                f"WHERE el.entite_id IN ({cid_ph}) AND +el.type = 'composant' "
+                "ORDER BY el.entite_id, el.position",
+                candidate_ids,
+            )
+            for row in cur.fetchall():
+                eid = row[0]
+                if eid not in composants_par_entite:
+                    composants_par_entite[eid] = []
+                composants_par_entite[eid].append(row[1].lower())
+        except Exception:
+            return []
+
+        # 5. Matching sequentiel dans le texte
+        mots_outils = {
+            "de", "du", "des", "le", "la", "les", "l", "d",
+            "a", "au", "aux", "en", "et",
+        }
+
+        # Index lemme -> positions dans la liste
+        index_positions: dict[str, list[int]] = {}
+        for i, lem in enumerate(lemmes_lower):
+            if lem not in index_positions:
+                index_positions[lem] = []
+            index_positions[lem].append(i)
+
+        entites_matchees: dict[int, list[tuple[int, int]]] = {}
+
+        for eid, composants in composants_par_entite.items():
+            if not composants:
+                continue
+            premier = composants[0]
+            if premier not in index_positions:
+                continue
+
+            for start in index_positions[premier]:
+                pos = start
+                comp_idx = 0
+                matched = True
+
+                while comp_idx < len(composants):
+                    if pos >= len(lemmes_lower):
+                        matched = False
+                        break
+                    if lemmes_lower[pos] == composants[comp_idx]:
+                        comp_idx += 1
+                        pos += 1
+                    elif lemmes_lower[pos] in mots_outils and comp_idx > 0:
+                        pos += 1
+                    else:
+                        matched = False
+                        break
+
+                if matched and comp_idx == len(composants):
+                    if eid not in entites_matchees:
+                        entites_matchees[eid] = []
+                    entites_matchees[eid].append((start, pos))
+
+        if not entites_matchees:
+            return []
+
+        # 6. Recuperer les infos des entites matchees
+        results: list[dict[str, Any]] = []
+        matched_ids = list(entites_matchees.keys())
+        matched_ph = ",".join("?" * len(matched_ids))
+        try:
+            cur = conn.execute(
+                "SELECT id, label, description, type_entite "
+                f"FROM entites WHERE id IN ({matched_ph})",
+                matched_ids,
+            )
+            for row in cur.fetchall():
+                eid = row[0]
+                results.append({
+                    "id": eid,
+                    "label": row[1] or "",
+                    "description": row[2] or "",
+                    "type_entite": row[3] or "",
+                    "_positions": entites_matchees[eid],
+                    "_composants": composants_par_entite.get(eid, []),
+                })
+        except Exception:
+            return []
+
+        return results
 
     def synonymes_de(self, id_ou_lemme_id: int) -> list[Concept]:
         """Retourne les synonymes.
@@ -2238,6 +2438,54 @@ class Lexique:
             )
         return [row[0] for row in cur.fetchall() if row[0]]
 
+    def categories_de_batch(
+        self, ids: list[int], inclure_ancetres: bool = False,
+    ) -> dict[int, list[str]]:
+        """Retourne les categories de plusieurs entites en un seul appel.
+
+        Retourne un dict {entite_id: [label, ...]}.
+        """
+        if not ids or self._backend != "sqlite" or self._schema_version < 4:
+            return {}
+        conn = self._get_conn()
+        join_table = "entite_categories" if self._schema_version >= 5 else "concept_categories"
+        id_col = "entite_id" if self._schema_version >= 5 else "concept_id"
+
+        result: dict[int, list[str]] = {}
+        # SQLite limite les parametres a ~999 — traiter par lots
+        batch_size = 900
+        for i in range(0, len(ids), batch_size):
+            batch = ids[i:i + batch_size]
+            placeholders = ",".join("?" * len(batch))
+            if inclure_ancetres:
+                cur = conn.execute(
+                    "SELECT DISTINCT cc.{id_col}, anc.label "
+                    "FROM categories anc "
+                    "JOIN categorie_hierarchie h ON anc.id = h.ancestor_id "
+                    "JOIN {join_table} cc ON cc.categorie_id = h.descendant_id "
+                    "WHERE cc.{id_col} IN ({ph}) "
+                    "ORDER BY h.depth, anc.label".format(
+                        id_col=id_col, join_table=join_table, ph=placeholders,
+                    ),
+                    batch,
+                )
+            else:
+                cur = conn.execute(
+                    "SELECT cc.{id_col}, cat.label "
+                    "FROM categories cat "
+                    "JOIN {join_table} cc ON cc.categorie_id = cat.id "
+                    "WHERE cc.{id_col} IN ({ph})".format(
+                        id_col=id_col, join_table=join_table, ph=placeholders,
+                    ),
+                    batch,
+                )
+            for row in cur.fetchall():
+                eid = int(row[0])
+                lab = row[1]
+                if lab:
+                    result.setdefault(eid, []).append(lab)
+        return result
+
     def info_categorie(self, label: str) -> Categorie | None:
         """Retourne une categorie par son label (v4 uniquement)."""
         if self._backend != "sqlite" or self._schema_version < 4:
@@ -2306,8 +2554,85 @@ class Lexique:
         cur = conn.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]  # type: ignore[misc]
 
+    def _load_dag_parents(self) -> dict[int, list[tuple[int, str]]]:
+        """Charge et met en cache les aretes parent direct du DAG categories."""
+        cache_attr = "_dag_parents_cache"
+        cached = getattr(self, cache_attr, None)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+        conn = self._get_conn()
+        cur = conn.execute(
+            "SELECT h.descendant_id, h.ancestor_id, c.label "
+            "FROM categorie_hierarchie h "
+            "JOIN categories c ON c.id = h.ancestor_id "
+            "WHERE h.depth = 1"
+        )
+        parents_of: dict[int, list[tuple[int, str]]] = {}
+        for row in cur.fetchall():
+            parents_of.setdefault(row[0], []).append((row[1], row[2]))
+        setattr(self, cache_attr, parents_of)
+        return parents_of
+
+    def hierarchie_categories_entite(
+        self, entite_id: int, max_chemins: int = 10,
+    ) -> list[list[str]]:
+        """Reconstruit les chemins hierarchiques pour une entite.
+
+        Pour chaque categorie directe de l'entite, remonte le DAG via
+        les parents directs (depth=1 dans categorie_hierarchie).
+        Utilise BFS pour trouver les chemins les plus courts vers les
+        racines, un chemin par racine par categorie directe.
+
+        Retourne une liste de chemins tries par longueur, chaque chemin
+        etant une liste de labels [feuille, parent, ..., racine].
+        """
+        if self._backend != "sqlite" or self._schema_version < 4:
+            return []
+        conn = self._get_conn()
+        join_table = "entite_categories" if self._schema_version >= 5 else "concept_categories"
+        id_col = "entite_id" if self._schema_version >= 5 else "concept_id"
+
+        # Recuperer les categories directes de l'entite
+        cur = conn.execute(
+            f"SELECT c.id, c.label FROM categories c "
+            f"JOIN {join_table} ec ON ec.categorie_id = c.id "
+            f"WHERE ec.{id_col} = ?",
+            (entite_id,),
+        )
+        direct_cats = cur.fetchall()
+        if not direct_cats:
+            return []
+
+        parents_of = self._load_dag_parents()
+
+        # BFS par categorie directe : un chemin par racine (le plus court)
+        from collections import deque
+        all_paths: list[list[str]] = []
+        for cat_id, cat_label in direct_cats:
+            seen_roots: set[int] = set()
+            queue: deque[tuple[int, list[str]]] = deque()
+            queue.append((cat_id, [cat_label]))
+            visited: set[int] = {cat_id}
+            while queue:
+                node_id, path = queue.popleft()
+                plist = parents_of.get(node_id, [])
+                if not plist:
+                    # Racine atteinte — garder si pas deja vu cette racine
+                    if node_id not in seen_roots:
+                        seen_roots.add(node_id)
+                        all_paths.append(path)
+                else:
+                    for parent_id, parent_label in plist:
+                        if parent_id not in visited:
+                            visited.add(parent_id)
+                            queue.append((parent_id, path + [parent_label]))
+
+        all_paths.sort(key=len)
+        return all_paths[:max_chemins]
+
     def entites_par_categorie(
-        self, label: str, inclure_descendants: bool = False
+        self, label: str, inclure_descendants: bool = False,
+        limite: int = 0, offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Retourne les entites liees a une categorie.
 
@@ -2315,33 +2640,56 @@ class Lexique:
         En v4, lit ``concept_categories`` + ``concepts``.
 
         Si *inclure_descendants* est True, inclut les sous-categories.
+        Si *limite* > 0, limite le nombre de resultats SQL.
+        Si *offset* > 0, saute les N premiers resultats (pagination).
         """
         if self._backend != "sqlite" or self._schema_version < 4:
             return []
         conn = self._get_conn()
 
+        limit_clause = ""
+        limit_params: tuple[int, ...] = ()
+        # Quand un LIMIT est applique sans offset, on supprime ORDER BY
+        # cote SQL (le tri se fait cote client dans le QTableWidget) —
+        # sinon SQLite materialise et trie l'integralite du resultset.
+        # Avec offset (pagination web), ORDER BY est requis.
+        order_clause = ""
+        if limite > 0:
+            limit_clause = " LIMIT ?"
+            limit_params = (limite,)
+            if offset > 0:
+                order_clause = " ORDER BY {sort}"
+                limit_clause += " OFFSET ?"
+                limit_params = (limite, offset)
+        else:
+            order_clause = " ORDER BY {sort}"
+
         if self._schema_version >= 5:
+            sort_col = "e.label"
             if inclure_descendants:
                 sql = (
                     "SELECT DISTINCT e.* FROM entites e "
                     "JOIN entite_categories ec ON e.id = ec.entite_id "
                     "JOIN categorie_hierarchie h ON ec.categorie_id = h.descendant_id "
                     "JOIN categories cat ON h.ancestor_id = cat.id "
-                    "WHERE cat.label = ? COLLATE NOCASE "
-                    "ORDER BY e.label"
+                    "WHERE cat.label = ? COLLATE NOCASE"
+                    + order_clause.format(sort=sort_col)
+                    + limit_clause
                 )
             else:
                 sql = (
                     "SELECT DISTINCT e.* FROM entites e "
                     "JOIN entite_categories ec ON e.id = ec.entite_id "
                     "JOIN categories cat ON ec.categorie_id = cat.id "
-                    "WHERE cat.label = ? COLLATE NOCASE "
-                    "ORDER BY e.label"
+                    "WHERE cat.label = ? COLLATE NOCASE"
+                    + order_clause.format(sort=sort_col)
+                    + limit_clause
                 )
-            cur = conn.execute(sql, (label,))
+            cur = conn.execute(sql, (label,) + limit_params)
             return [dict(row) for row in cur.fetchall()]
 
         # v4
+        sort_col = "l.lemme, c.sens_num"
         if inclure_descendants:
             sql = (
                 "SELECT DISTINCT c.*, l.lemme AS _lemme FROM concepts c "
@@ -2349,8 +2697,9 @@ class Lexique:
                 "JOIN categorie_hierarchie h ON cc.categorie_id = h.descendant_id "
                 "JOIN categories cat ON h.ancestor_id = cat.id "
                 "LEFT JOIN lemmes l ON c.lemme_id = l.id "
-                "WHERE cat.label = ? COLLATE NOCASE "
-                "ORDER BY l.lemme, c.sens_num"
+                "WHERE cat.label = ? COLLATE NOCASE"
+                + order_clause.format(sort=sort_col)
+                + limit_clause
             )
         else:
             sql = (
@@ -2358,10 +2707,11 @@ class Lexique:
                 "JOIN concept_categories cc ON c.id = cc.concept_id "
                 "JOIN categories cat ON cc.categorie_id = cat.id "
                 "LEFT JOIN lemmes l ON c.lemme_id = l.id "
-                "WHERE cat.label = ? COLLATE NOCASE "
-                "ORDER BY l.lemme, c.sens_num"
+                "WHERE cat.label = ? COLLATE NOCASE"
+                + order_clause.format(sort=sort_col)
+                + limit_clause
             )
-        cur = conn.execute(sql, (label,))
+        cur = conn.execute(sql, (label,) + limit_params)
         return [dict(row) for row in cur.fetchall()]
 
     def concepts_par_categorie(
@@ -2649,12 +2999,15 @@ class Lexique:
             )
             result["_composants"] = [dict(r) for r in cur2.fetchall()]
 
-            # Exemples
-            cur3 = conn.execute(
-                "SELECT texte FROM entite_exemples WHERE entite_id = ?",
-                (entite_id,),
-            )
-            result["_exemples"] = [r[0] for r in cur3.fetchall() if r[0]]
+            # Exemples (table supprimee en v6, guard pour compatibilite)
+            if self._has_table("entite_exemples"):
+                cur3 = conn.execute(
+                    "SELECT texte FROM entite_exemples WHERE entite_id = ?",
+                    (entite_id,),
+                )
+                result["_exemples"] = [r[0] for r in cur3.fetchall() if r[0]]
+            else:
+                result["_exemples"] = []
 
             return result
 
@@ -2689,6 +3042,18 @@ class Lexique:
         result["_composants"] = [dict(r) for r in cur2.fetchall()]
 
         return result
+
+    def entite_par_qid(self, qid: str) -> dict[str, Any] | None:
+        """Retourne le detail d'une entite par son QID Wikidata (v5+)."""
+        if self._backend != "sqlite" or self._schema_version < 5:
+            return None
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT id FROM entites WHERE qid = ?", (qid,)
+        ).fetchone()
+        if row is None:
+            return None
+        return self.entite_detail(row[0])
 
     def concept_detail(self, concept_id: int) -> Concept | None:
         """Alias de entite_detail() pour retrocompatibilite v4."""
@@ -2754,6 +3119,8 @@ class Lexique:
     def exemples_entite(self, entite_id: int) -> list[str]:
         """Retourne les exemples d'une entite (v5 uniquement)."""
         if self._backend != "sqlite" or self._schema_version < 5:
+            return []
+        if not self._has_table("entite_exemples"):
             return []
         conn = self._get_conn()
         cur = conn.execute(
@@ -2957,10 +3324,16 @@ class Lexique:
         )
 
     def close(self) -> None:
-        """Ferme la connexion SQLite si ouverte."""
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        """Ferme toutes les connexions SQLite (tous les threads)."""
+        with self._conn_lock:
+            for conn in self._all_conns:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self._all_conns.clear()
+        self._conn = None
+        self._local = threading.local()
 
     def __enter__(self) -> Lexique:
         return self

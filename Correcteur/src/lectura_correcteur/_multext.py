@@ -119,16 +119,23 @@ def decoder_multext(tag: str) -> dict[str, str]:
                     result["nombre"] = _NOMBRE.get(tag[3], tag[3])
 
     elif cat == "A":
-        # Adjectif : A type degre genre nombre
+        # Adjectif : A type [degre] genre nombre
+        # Le degre (p/c/s) peut etre omis → tag de 4 chars au lieu de 5
         if len(tag) > 1 and tag[1] != "-":
             st = _SUBTYPE.get("A", {}).get(tag[1])
             if st:
                 result["sous_type"] = st
-        # Position 2 = degre (p=positif, c=comparatif, s=superlatif)
-        if len(tag) > 3 and tag[3] != "-":
-            result["genre"] = _GENRE.get(tag[3], tag[3])
-        if len(tag) > 4 and tag[4] != "-":
-            result["nombre"] = _NOMBRE.get(tag[4], tag[4])
+        _degree_chars = frozenset("pcs")
+        if len(tag) > 2 and tag[2] in _degree_chars:
+            # Degre present : positions 3=genre, 4=nombre
+            _gp, _np = 3, 4
+        else:
+            # Degre omis : positions 2=genre, 3=nombre
+            _gp, _np = 2, 3
+        if len(tag) > _gp and tag[_gp] != "-":
+            result["genre"] = _GENRE.get(tag[_gp], tag[_gp])
+        if len(tag) > _np and tag[_np] != "-":
+            result["nombre"] = _NOMBRE.get(tag[_np], tag[_np])
 
     elif cat in ("D", "P"):
         # Determinant / Pronom : type personne genre nombre

@@ -22,16 +22,54 @@ log = logging.getLogger(__name__)
 
 SEMITONE = 0.0577622  # log(2) / 12
 
-# Style presets: 5-dim vectors [expressiveness, energy_level, speaking_rate, final_intonation, is_dialogue]
+# Prosodic defaults when no style preset is active
+_PROSODY_DEFAULTS = {
+    "duration_scale": 1.0,
+    "pitch_shift": 0.0,
+    "pitch_range": 1.3,
+    "energy_scale": 1.0,
+    "pause_scale": 1.0,
+}
+
+# Style presets: style_vector [expressiveness, energy_level, speaking_rate,
+#                              final_intonation, is_dialogue]
+#                + prosodic overrides (duration_scale, pitch_range, etc.)
 STYLE_PRESETS = {
-    "neutral":    [0.0, 0.0, 0.0, 0.0, 0.0],
-    "expressive": [1.5, 0.5, 0.3, 0.0, 0.0],
-    "calm":       [-1.0, -0.5, -0.5, 0.0, 0.0],
-    "dialogue":   [0.8, 0.3, 0.2, 0.0, 1.0],
-    "fast":       [0.0, 0.0, 1.5, 0.0, 0.0],
-    "slow":       [0.0, 0.0, -1.5, 0.0, 0.0],
-    "rising":     [0.5, 0.0, 0.0, 1.5, 0.0],
-    "suspense":   [-0.5, -0.5, -0.5, -1.0, 0.0],
+    "neutre": {
+        "style_vector": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "pitch_range": 1.0, "energy_scale": 1.0,
+        "duration_scale": 1.0, "pause_scale": 1.0,
+    },
+    "narratif": {
+        "style_vector": [0.0, -0.2, -0.2, 0.0, 0.0],
+        "pitch_range": 0.9, "energy_scale": 0.95,
+        "duration_scale": 1.05, "pause_scale": 1.2,
+    },
+    "dialogue": {
+        "style_vector": [0.3, 0.2, 0.2, 0.0, 1.0],
+        "pitch_range": 1.15, "energy_scale": 1.0,
+        "duration_scale": 0.92, "pause_scale": 0.8,
+    },
+    "expressif": {
+        "style_vector": [1.0, 1.0, 0.0, 0.0, 0.0],
+        "pitch_range": 1.1, "energy_scale": 1.3,
+        "duration_scale": 1.0, "pause_scale": 1.0,
+    },
+    "meditatif": {
+        "style_vector": [-1.5, -0.8, -1.0, -0.5, 0.0],
+        "pitch_range": 0.7, "energy_scale": 0.8,
+        "duration_scale": 1.3, "pause_scale": 1.8,
+    },
+    "rapide": {
+        "style_vector": [0.0, 0.3, 2.0, 0.0, 0.0],
+        "pitch_range": 1.1, "energy_scale": 1.0,
+        "duration_scale": 0.75, "pause_scale": 0.6,
+    },
+    "lent": {
+        "style_vector": [0.0, -0.2, -2.0, 0.0, 0.0],
+        "pitch_range": 1.0, "energy_scale": 0.9,
+        "duration_scale": 1.4, "pause_scale": 1.5,
+    },
 }
 
 # Ponctuation reconnue par le modele TTS
@@ -268,11 +306,11 @@ class OnnxTTSEngine:
         self,
         text: str,
         phrase_type: int | None = None,
-        duration_scale: float = 1.0,
-        pitch_shift: float = 0.0,
-        pitch_range: float = 1.3,
-        energy_scale: float = 1.0,
-        pause_scale: float = 1.0,
+        duration_scale: float | None = None,
+        pitch_shift: float | None = None,
+        pitch_range: float | None = None,
+        energy_scale: float | None = None,
+        pause_scale: float | None = None,
         variability: bool = False,
         style: str | None = None,
         style_vector: list[float] | None = None,
@@ -280,7 +318,7 @@ class OnnxTTSEngine:
         """Synthetise du texte (necessite lectura-g2p).
 
         Args:
-            style: Nom d'un preset de style (ex: "expressive", "calm")
+            style: Nom d'un preset de style (ex: "narratif", "dialogue")
             style_vector: Vecteur de style explicite [n_style_dims]
                          (prioritaire sur style)
         """
@@ -345,28 +383,35 @@ class OnnxTTSEngine:
             phoneme_timings=all_timings,
         )
 
-    def _resolve_style_vector(
+    def _resolve_style(
         self,
         style: str | None = None,
         style_vector: list[float] | None = None,
-    ) -> list[float]:
-        """Resolve style to a float vector. Explicit vector > preset > neutral."""
+    ) -> tuple[list[float], dict[str, float]]:
+        """Resolve style to (vector, prosody_overrides).
+
+        Priority: explicit style_vector > named preset > neutral default.
+        When style_vector is given directly, no prosodic overrides are applied.
+        """
         if style_vector is not None:
-            return list(style_vector)
+            return list(style_vector), {}
         if style is not None and style in STYLE_PRESETS:
-            return list(STYLE_PRESETS[style])
+            preset = STYLE_PRESETS[style]
+            sv = list(preset["style_vector"])
+            prosody = {k: v for k, v in preset.items() if k != "style_vector"}
+            return sv, prosody
         n = self._n_style_dims if self._n_style_dims > 0 else 5
-        return [0.0] * n
+        return [0.0] * n, {}
 
     def synthesize_phonemes(
         self,
         phonemes_ipa: str,
         phrase_type: int = 0,
-        duration_scale: float = 1.0,
-        pitch_shift: float = 0.0,
-        pitch_range: float = 1.3,
-        energy_scale: float = 1.0,
-        pause_scale: float = 1.0,
+        duration_scale: float | None = None,
+        pitch_shift: float | None = None,
+        pitch_range: float | None = None,
+        energy_scale: float | None = None,
+        pause_scale: float | None = None,
         variability: bool = False,
         style: str | None = None,
         style_vector: list[float] | None = None,
@@ -376,15 +421,25 @@ class OnnxTTSEngine:
         Args:
             phonemes_ipa: Chaine IPA (ex: "bɔ̃ʒuʁ")
             phrase_type: 0=decl, 1=inter, 2=excl, 3=susp
-            duration_scale: Multiplicateur de duree globale
-            pitch_shift: Decalage F0 en demi-tons
-            pitch_range: Echelle de variation F0
-            energy_scale: Multiplicateur d'energie
-            pause_scale: Multiplicateur pour les pauses
-            style: Nom d'un preset de style (ex: "expressive", "calm")
+            duration_scale: Multiplicateur de duree globale (None = preset ou 1.0)
+            pitch_shift: Decalage F0 en demi-tons (None = preset ou 0.0)
+            pitch_range: Echelle de variation F0 (None = preset ou 1.3)
+            energy_scale: Multiplicateur d'energie (None = preset ou 1.0)
+            pause_scale: Multiplicateur pour les pauses (None = preset ou 1.0)
+            style: Nom d'un preset de style (ex: "narratif", "dialogue")
             style_vector: Vecteur de style explicite [n_style_dims]
         """
         self._ensure_loaded()
+
+        # Resolve style preset → style_vector + prosodic overrides
+        sv, prosody_overrides = self._resolve_style(style, style_vector)
+
+        # Apply prosodic values: explicit param > preset override > global default
+        duration_scale = duration_scale if duration_scale is not None else prosody_overrides.get("duration_scale", _PROSODY_DEFAULTS["duration_scale"])
+        pitch_shift = pitch_shift if pitch_shift is not None else prosody_overrides.get("pitch_shift", _PROSODY_DEFAULTS["pitch_shift"])
+        pitch_range = pitch_range if pitch_range is not None else prosody_overrides.get("pitch_range", _PROSODY_DEFAULTS["pitch_range"])
+        energy_scale = energy_scale if energy_scale is not None else prosody_overrides.get("energy_scale", _PROSODY_DEFAULTS["energy_scale"])
+        pause_scale = pause_scale if pause_scale is not None else prosody_overrides.get("pause_scale", _PROSODY_DEFAULTS["pause_scale"])
 
         from lectura_tts_multispeaker.phonemes import (
             ipa_to_phones, get_phone_min_frames, _PHONE_FALLBACKS,
@@ -423,7 +478,6 @@ class OnnxTTSEngine:
         # 1. Encoder
         if self._unified:
             speaker_id_np = np.array([self._speaker_id], dtype=np.int64)
-            sv = self._resolve_style_vector(style, style_vector)
             style_np = np.array([sv], dtype=np.float32)
             enc_out, dur_pred, pitch_pred, energy_pred = self._encoder.run(None, {
                 "phone_ids": phone_ids_np,

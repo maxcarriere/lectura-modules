@@ -6,7 +6,7 @@ Sorties :
   - lexique_correcteur.db     (~50 Mo, SQLite avec index)
   - lexique_correcteur.csv.gz (~14 Mo, CSV compresse, optionnel)
 
-Colonnes : ortho, phone, cgram, genre, nombre, freq, lemme, multext, is_lemme
+Colonnes : ortho, phone, cgram, genre, nombre, freq, lemme, multext, is_lemme, syllabes
 
 Usage :
     python build_csv.py                          # depuis lexique_lectura.db
@@ -27,24 +27,37 @@ from pathlib import Path
 # Colonnes
 COLUMNS = [
     "ortho", "phone", "cgram", "genre", "nombre",
-    "freq", "lemme", "multext", "is_lemme",
+    "freq", "lemme", "multext", "is_lemme", "syllabes",
 ]
 
 # Positions genre/nombre dans les tags multext (depend de la categorie)
+# Standard Multext-GRACE : A=ADJ est Afpms (5 car), mais 6386 entrees
+# ont des tags a 4 car (Afms) ou le degre est omis.
 _GENRE_POS = {
     "N": 2,  # Ncms → pos 2
-    "A": 3,  # Afpms → pos 3
+    "A": 3,  # Afpms → pos 3 (5 car standard)
     "D": 3,  # Da-ms → pos 3
     "P": 3,  # Pp3ms → pos 3
 }
 
 _NOMBRE_POS = {
     "N": 3,  # Ncms → pos 3
-    "A": 4,  # Afpfs → pos 4
+    "A": 4,  # Afpfs → pos 4 (5 car standard)
     "D": 4,  # Da-ms → pos 4
     "P": 4,  # Pp3ms → pos 4
     "V": 5,  # Vmip3s → pos 5
 }
+
+_DEGRE_VALUES = frozenset("pcs")  # positif, comparatif, superlatif
+
+
+def _adj_genre_nombre_pos(multext: str) -> tuple[int, int]:
+    """Positions genre/nombre pour un ADJ, selon que le degre est present ou non."""
+    # Standard (5 car) : Afpms → degre en pos 2, genre pos 3, nombre pos 4
+    # Tronque (4 car)  : Afms  → pas de degre, genre pos 2, nombre pos 3
+    if len(multext) >= 3 and multext[2] in _DEGRE_VALUES:
+        return 3, 4  # standard
+    return 2, 3  # degre omis
 
 
 def _genre_from_multext(multext: str) -> str:
@@ -52,6 +65,13 @@ def _genre_from_multext(multext: str) -> str:
     if not multext:
         return ""
     cat = multext[0]
+    if cat == "A":
+        g_pos, _ = _adj_genre_nombre_pos(multext)
+        if len(multext) > g_pos:
+            c = multext[g_pos]
+            if c in ("m", "f"):
+                return c
+        return ""
     pos = _GENRE_POS.get(cat)
     if pos is not None and len(multext) > pos:
         c = multext[pos]
@@ -65,6 +85,13 @@ def _nombre_from_multext(multext: str) -> str:
     if not multext:
         return ""
     cat = multext[0]
+    if cat == "A":
+        _, n_pos = _adj_genre_nombre_pos(multext)
+        if len(multext) > n_pos:
+            c = multext[n_pos]
+            if c in ("s", "p"):
+                return c
+        return ""
     pos = _NOMBRE_POS.get(cat)
     if pos is not None and len(multext) > pos:
         c = multext[pos]
@@ -89,7 +116,14 @@ def _iter_rows(db_path: Path):
               file=sys.stderr)
         sys.exit(1)
 
-    query = """
+    # Detecter la presence de la colonne syllabes
+    cols_formes = {
+        r[1] for r in conn.execute("PRAGMA table_info(formes)")
+    }
+    has_syllabes = "syllabes" in cols_formes
+    syl_col = ", f.syllabes" if has_syllabes else ""
+
+    query = f"""
         SELECT
             f.ortho,
             f.phone,
@@ -99,6 +133,7 @@ def _iter_rows(db_path: Path):
             f.freq_composite,
             f.freq_opensubs,
             l.lemme
+            {syl_col}
         FROM formes f
         JOIN lemmes l ON f.lemme_id = l.id
         ORDER BY lower(f.ortho), f.freq_composite DESC
@@ -111,6 +146,7 @@ def _iter_rows(db_path: Path):
         multext = row["multext"] or ""
         genre = _genre_from_multext(multext) or row["genre"] or ""
         lemme = row["lemme"] or ""
+        syllabes = (row["syllabes"] or "") if has_syllabes else ""
 
         freq_raw = row["freq_composite"]
         if freq_raw is None or freq_raw == 0:
@@ -120,7 +156,7 @@ def _iter_rows(db_path: Path):
         nombre = _nombre_from_multext(multext)
         is_lemme = 1 if ortho.lower() == lemme.lower() else 0
 
-        yield (ortho, phone, cgram, genre, nombre, freq, lemme, multext, is_lemme)
+        yield (ortho, phone, cgram, genre, nombre, freq, lemme, multext, is_lemme, syllabes)
 
     conn.close()
 
@@ -151,7 +187,8 @@ def build_sqlite(db_path: Path, output_path: Path) -> int:
             freq      REAL DEFAULT 0,
             lemme     TEXT DEFAULT '',
             multext   TEXT DEFAULT '',
-            is_lemme  INTEGER DEFAULT 0
+            is_lemme  INTEGER DEFAULT 0,
+            syllabes  TEXT DEFAULT ''
         )
     """)
 
@@ -164,13 +201,13 @@ def build_sqlite(db_path: Path, output_path: Path) -> int:
         row_count += 1
         if len(batch) >= BATCH_SIZE:
             out.executemany(
-                "INSERT INTO lexique VALUES (?,?,?,?,?,?,?,?,?)", batch
+                "INSERT INTO lexique VALUES (?,?,?,?,?,?,?,?,?,?)", batch
             )
             batch.clear()
 
     if batch:
         out.executemany(
-            "INSERT INTO lexique VALUES (?,?,?,?,?,?,?,?,?)", batch
+            "INSERT INTO lexique VALUES (?,?,?,?,?,?,?,?,?,?)", batch
         )
 
     # Index

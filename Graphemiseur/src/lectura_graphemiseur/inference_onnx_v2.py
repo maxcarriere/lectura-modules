@@ -1,14 +1,16 @@
-"""Inférence ONNX Runtime pour le modèle unifié P2G V2 (avec features lexicales).
+"""Inférence ONNX Runtime pour le modèle unifié P2G V2+ (avec features lexicales).
 
 V2 par rapport à V1 :
   - Supporte les lex_features (24d) pour améliorer POS/Morpho
   - API V1-compatible (analyser) + API V2 (analyser_v2 avec top-K POS/Morpho)
   - Conserve analyser_avec_alternatives() pour les alternatives P2G
+  - V4 : Supporte lex_select (sélection ortho parmi candidats lexique)
+  - V6 : phone_lex_features (28d), NeighborContext, LexSelectHead V3
 
 Usage :
     engine = OnnxInferenceEngineV2(
-        "modeles/unifie_p2g_v3.onnx", "modeles/unifie_p2g_v3_vocab.json",
-        lexicon_path="path/to/lexique_pos_candidates.json",
+        "modeles/unifie_p2g_v6_int8.onnx", "modeles/unifie_p2g_v6_vocab.json",
+        phone_lexicon=phone_lexicon,  # PhoneLexicon pour lex_select + phone_lex_features
     )
     result = engine.analyser(["le", "ʃa"])
     result = engine.analyser_v2(["le", "ʃa"], top_k=3)
@@ -19,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +40,31 @@ ALL_LEX_POS = [
 ]
 
 LEX_FEATURE_DIM = len(ALL_LEX_POS) + 3
+
+# V3/V6 phone_lex_features: 28d (lookup par IPA)
+PHONE_LEX_FEATURE_DIM = 28
+
+CAND_FEAT_DIM = 30
+K_MAX = 20
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Distance de Levenshtein entre deux chaines."""
+    if a == b:
+        return 0
+    la, lb = len(a), len(b)
+    if la == 0:
+        return lb
+    if lb == 0:
+        return la
+    prev = list(range(lb + 1))
+    for i in range(la):
+        curr = [i + 1] + [0] * lb
+        for j in range(lb):
+            cost = 0 if a[i] == b[j] else 1
+            curr[j + 1] = min(curr[j] + 1, prev[j + 1] + 1, prev[j] + cost)
+        prev = curr
+    return prev[lb]
 
 
 def _build_lex_features(word: str, lexicon: dict[str, list[str]] | None) -> list[float]:
@@ -59,8 +87,111 @@ def _build_lex_features(word: str, lexicon: dict[str, list[str]] | None) -> list
     return feats
 
 
+def _build_phone_lex_features(phone: str, phone_lexicon) -> list[float]:
+    """28d feature vector from IPA phone lookup in phone_lexicon (V6)."""
+    feats = [0.0] * PHONE_LEX_FEATURE_DIM
+
+    if phone_lexicon is None or not phone:
+        return feats
+
+    entries = phone_lexicon.all_entries(phone) if hasattr(phone_lexicon, 'all_entries') else []
+    if not entries:
+        return feats
+
+    by_ortho: dict[str, dict] = {}
+    for e in entries:
+        key = e["ortho"].lower()
+        if key not in by_ortho or (e.get("freq", 0) or 0) > (by_ortho[key].get("freq", 0) or 0):
+            by_ortho[key] = e
+    unique = list(by_ortho.values())
+    n_cands = len(unique)
+
+    pos_counts: dict[str, float] = {}
+    total_freq = 0.0
+    max_freq = 0.0
+    has_verb = False
+    has_noun_adj = False
+
+    for e in unique:
+        cgram = e.get("cgram", "")
+        freq = e.get("freq", 0) or 0
+        total_freq += freq
+        if freq > max_freq:
+            max_freq = freq
+
+        for i, pos in enumerate(ALL_LEX_POS):
+            if cgram == pos or cgram.startswith(pos + ":") or pos.startswith(cgram + ":"):
+                feats[i] = 1.0
+                pos_counts[pos] = pos_counts.get(pos, 0) + freq
+
+        base = cgram.split(":")[0] if cgram else ""
+        if base in ("VER", "AUX"):
+            has_verb = True
+        if base in ("NOM", "ADJ"):
+            has_noun_adj = True
+
+    feats[21] = 1.0  # is_known
+    feats[22] = min(n_cands / 10.0, 1.0)  # n_candidates normalise
+    feats[23] = 1.0 if n_cands == 1 else 0.0  # is_unambiguous
+    feats[24] = 1.0 if has_verb else 0.0
+    feats[25] = 1.0 if has_noun_adj else 0.0
+
+    if total_freq > 0:
+        feats[26] = max_freq / total_freq  # max_freq_ratio
+    else:
+        feats[26] = 1.0 / n_cands if n_cands > 0 else 0.0
+
+    if pos_counts and total_freq > 0:
+        entropy = 0.0
+        for freq_sum in pos_counts.values():
+            p = freq_sum / total_freq
+            if p > 0:
+                entropy -= p * math.log2(p)
+        feats[27] = min(entropy / 4.39, 1.0)  # pos_entropy
+
+    return feats
+
+
+def _encode_candidate(entry: dict, total_freq: float, max_freq: float) -> list[float]:
+    """Encode une entrée lexique en vecteur 30d (même logique que entrainer_v2)."""
+    feats = [0.0] * CAND_FEAT_DIM
+    cgram = entry.get("cgram", "")
+    for i, pos in enumerate(ALL_LEX_POS):
+        if cgram == pos or cgram.startswith(pos + ":") or pos.startswith(cgram + ":"):
+            feats[i] = 1.0
+    genre = (entry.get("genre") or "").strip()
+    if genre == "m":
+        feats[21] = 1.0
+    elif genre == "f":
+        feats[22] = 1.0
+    else:
+        feats[23] = 1.0
+    nombre = (entry.get("nombre") or "").strip()
+    if nombre == "s":
+        feats[24] = 1.0
+    elif nombre == "p":
+        feats[25] = 1.0
+    else:
+        feats[26] = 1.0
+    freq = entry.get("freq", 0) or 0
+    feats[27] = min(1.0, math.log10(freq + 1) / 5.0)
+    feats[28] = 1.0 if freq >= max_freq and max_freq > 0 else 0.0
+    feats[29] = freq / total_freq if total_freq > 0 else 0.0
+    return feats
+
+
+def _deduplicate_by_ortho(entries: list[dict]) -> list[dict]:
+    """1 entrée par ortho unique (la plus fréquente), triée par freq desc."""
+    by_ortho: dict[str, dict] = {}
+    for e in entries:
+        key = e["ortho"].lower()
+        if key not in by_ortho or (e.get("freq", 0) or 0) > (by_ortho[key].get("freq", 0) or 0):
+            by_ortho[key] = dict(e)
+    return sorted(by_ortho.values(), key=lambda e: -(e.get("freq", 0) or 0))
+
+
 class OnnxInferenceEngineV2:
-    """Inférence ONNX Runtime pour le modèle unifié P2G V2."""
+    """Inférence ONNX Runtime pour le modèle unifié P2G V2/V4."""
 
     def __init__(
         self,
@@ -68,6 +199,7 @@ class OnnxInferenceEngineV2:
         vocab_path: str | Path,
         lexicon_path: str | Path | None = None,
         lexicon: dict[str, list[str]] | None = None,
+        phone_lexicon=None,
     ):
         import onnxruntime as ort
 
@@ -96,6 +228,10 @@ class OnnxInferenceEngineV2:
             self.idx2morpho[feat] = {int(v): k for k, v in vocab.items()}
 
         self.lex_feature_dim = self.config.get("lex_feature_dim", LEX_FEATURE_DIM)
+        # V6 uses phone_lex_features (28d) instead of ortho_lex_features (24d)
+        self.is_v6 = self.lex_feature_dim == PHONE_LEX_FEATURE_DIM
+        if self.is_v6:
+            logger.info("V6 model detected (phone_lex_features, %dd)", self.lex_feature_dim)
 
         if lexicon is not None:
             self.lexicon = lexicon
@@ -105,6 +241,28 @@ class OnnxInferenceEngineV2:
             logger.info("Loaded lexicon: %d words", len(self.lexicon))
         else:
             self.lexicon = None
+
+        # Lex select support (V4)
+        self.phone_lexicon = phone_lexicon
+        output_names = [o.name for o in self.session.get_outputs()]
+        self.has_lex_select = "lex_select_logits" in output_names
+        if self.has_lex_select:
+            logger.info("Lex select head detected in ONNX model")
+            if phone_lexicon is None:
+                logger.warning("Lex select available but no phone_lexicon provided")
+
+        # Detect word_mask support (V5 model)
+        input_names = [i.name for i in self.session.get_inputs()]
+        self.has_word_mask = "word_mask" in input_names
+
+        # UNK word embedding (pour prediction contexte seul)
+        self.unk_word_embedding = data.get("unk_word_embedding")
+
+        # Lex select gating params (V6)
+        if data.get("lex_select_threshold") is not None:
+            self.LEX_SELECT_THRESHOLD = data["lex_select_threshold"]
+        if data.get("lex_select_max_edit") is not None:
+            self.LEX_SELECT_MAX_EDIT = data["lex_select_max_edit"]
 
     def _encode_sentence(
         self, ipa_words: list[str], ortho_words: list[str] | None = None,
@@ -140,10 +298,18 @@ class OnnxInferenceEngineV2:
         ws = np.array([word_starts], dtype=np.int64)
         we = np.array([word_ends], dtype=np.int64)
 
-        # Build lex features from ortho_words (if available and use_lex)
+        # Build lex features
         lex_feats = []
         for w_idx in range(len(ipa_words)):
-            if use_lex and ortho_words and w_idx < len(ortho_words):
+            if not use_lex:
+                lex_feats.append([0.0] * self.lex_feature_dim)
+            elif self.is_v6:
+                # V6: phone_lex_features from IPA lookup
+                lex_feats.append(
+                    _build_phone_lex_features(ipa_words[w_idx], self.phone_lexicon)
+                )
+            elif ortho_words and w_idx < len(ortho_words):
+                # V2-V5: ortho_lex_features from word form
                 lex_feats.append(_build_lex_features(ortho_words[w_idx], self.lexicon))
             else:
                 lex_feats.append([0.0] * self.lex_feature_dim)
@@ -152,9 +318,459 @@ class OnnxInferenceEngineV2:
 
         return char_ids, ws, we, lex_features, chars
 
+    def _build_lex_candidates(
+        self, ipa_words: list[str],
+    ) -> tuple[np.ndarray, np.ndarray, list[list[dict]], list[dict[str, str]]]:
+        """Construit les features candidats pour lex_select.
+
+        Returns:
+            cand_features: (1, n_words, K_MAX, CAND_FEAT_DIM)
+            cand_mask: (1, n_words, K_MAX)
+            candidates_list: pour chaque mot, liste des dicts candidats (dédupliqués)
+            resolved_maps: pour chaque mot, {ortho.lower(): source_phone}
+        """
+        n_words = len(ipa_words)
+        cand_features = np.zeros((1, n_words, K_MAX, CAND_FEAT_DIM), dtype=np.float32)
+        cand_mask = np.zeros((1, n_words, K_MAX), dtype=np.float32)
+        candidates_list: list[list[dict]] = []
+        resolved_maps: list[dict[str, str]] = []
+
+        use_perturbations = (
+            self.phone_lexicon is not None
+            and hasattr(self.phone_lexicon, "all_entries_with_perturbations")
+        )
+
+        for w_idx, phone in enumerate(ipa_words):
+            # D'abord essayer les entrées exactes
+            raw = self.phone_lexicon.all_entries(phone) if self.phone_lexicon and phone else []
+            unique = _deduplicate_by_ortho(raw) if raw else []
+            resolved_map = {e["ortho"].lower(): "exact" for e in unique}
+
+            # Enrichir avec perturbations phonétiques (tolérance o/ɔ, e/ɛ, ə, etc.)
+            # Toujours enrichir (pas seulement en fallback) pour augmenter le pool
+            if use_perturbations and phone:
+                entries_perturbed, perturbed_map = (
+                    self.phone_lexicon.all_entries_with_perturbations(
+                        phone, k_max=K_MAX,
+                    )
+                )
+                if not unique:
+                    # Aucun exact : prendre tout
+                    unique = entries_perturbed
+                    resolved_map = perturbed_map
+                else:
+                    # Ajouter les perturbés non encore présents
+                    existing = {e["ortho"].lower() for e in unique}
+                    for e in entries_perturbed:
+                        key = e["ortho"].lower()
+                        if key not in existing:
+                            unique.append(e)
+                            existing.add(key)
+                            resolved_map[key] = perturbed_map.get(key, "perturbed")
+                    # Re-trier : exact d'abord par freq, puis perturbés par freq
+                    unique.sort(
+                        key=lambda e: (
+                            0 if resolved_map.get(e["ortho"].lower()) == "exact" else 1,
+                            -(e.get("freq", 0) or 0),
+                        )
+                    )
+                    unique = unique[:K_MAX]
+
+            total_freq = sum(e.get("freq", 0) or 0 for e in unique)
+            max_freq = max((e.get("freq", 0) or 0 for e in unique), default=0)
+
+            word_cands = []
+            for k, entry in enumerate(unique[:K_MAX]):
+                cand_features[0, w_idx, k] = _encode_candidate(entry, total_freq, max_freq)
+                cand_mask[0, w_idx, k] = 1.0
+                word_cands.append(entry)
+            candidates_list.append(word_cands)
+            resolved_maps.append(resolved_map)
+
+        return cand_features, cand_mask, candidates_list, resolved_maps
+
+    def _run_session(
+        self, char_ids, word_starts, word_ends, lex_features,
+        lex_cand_features=None, lex_cand_mask=None,
+        word_mask: np.ndarray | None = None,
+    ):
+        """Exécute la session ONNX avec ou sans lex_select/word_mask inputs."""
+        feed = {
+            "char_ids": char_ids,
+            "word_starts": word_starts,
+            "word_ends": word_ends,
+            "lex_features": lex_features,
+        }
+        if self.has_lex_select:
+            if lex_cand_features is not None:
+                feed["lex_cand_features"] = lex_cand_features
+                feed["lex_cand_mask"] = lex_cand_mask
+            else:
+                # Pas de phone_lexicon → zeros (lex_select inactif)
+                n_words = word_starts.shape[1]
+                feed["lex_cand_features"] = np.zeros(
+                    (1, n_words, K_MAX, CAND_FEAT_DIM), dtype=np.float32,
+                )
+                feed["lex_cand_mask"] = np.zeros(
+                    (1, n_words, K_MAX), dtype=np.float32,
+                )
+        if self.has_word_mask:
+            if word_mask is not None:
+                feed["word_mask"] = word_mask
+            else:
+                feed["word_mask"] = np.zeros(
+                    (1, word_starts.shape[1]), dtype=np.float32,
+                )
+
+        outputs = self.session.run(None, feed)
+        output_names = [o.name for o in self.session.get_outputs()]
+        return dict(zip(output_names, outputs))
+
+    @staticmethod
+    def _pos_compatible(pred_pos: str, cand_cgram: str) -> bool:
+        """Vérifie si le POS prédit est compatible avec le cgram du candidat."""
+        if not pred_pos or not cand_cgram:
+            return True
+        if pred_pos == cand_cgram:
+            return True
+        # "VER" matche "VER:ind", "VER:sub", etc.
+        if cand_cgram.startswith(pred_pos + ":"):
+            return True
+        if pred_pos.startswith(cand_cgram + ":"):
+            return True
+        # AUX et VER sont interchangeables (le POS head confond souvent les deux)
+        _verb_tags = {"AUX", "VER"}
+        pred_base = pred_pos.split(":")[0]
+        cand_base = cand_cgram.split(":")[0]
+        if pred_base in _verb_tags and cand_base in _verb_tags:
+            return True
+        return False
+
+    def _morpho_score(self, cand: dict, morpho_preds: dict[str, str]) -> float:
+        """Score de compatibilité morpho entre un candidat et les prédictions.
+
+        Retourne un bonus (0.0 à 1.0) basé sur le nombre de traits morpho
+        compatibles. Chaque trait compatible vaut +1, chaque incompatible -1.
+        Les traits non renseignés (candidat ou prédiction = '_' ou vide) sont ignorés.
+        """
+        score = 0.0
+        checks = 0
+
+        # Number: Sing/Plur vs nombre s/p
+        pred_num = morpho_preds.get("Number", "_")
+        cand_nombre = (cand.get("nombre") or "").strip()
+        if pred_num not in ("_", "") and cand_nombre:
+            checks += 1
+            if (pred_num == "Sing" and "singulier" in cand_nombre) or \
+               (pred_num == "Plur" and "pluriel" in cand_nombre) or \
+               (pred_num == "Sing" and cand_nombre == "s") or \
+               (pred_num == "Plur" and cand_nombre == "p"):
+                score += 1.0
+            else:
+                score -= 1.0
+
+        # Gender: Masc/Fem vs genre m/f
+        pred_gen = morpho_preds.get("Gender", "_")
+        cand_genre = (cand.get("genre") or "").strip()
+        if pred_gen not in ("_", "") and cand_genre:
+            checks += 1
+            if (pred_gen == "Masc" and ("masculin" in cand_genre or cand_genre == "m")) or \
+               (pred_gen == "Fem" and ("feminin" in cand_genre or cand_genre == "f" or "féminin" in cand_genre)):
+                score += 1.0
+            else:
+                score -= 1.0
+
+        # Person: 1/2/3 — pour distinguer ai(1)/est(3), es(2)/est(3)
+        pred_person = morpho_preds.get("Person", "_")
+        cand_ortho = cand.get("ortho", "").lower()
+        cand_cgram = cand.get("cgram", "")
+        if pred_person not in ("_", "") and (
+            cand_cgram in ("AUX", "VER") or
+            (cand_cgram and cand_cgram.startswith(("AUX:", "VER:")))):
+
+            # Heuristiques être/avoir pour les formes courantes
+            person_map = {
+                # être — présent
+                "suis": "1", "es": "2", "est": "3",
+                "sommes": "1", "êtes": "2", "sont": "3",
+                # avoir — présent
+                "ai": "1", "as": "2", "a": "3",
+                "avons": "1", "avez": "2", "ont": "3",
+                # être — imparfait
+                "étais": "1", "était": "3", "étions": "1",
+                "étiez": "2", "étaient": "3",
+                # avoir — imparfait
+                "avais": "1", "avait": "3", "avions": "1",
+                "aviez": "2", "avaient": "3",
+                # être — futur simple
+                "serai": "1", "seras": "2", "sera": "3",
+                "serons": "1", "serez": "2", "seront": "3",
+                # avoir — futur simple
+                "aurai": "1", "auras": "2", "aura": "3",
+                "aurons": "1", "aurez": "2", "auront": "3",
+                # être — conditionnel
+                "serais": "1", "serait": "3",
+                "serions": "1", "seriez": "2", "seraient": "3",
+                # avoir — conditionnel
+                "aurais": "1", "aurait": "3",
+                "aurions": "1", "auriez": "2", "auraient": "3",
+                # être — passé simple
+                "fus": "1", "fut": "3", "fût": "3",
+                "fûmes": "1", "fûtes": "2", "furent": "3",
+                # avoir — passé simple
+                "eus": "1", "eut": "3", "eût": "3",
+                "eûmes": "1", "eûtes": "2", "eurent": "3",
+                # être — subjonctif
+                "sois": "1", "soit": "3", "soient": "3",
+                "soyons": "1", "soyez": "2",
+                # avoir — subjonctif
+                "aie": "1", "ait": "3", "aient": "3",
+                "ayons": "1", "ayez": "2",
+                # aller — présent (auxiliaire fréquent)
+                "vais": "1", "vas": "2", "va": "3",
+                "allons": "1", "allez": "2", "vont": "3",
+                # faire — présent
+                "fais": "1", "fait": "3",
+                "faisons": "1", "faites": "2", "font": "3",
+                # pouvoir — présent
+                "peux": "1", "peut": "3",
+                "pouvons": "1", "pouvez": "2", "peuvent": "3",
+                # vouloir — présent
+                "veux": "1", "veut": "3",
+                "voulons": "1", "voulez": "2", "veulent": "3",
+                # devoir — présent
+                "dois": "1", "doit": "3",
+                "devons": "1", "devez": "2", "doivent": "3",
+            }
+            cand_person = person_map.get(cand_ortho)
+            if cand_person:
+                checks += 1
+                if cand_person == pred_person:
+                    score += 1.0
+                else:
+                    score -= 1.0
+
+        # Mood: Ind/Sub/Cond — pour distinguer est(Ind) de ait(Sub)
+        pred_mood = morpho_preds.get("Mood", "_")
+        if pred_mood not in ("_", "") and (
+            cand_cgram in ("AUX", "VER") or
+            (cand_cgram and cand_cgram.startswith(("AUX:", "VER:")))):
+
+            mood_map = {
+                # Indicatif présent être/avoir
+                "est": "Ind", "suis": "Ind", "es": "Ind",
+                "sommes": "Ind", "êtes": "Ind", "sont": "Ind",
+                "ai": "Ind", "as": "Ind", "a": "Ind",
+                "avons": "Ind", "avez": "Ind", "ont": "Ind",
+                # Indicatif imparfait
+                "étais": "Ind", "était": "Ind", "étions": "Ind",
+                "étiez": "Ind", "étaient": "Ind",
+                "avais": "Ind", "avait": "Ind", "avions": "Ind",
+                "aviez": "Ind", "avaient": "Ind",
+                # Indicatif futur
+                "serai": "Ind", "seras": "Ind", "sera": "Ind",
+                "serons": "Ind", "serez": "Ind", "seront": "Ind",
+                "aurai": "Ind", "auras": "Ind", "aura": "Ind",
+                "aurons": "Ind", "aurez": "Ind", "auront": "Ind",
+                # Conditionnel
+                "serais": "Cnd", "serait": "Cnd",
+                "serions": "Cnd", "seriez": "Cnd", "seraient": "Cnd",
+                "aurais": "Cnd", "aurait": "Cnd",
+                "aurions": "Cnd", "auriez": "Cnd", "auraient": "Cnd",
+                # Subjonctif
+                "sois": "Sub", "soit": "Sub", "soient": "Sub",
+                "soyons": "Sub", "soyez": "Sub",
+                "aie": "Sub", "ait": "Sub", "aient": "Sub",
+                "ayons": "Sub", "ayez": "Sub",
+                # Indicatif passé simple
+                "fus": "Ind", "fut": "Ind", "fût": "Sub",
+                "furent": "Ind",
+                "eus": "Ind", "eut": "Ind", "eût": "Sub",
+                "eurent": "Ind",
+            }
+            cand_mood = mood_map.get(cand_ortho)
+            if cand_mood:
+                checks += 1
+                if cand_mood == pred_mood:
+                    score += 1.0
+                else:
+                    score -= 1.0
+
+        return score if checks > 0 else 0.0
+
+    # Parametres lex_select (V6)
+    LEX_SELECT_THRESHOLD = 0.95   # seuil softmax minimum pour remplacer
+    LEX_SELECT_MAX_EDIT = 2       # edit distance max entre P2G et candidat
+
+    # Seuil de confiance plus haut quand le P2G brut existe dans le lexique
+    LEX_SELECT_THRESHOLD_SAFE = 0.99
+
+    # Ratio de frequence max : ne pas remplacer un mot frequent par un mot rare
+    LEX_SELECT_FREQ_RATIO = 5.0
+
+    # Paires d'homophones grammaticaux que lex_select ne doit pas substituer
+    # (c'est le role du POS, pas du lexique phonetique)
+    _LEX_SELECT_BLACKLIST = frozenset({
+        ("est", "ai"), ("ai", "est"), ("est", "et"), ("et", "est"),
+        ("a", "à"), ("à", "a"),
+        ("ou", "où"), ("où", "ou"),
+        ("son", "sont"), ("sont", "son"),
+        ("on", "ont"), ("ont", "on"),
+        ("ses", "ces"), ("ces", "ses"),
+        ("se", "ce"), ("ce", "se"),
+        ("leur", "leurs"), ("leurs", "leur"),
+    })
+
+    def _apply_lex_select(
+        self, output_dict, word_starts, n_words, candidates_list, ortho_results,
+        ipa_words: list[str] | None = None,
+    ) -> list[str]:
+        """Remplace les résultats P2G par le candidat lex_select quand disponible.
+
+        V6 (native POS/morpho): remplacement conditionné par confiance (softmax)
+        et proximité (edit distance). Seuls les candidats proches du P2G brut
+        avec une confiance élevée sont appliqués.
+
+        Gardes supplementaires (V6) :
+        - Blacklist d'homophones grammaticaux (est/et, a/à, etc.)
+        - Garde de frequence : ne pas remplacer un mot frequent par un mot rare
+        - Seuil adaptatif : confiance plus haute si le P2G brut est dans le lexique
+
+        V2-V5 (post-hoc): filtre POS + re-rank morpho + safety check fréquence.
+        """
+        if "lex_select_logits" not in output_dict or not candidates_list:
+            return ortho_results
+
+        lex_logits = output_dict["lex_select_logits"][0]  # (W, K)
+
+        # V6: confiance + edit distance filter + gardes
+        if self.is_v6:
+            result = list(ortho_results)
+            for w in range(n_words):
+                cands = candidates_list[w]
+                if not cands:
+                    continue
+                logits_w = lex_logits[w, :len(cands)]
+                # Softmax pour confiance
+                exp_l = np.exp(logits_w - logits_w.max())
+                probs = exp_l / exp_l.sum()
+                best_k = int(np.argmax(probs))
+                confidence = float(probs[best_k])
+                cand_ortho = cands[best_k].get("ortho", "")
+                if not cand_ortho or cand_ortho.startswith("-"):
+                    continue
+                if cand_ortho == result[w]:
+                    continue  # deja identique
+
+                # ── Garde blacklist : homophones grammaticaux ──
+                pair = (result[w].lower(), cand_ortho.lower())
+                if pair in self._LEX_SELECT_BLACKLIST:
+                    continue
+
+                # ── Garde de frequence : ne pas remplacer un mot frequent
+                #    par un mot rare si le P2G brut existe dans le lexique ──
+                brut_in_lexicon = False
+                if self.phone_lexicon and ipa_words and w < len(ipa_words):
+                    phone = ipa_words[w]
+                    brut_freq = self.phone_lexicon.best_freq(phone)
+                    if brut_freq > 0:
+                        # Le phone est connu : verifier si le P2G brut correspond
+                        # a une entree frequente
+                        brut_ortho_best = self.phone_lexicon.best_ortho(phone)
+                        if brut_ortho_best and brut_ortho_best.lower() == result[w].lower():
+                            brut_in_lexicon = True
+                            cand_freq = cands[best_k].get("freq", 0) or 0
+                            if cand_freq > 0 and brut_freq / cand_freq > self.LEX_SELECT_FREQ_RATIO:
+                                continue
+
+                # ── Seuil adaptatif : confiance plus haute si P2G brut est
+                #    dans le lexique (on est plus conservateur) ──
+                threshold = self.LEX_SELECT_THRESHOLD
+                if brut_in_lexicon:
+                    threshold = self.LEX_SELECT_THRESHOLD_SAFE
+
+                if confidence < threshold:
+                    continue
+
+                # Edit distance entre P2G brut et candidat
+                ed = _edit_distance(result[w].lower(), cand_ortho.lower())
+                if ed <= self.LEX_SELECT_MAX_EDIT:
+                    result[w] = cand_ortho
+            return result
+
+        # POS predictions with confidence
+        pos_preds = None
+        pos_conf = None  # confiance par mot (max softmax)
+        if "pos_logits" in output_dict:
+            pos_logits_raw = output_dict["pos_logits"][0]  # (W, n_pos)
+            pos_preds = pos_logits_raw.argmax(axis=-1)
+            # Softmax pour confiance
+            exp_l = np.exp(pos_logits_raw - pos_logits_raw.max(axis=-1, keepdims=True))
+            pos_probs = exp_l / exp_l.sum(axis=-1, keepdims=True)
+            pos_conf = pos_probs.max(axis=-1)  # (W,)
+
+        # Morpho predictions
+        morpho_preds_per_word: list[dict[str, str]] = []
+        for w in range(n_words):
+            mp: dict[str, str] = {}
+            for feat_name, idx2label in self.idx2morpho.items():
+                key = f"morpho_{feat_name}_logits"
+                if key in output_dict:
+                    pred_idx = int(output_dict[key][0][w].argmax())
+                    mp[feat_name] = idx2label.get(pred_idx, "_")
+            morpho_preds_per_word.append(mp)
+
+        MORPHO_WEIGHT = 10.0  # Poids du bonus morpho vs logits bruts
+        FREQ_SAFETY_RATIO = 20  # Si le candidat filtré est N× moins fréquent que le meilleur, fallback
+
+        result = list(ortho_results)
+        for w in range(n_words):
+            cands = candidates_list[w]
+            if not cands:
+                continue
+            logits_w = lex_logits[w, :len(cands)]
+            morpho_w = morpho_preds_per_word[w]
+
+            # Meilleur candidat sans filtre (référence pour safety check)
+            best_k_raw = int(np.argmax(logits_w))
+            freq_best_raw = cands[best_k_raw].get("freq", 0) or 0
+
+            # Étape 1 : filtre POS + re-rank morpho
+            # N'appliquer le filtre POS que si confiance > 40%
+            POS_CONF_THRESHOLD = 0.40
+            if pos_preds is not None and (pos_conf is None or pos_conf[w] >= POS_CONF_THRESHOLD):
+                pred_pos = self.idx2pos.get(int(pos_preds[w]), "")
+                compatible = []
+                for k, cand in enumerate(cands):
+                    # Exclure les formes suffixées (-il, -ils, -on, etc.)
+                    if cand.get("ortho", "").startswith("-"):
+                        continue
+                    if self._pos_compatible(pred_pos, cand.get("cgram", "")):
+                        m_score = self._morpho_score(cand, morpho_w)
+                        combined = float(logits_w[k]) + m_score * MORPHO_WEIGHT
+                        compatible.append((k, combined))
+
+                if compatible:
+                    best_k = max(compatible, key=lambda x: x[1])[0]
+                    freq_filtered = cands[best_k].get("freq", 0) or 0
+
+                    # Safety : si le candidat filtré est beaucoup plus rare
+                    # que le meilleur brut, le POS est probablement faux
+                    if freq_best_raw > 0 and freq_filtered > 0 and \
+                       freq_best_raw / freq_filtered > FREQ_SAFETY_RATIO:
+                        result[w] = cands[best_k_raw]["ortho"]
+                    else:
+                        result[w] = cands[best_k]["ortho"]
+                    continue
+
+            # Fallback : argmax sans filtre
+            result[w] = cands[best_k_raw]["ortho"]
+        return result
+
     def analyser(
         self, ipa_words: list[str], ortho_words: list[str] | None = None,
         *, use_lex: bool = True,
+        word_mask: list[bool] | None = None,
     ) -> dict[str, Any]:
         """API V1-compatible.
 
@@ -162,6 +778,8 @@ class OnnxInferenceEngineV2:
             ipa_words: Mots IPA.
             ortho_words: Mots orthographiques pour lookup lexique (optionnel).
             use_lex: Si True (defaut), utilise les features lexicales.
+            word_mask: Liste de booleans (un par mot). True = mot masque
+                       (prediction contexte seul). None = pas de masque.
         """
         if not ipa_words:
             return {"ipa_words": [], "ortho": [], "pos": [], "morpho": {}}
@@ -170,21 +788,24 @@ class OnnxInferenceEngineV2:
             ipa_words, ortho_words, use_lex=use_lex,
         )
 
-        outputs = self.session.run(
-            None,
-            {
-                "char_ids": char_ids,
-                "word_starts": word_starts,
-                "word_ends": word_ends,
-                "lex_features": lex_features,
-            },
-        )
+        wm = None
+        if word_mask is not None:
+            wm = np.array([[1.0 if m else 0.0 for m in word_mask]], dtype=np.float32)
 
-        output_names = [o.name for o in self.session.get_outputs()]
-        output_dict = dict(zip(output_names, outputs))
+        # Build lex candidates if lex_select available
+        lex_cand_features = lex_cand_mask = None
+        candidates_list = None
+        resolved_maps = None
+        if self.has_lex_select and self.phone_lexicon is not None:
+            lex_cand_features, lex_cand_mask, candidates_list, resolved_maps = self._build_lex_candidates(ipa_words)
+
+        output_dict = self._run_session(
+            char_ids, word_starts, word_ends, lex_features,
+            lex_cand_features, lex_cand_mask, word_mask=wm,
+        )
         n_words = len(ipa_words)
 
-        # P2G
+        # P2G (char-level fallback)
         p2g_logits = output_dict["p2g_logits"]
         p2g_preds = p2g_logits[0].argmax(axis=-1)
         ortho_results = []
@@ -194,6 +815,12 @@ class OnnxInferenceEngineV2:
             word_labels = [self.idx2p2g.get(int(p2g_preds[i]), "_CONT") for i in range(ws, we + 1)]
             ortho = reconstruct_ortho(word_labels)
             ortho_results.append(ortho)
+
+        # Apply lex_select (overrides P2G for words with candidates)
+        if candidates_list is not None:
+            ortho_results = self._apply_lex_select(
+                output_dict, word_starts, n_words, candidates_list, ortho_results,
+                ipa_words=ipa_words)
 
         # POS
         pos_results = []
@@ -226,6 +853,7 @@ class OnnxInferenceEngineV2:
         top_k: int = 3,
         *,
         use_lex: bool = True,
+        word_mask: list[bool] | None = None,
     ) -> dict[str, Any]:
         """API V2 : comme analyser() + top-K POS/Morpho avec scores."""
         if not ipa_words:
@@ -238,18 +866,21 @@ class OnnxInferenceEngineV2:
             ipa_words, ortho_words, use_lex=use_lex,
         )
 
-        outputs = self.session.run(
-            None,
-            {
-                "char_ids": char_ids,
-                "word_starts": word_starts,
-                "word_ends": word_ends,
-                "lex_features": lex_features,
-            },
-        )
+        wm = None
+        if word_mask is not None:
+            wm = np.array([[1.0 if m else 0.0 for m in word_mask]], dtype=np.float32)
 
-        output_names = [o.name for o in self.session.get_outputs()]
-        output_dict = dict(zip(output_names, outputs))
+        # Build lex candidates if lex_select available
+        lex_cand_features = lex_cand_mask = None
+        candidates_list = None
+        resolved_maps = None
+        if self.has_lex_select and self.phone_lexicon is not None:
+            lex_cand_features, lex_cand_mask, candidates_list, resolved_maps = self._build_lex_candidates(ipa_words)
+
+        output_dict = self._run_session(
+            char_ids, word_starts, word_ends, lex_features,
+            lex_cand_features, lex_cand_mask, word_mask=wm,
+        )
         n_words = len(ipa_words)
 
         # P2G (standard)
@@ -261,6 +892,12 @@ class OnnxInferenceEngineV2:
             we = word_ends[0, w]
             word_labels = [self.idx2p2g.get(int(p2g_preds[i]), "_CONT") for i in range(ws, we + 1)]
             ortho_results.append(reconstruct_ortho(word_labels))
+
+        # Apply lex_select
+        if candidates_list is not None:
+            ortho_results = self._apply_lex_select(
+                output_dict, word_starts, n_words, candidates_list, ortho_results,
+                ipa_words=ipa_words)
 
         # POS with top-K
         pos_results = []
@@ -310,6 +947,26 @@ class OnnxInferenceEngineV2:
             morpho_results[feat_name] = feat_results
             morpho_scores[feat_name] = feat_scores_list
 
+        # Lex-select candidates avec confiance (pour post-traitement)
+        lex_candidates: list[list[tuple[str, float]]] = []
+        if candidates_list is not None and "lex_select_logits" in output_dict:
+            lex_logits = output_dict["lex_select_logits"][0]
+            for w in range(n_words):
+                cands = candidates_list[w]
+                if not cands:
+                    lex_candidates.append([])
+                    continue
+                logits_w = lex_logits[w, :len(cands)]
+                exp_l = np.exp(logits_w - logits_w.max())
+                probs = exp_l / exp_l.sum()
+                word_cands = [
+                    (c.get("ortho", ""), float(probs[k]))
+                    for k, c in enumerate(cands)
+                    if c.get("ortho", "") and not c["ortho"].startswith("-")
+                ]
+                word_cands.sort(key=lambda x: -x[1])
+                lex_candidates.append(word_cands)
+
         return {
             "ipa_words": ipa_words,
             "ortho": ortho_results,
@@ -318,6 +975,7 @@ class OnnxInferenceEngineV2:
             "pos_scores": pos_scores,
             "morpho_scores": morpho_scores,
             "confiance_pos": confiance_pos,
+            "lex_candidates": lex_candidates,
         }
 
     def analyser_avec_alternatives(
@@ -327,6 +985,7 @@ class OnnxInferenceEngineV2:
         k: int = 5,
         *,
         use_lex: bool = True,
+        word_mask: list[bool] | None = None,
     ) -> dict[str, Any]:
         """Retourne alternatives P2G + top-K POS/Morpho.
 
@@ -344,18 +1003,21 @@ class OnnxInferenceEngineV2:
             ipa_words, ortho_words, use_lex=use_lex,
         )
 
-        outputs = self.session.run(
-            None,
-            {
-                "char_ids": char_ids,
-                "word_starts": word_starts,
-                "word_ends": word_ends,
-                "lex_features": lex_features,
-            },
-        )
+        wm = None
+        if word_mask is not None:
+            wm = np.array([[1.0 if m else 0.0 for m in word_mask]], dtype=np.float32)
 
-        output_names = [o.name for o in self.session.get_outputs()]
-        output_dict = dict(zip(output_names, outputs))
+        # Build lex candidates if lex_select available
+        lex_cand_features = lex_cand_mask = None
+        candidates_list = None
+        resolved_maps = None
+        if self.has_lex_select and self.phone_lexicon is not None:
+            lex_cand_features, lex_cand_mask, candidates_list, resolved_maps = self._build_lex_candidates(ipa_words)
+
+        output_dict = self._run_session(
+            char_ids, word_starts, word_ends, lex_features,
+            lex_cand_features, lex_cand_mask, word_mask=wm,
+        )
         n_words = len(ipa_words)
         p2g_logits = output_dict["p2g_logits"]
 
@@ -418,6 +1080,12 @@ class OnnxInferenceEngineV2:
                     seen.add(ortho)
                     unique_alts.append((ortho, score))
             alternatives_results.append(unique_alts[:k])
+
+        # Apply lex_select (overrides P2G top1 for words with candidates)
+        if candidates_list is not None:
+            ortho_results = self._apply_lex_select(
+                output_dict, word_starts, n_words, candidates_list, ortho_results,
+                ipa_words=ipa_words)
 
         # POS with top-K
         pos_results = []

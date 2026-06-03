@@ -12,6 +12,8 @@ from lectura_correcteur.grammaire._donnees import (
     AUXILIAIRES,
     ETRE_FORMES,
     MODAUX_FORMES,
+    PRONOM_GENRE,
+    analyser_inversion,
     generer_candidats_participe,
     generer_candidats_pp_accorde,
     trouver_sujet_genre_nombre,
@@ -79,6 +81,7 @@ def verifier_participes_passes(
         aller_found = False
         prep_inf_found = False
         ver_found = False
+        ver_idx = -1
         _PREP_INF = frozenset({
             "pour", "sans", "afin", "à", "d'", "d\u2019",
         })
@@ -98,6 +101,25 @@ def verifier_participes_passes(
             if w in _PREP_INF:
                 prep_inf_found = True
                 break
+            # Inversion interrogative : "A-t-il manger" → aux "a"
+            _inv_pp = analyser_inversion(result[j])
+            if _inv_pp is not None:
+                _inv_verbe_low = _inv_pp[0].lower()
+                if _inv_verbe_low in AUXILIAIRES:
+                    aux_found = True
+                    aux_word = _inv_verbe_low
+                    aux_idx = j
+                    break
+                if _inv_verbe_low in MODAUX_FORMES:
+                    modal_found = True
+                    break
+                if _inv_verbe_low in ALLER_FORMES:
+                    aller_found = True
+                    break
+                # Verbe conjugue non-aux → le suivant doit etre INF
+                ver_found = True
+                ver_idx = j
+                break
             if w not in _TRANSPARENTS:
                 # Verbe conjugue (non-aux/modal/aller) : le suivant
                 # doit etre a l'infinitif, jamais au PP
@@ -112,6 +134,7 @@ def verifier_participes_passes(
                             _ver_after_det = True
                     if not _ver_after_det:
                         ver_found = True
+                        ver_idx = j
                 break
 
         # --- Regle 1 : AUX + infinitif -> PP ---
@@ -119,9 +142,12 @@ def verifier_participes_passes(
             # Guard R1-prep-a: "a" en debut de phrase = preposition "à"
             # "A noter que" = "À noter que" (correct), pas "a noté que"
             # "A partir de" = "À partir de" (correct), pas "a parti de"
+            # Exception: inversion "A-t-il" → "a" est clairement un auxiliaire
             _skip_r1_prep_a = False
             if aux_word.lower() == "a" and aux_idx == 0:
-                _skip_r1_prep_a = True
+                _is_inv_aux = analyser_inversion(result[aux_idx]) is not None
+                if not _is_inv_aux:
+                    _skip_r1_prep_a = True
             # Guard R1: si la forme -er est principalement NOM/ADJ dans
             # le lexique, c'est probablement un nom/adj, pas un infinitif
             # ("a été conseiller culturel" = NOM, pas "a été conseillé")
@@ -142,7 +168,34 @@ def verifier_participes_passes(
                             _skip_r1_nom = False
                         else:
                             _skip_r1_nom = True
-            if not _skip_r1_nom and not _skip_r1_prep_a:
+            # Guard R1-copule: c'est/c'etait + INF = copule, pas auxiliaire
+            # "c'est accepter", "c'etait franchir"
+            _skip_r1_copule = False
+            if aux_word in ETRE_FORMES and aux_idx >= 1:
+                _before_aux = result[aux_idx - 1].lower()
+                if _before_aux in ("c'", "c\u2019", "ce"):
+                    _skip_r1_copule = True
+            # Guard R1-perception: verbe de perception + NOM + INF
+            # "sentit le sol tanguer", "vu l'eau monter"
+            _skip_r1_perception = False
+            _PERCEPTION = frozenset({
+                "sent", "sentit", "sentis", "senti", "sentie",
+                "sentait", "sentaient", "sentant",
+                "voit", "vit", "voyait", "voyaient", "vu", "vue", "vus", "vues",
+                "entend", "entendit", "entendait", "entendu", "entendue",
+                "regarde", "regardait", "regardé", "regardée",
+                "écoute", "écoutait", "écouté",
+                "laisse", "laissait", "laissé", "laissée", "laissant",
+            })
+            for _jp in range(aux_idx - 1, max(-1, aux_idx - 4), -1):
+                _wp = result[_jp].lower()
+                if _wp in _PERCEPTION:
+                    _skip_r1_perception = True
+                    break
+                _wp_pos = pos_tags[_jp] if _jp < len(pos_tags) else ""
+                if _wp_pos not in ("NOM", "ART", "DET", "ADJ", "PRO:per", ""):
+                    break
+            if not _skip_r1_nom and not _skip_r1_prep_a and not _skip_r1_copule and not _skip_r1_perception:
                 candidats = generer_candidats_participe(curr)
                 # Check if the -er form is a known verb (allows low-freq PP)
                 _er_is_verb = False
@@ -182,7 +235,14 @@ def verifier_participes_passes(
         # "a sonne" -> "a sonné", "a prépare" -> "a préparé"
         # Elargie : au lieu d'exclure par suffixe, verifier dans le lexique
         # si le candidat PP existe.
-        if aux_found and (pos == "VER" or curr_low.endswith(_PP_SUFFIXES)):
+        # Guard: "n'importe" = expression figee
+        # "n'importe quoi/quel/qui/ou/comment" est correct
+        _skip_nimporte = False
+        if curr_low == "importe" and i >= 1:
+            _prev_ni = result[i - 1].lower()
+            if _prev_ni in ("n'", "n\u2019"):
+                _skip_nimporte = True
+        if aux_found and (pos == "VER" or curr_low.endswith(_PP_SUFFIXES)) and not _skip_nimporte:
             if (
                 curr_low.endswith("e")
                 and not curr_low.endswith(("ee", "er", "ée", "ue", "ie"))
@@ -280,15 +340,28 @@ def verifier_participes_passes(
         # "pour participé" → "pour participer", "sans hésité" → "sans hésiter"
         # "destinée à restée" → "destinée à rester"
         if prep_inf_found and not curr_low.endswith("er"):
+            # Guard: PP est aussi NOM frequent dans le lexique
+            # "a portee de main" → "portee" est NOM, pas PP a convertir
+            _skip_r4c_nom = False
+            if lexique is not None:
+                _r4c_infos = lexique.info(curr_low)
+                if _r4c_infos and any(e.get("cgram") == "NOM" for e in _r4c_infos):
+                    _r4c_nom_freq = max(
+                        (float(e.get("freq") or 0) for e in _r4c_infos if e.get("cgram") == "NOM"),
+                        default=0.0,
+                    )
+                    if _r4c_nom_freq > 1.0:
+                        _skip_r4c_nom = True
             candidate = None
-            if curr_low.endswith("ées"):
-                candidate = curr_low[:-3] + "er"
-            elif curr_low.endswith("és"):
-                candidate = curr_low[:-2] + "er"
-            elif curr_low.endswith("ée"):
-                candidate = curr_low[:-2] + "er"
-            elif curr_low.endswith("é"):
-                candidate = curr_low[:-1] + "er"
+            if not _skip_r4c_nom:
+                if curr_low.endswith("ées"):
+                    candidate = curr_low[:-3] + "er"
+                elif curr_low.endswith("és"):
+                    candidate = curr_low[:-2] + "er"
+                elif curr_low.endswith("ée"):
+                    candidate = curr_low[:-2] + "er"
+                elif curr_low.endswith("é"):
+                    candidate = curr_low[:-1] + "er"
             if candidate and (lexique is None or lexique.existe(candidate)):
                 ancien = result[i]
                 result[i] = transferer_casse(curr, candidate)
@@ -321,8 +394,18 @@ def verifier_participes_passes(
                 and (pos_tags[i - 1] if i - 1 < len(pos_tags) else "")
                 == "PRE"
             )
+            # Guard: si le verbe est a plus de 3 positions ET le mot i-1 est
+            # NOM/ADJ/virgule, c'est probablement une apposition, pas un
+            # complement verbal ("donnees classifiees", "acte delibere, assume")
+            _ver_distance = i - ver_idx if ver_idx >= 0 else 0
+            _prev_pos_4d = pos_tags[i - 1] if 0 < i <= len(pos_tags) else ""
+            _apposition_4d = False
+            if _ver_distance > 3 and _prev_pos_4d in ("NOM", "ADJ", "", "?"):
+                _apposition_4d = True
+            if i > 0 and result[i - 1] == ",":
+                _apposition_4d = True
             candidate = None
-            if not _next_is_par and not _after_prep_4d:
+            if not _next_is_par and not _after_prep_4d and not _apposition_4d:
                 if curr_low.endswith("ées"):
                     candidate = curr_low[:-3] + "er"
                 elif curr_low.endswith("és"):
@@ -364,34 +447,57 @@ def verifier_participes_passes(
             "motus", "couscous", "campus", "bonus", "cactus",
         })
         if aux_found and aux_word not in ETRE_FORMES and not _ete_between and lexique is not None and curr_low not in _NOT_PP_4B:
+            # Guard: COD antepose → l'accord du PP est correct
+            _cod_antepose = False
+            if aux_idx >= 0:
+                for _jc in range(aux_idx - 1, max(-1, aux_idx - 4), -1):
+                    _wc = result[_jc].lower()
+                    # Pronoms COD
+                    if _wc in ("le", "la", "l'", "l\u2019", "les"):
+                        _cod_antepose = True
+                        break
+                    # Pronom relatif "que"
+                    if _wc in ("que", "qu'", "qu\u2019"):
+                        _cod_antepose = True
+                        break
+                    # Pronom reflexif (verbes pronominaux transitifs)
+                    if _wc in ("se", "s'", "s\u2019", "me", "m'", "m\u2019",
+                                "te", "t'", "t\u2019"):
+                        _cod_antepose = True
+                        break
+                    # Clitiques transparents (ne, y, en, lui)
+                    if _wc not in ("ne", "n'", "n\u2019", "y", "en",
+                                    "lui", "nous", "vous"):
+                        break
             _accorde_pp = False
             _pp_base = ""
-            # Feminine forms → masculine singular
-            if curr_low.endswith("\xe9e") and not curr_low.endswith("er"):
-                _pp_base = curr_low[:-1]  # -ée → -é
-                _accorde_pp = True
-            elif curr_low.endswith("ie") and not curr_low.endswith(("rie", "lie", "nie", "sie", "tie")):
-                _pp_base = curr_low[:-1]  # -ie → -i
-                _accorde_pp = True
-            elif curr_low.endswith("ue") and not curr_low.endswith(("que", "gue")):
-                _pp_base = curr_low[:-1]  # -ue → -u
-                _accorde_pp = True
-            elif curr_low.endswith("\xe9es"):
-                _pp_base = curr_low[:-2]  # -ées → -é
-                _accorde_pp = True
-            elif curr_low.endswith("ies") and not curr_low.endswith("ries"):
-                _pp_base = curr_low[:-2]  # -ies → -i
-                _accorde_pp = True
-            # Masculine plural forms → masculine singular
-            elif curr_low.endswith("\xe9s") and len(curr_low) > 3:
-                _pp_base = curr_low[:-1]  # -és → -é
-                _accorde_pp = True
-            elif curr_low.endswith("us") and not curr_low.endswith(("ous", "nus")):
-                _pp_base = curr_low[:-1]  # -us → -u (eus→eu, reçus→reçu)
-                _accorde_pp = True
-            elif curr_low.endswith("is") and len(curr_low) > 3 and not curr_low.endswith(("ois", "ais")):
-                _pp_base = curr_low[:-1]  # -is → -i (partis→parti)
-                _accorde_pp = True
+            if not _cod_antepose:
+                # Feminine forms → masculine singular
+                if curr_low.endswith("\xe9e") and not curr_low.endswith("er"):
+                    _pp_base = curr_low[:-1]  # -ée → -é
+                    _accorde_pp = True
+                elif curr_low.endswith("ie") and not curr_low.endswith(("rie", "lie", "nie", "sie", "tie")):
+                    _pp_base = curr_low[:-1]  # -ie → -i
+                    _accorde_pp = True
+                elif curr_low.endswith("ue") and not curr_low.endswith(("que", "gue")):
+                    _pp_base = curr_low[:-1]  # -ue → -u
+                    _accorde_pp = True
+                elif curr_low.endswith("\xe9es"):
+                    _pp_base = curr_low[:-2]  # -ées → -é
+                    _accorde_pp = True
+                elif curr_low.endswith("ies") and not curr_low.endswith("ries"):
+                    _pp_base = curr_low[:-2]  # -ies → -i
+                    _accorde_pp = True
+                # Masculine plural forms → masculine singular
+                elif curr_low.endswith("\xe9s") and len(curr_low) > 3:
+                    _pp_base = curr_low[:-1]  # -és → -é
+                    _accorde_pp = True
+                elif curr_low.endswith("us") and not curr_low.endswith(("ous", "nus")):
+                    _pp_base = curr_low[:-1]  # -us → -u (eus→eu, reçus→reçu)
+                    _accorde_pp = True
+                elif curr_low.endswith("is") and len(curr_low) > 3 and not curr_low.endswith(("ois", "ais")):
+                    _pp_base = curr_low[:-1]  # -is → -i (partis→parti)
+                    _accorde_pp = True
             if _accorde_pp and _pp_base:
                 _base_infos = lexique.info(_pp_base)
                 if _base_infos and any(
@@ -448,6 +554,15 @@ def verifier_participes_passes(
                 for e in _er_infos
             ):
                 _skip_r567 = True
+            # Guard: -er form must have a VER entry to be an infinitive
+            # (hier=ADV, not VER → skip)
+            if not _skip_r567:
+                _has_ver_r567 = any(
+                    e.get("cgram") in ("VER", "AUX")
+                    for e in _er_infos
+                )
+                if not _has_ver_r567:
+                    _skip_r567 = True
             # Guard: next word is all-caps SIGLE → foreign/technical
             # "le user ID", "le master CPU" → not French -er verb
             if not _skip_r567 and i + 1 < n:
@@ -871,12 +986,25 @@ def verifier_pp_accord_etre(
         etre_found = False
         etre_idx = -1
         _subject_anchor = -1
+        _inversion_gn: tuple[str, str] | None = None  # genre/nombre du pronom inverse
         for j in range(i - 1, max(-1, i - 5), -1):
             w = result[j].lower()
             if w in ETRE_FORMES:
                 etre_found = True
                 etre_idx = j
                 _subject_anchor = j
+                break
+            # Inversion interrogative : "Est-elle allé" → etre + pronom
+            _inv_etre = analyser_inversion(result[j])
+            if _inv_etre is not None:
+                _inv_v_low = _inv_etre[0].lower()
+                if _inv_v_low in ETRE_FORMES:
+                    etre_found = True
+                    etre_idx = j
+                    _subject_anchor = j
+                    _inversion_gn = PRONOM_GENRE.get(_inv_etre[1].lower())
+                    break
+                # Pas une forme d'etre → pas un contexte PP-etre
                 break
             # Compose "a été" : "été" n'est pas dans ETRE_FORMES
             # mais forme le passif compose avec avoir.
@@ -917,16 +1045,23 @@ def verifier_pp_accord_etre(
                     continue
 
         # Trouver le genre/nombre du sujet
-        # Inclure ADJ car des noms substantives (commune, adversaire)
-        # sont souvent tagues ADJ par le lexique
-        gn = trouver_sujet_genre_nombre(
-            result, pos_tags, morpho, _subject_anchor, lexique,
-            pos_nominaux=("NOM", "NOM PROPRE", "ADJ", "ADJ:pos"),
-        )
+        if _inversion_gn is not None:
+            # Inversion interrogative : le pronom embarque donne le g/n
+            gn = _inversion_gn
+        else:
+            # Inclure ADJ car des noms substantives (commune, adversaire)
+            # sont souvent tagues ADJ par le lexique
+            gn = trouver_sujet_genre_nombre(
+                result, pos_tags, morpho, _subject_anchor, lexique,
+                pos_nominaux=("NOM", "NOM PROPRE", "ADJ", "ADJ:pos"),
+            )
 
         # Guard: override nombre avec la forme d'etre (plus fiable)
         # "sont" = pluriel, "est/fut/sera" = singulier
-        _etre_word = result[etre_idx].lower()
+        # Pour les inversions, extraire la partie verbe du token
+        _etre_raw = result[etre_idx].lower()
+        _inv_etre_check = analyser_inversion(result[etre_idx])
+        _etre_word = _inv_etre_check[0].lower() if _inv_etre_check else _etre_raw
         _ETRE_PLUR = frozenset({
             "sont", "seront", "soient", "furent",
             "seraient", "serions", "seriez", "serez",
@@ -949,11 +1084,13 @@ def verifier_pp_accord_etre(
                 or (curr_low.endswith("i") and not curr_low.endswith(("ie", "is")))
                 or (curr_low.endswith("u") and not curr_low.endswith(("ue", "us")))
             )
-            _orig_etre = (
+            _orig_etre_raw = (
                 originaux[etre_idx].lower()
                 if originaux and etre_idx < len(originaux)
                 else _etre_word
             )
+            _inv_orig = analyser_inversion(_orig_etre_raw) if "-" in _orig_etre_raw else None
+            _orig_etre = _inv_orig[0].lower() if _inv_orig else _orig_etre_raw
             if _etre_word in _ETRE_PLUR and _pp_base and _orig_etre in _ETRE_PLUR:
                 gn = ("Masc", "Plur")
             else:
@@ -967,7 +1104,7 @@ def verifier_pp_accord_etre(
 
         # Determiner si le sujet est un pronom (detection fiable)
         # ou un NOM precede d'un article genrant (detection assez fiable)
-        _subject_is_pronoun = False
+        _subject_is_pronoun = _inversion_gn is not None  # inversion = pronom fiable
         _subject_has_article = False
         _ARTICLES = frozenset({
             "la", "le", "l", "les", "une", "un", "l'",

@@ -37,7 +37,7 @@ class ScorerNgram:
             db_path: Chemin vers le fichier ngram.db.
         """
         uri = f"file:{db_path}?mode=ro"
-        self._conn = sqlite3.connect(uri, uri=True)
+        self._conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
         self._conn.execute("PRAGMA synchronous=OFF")
         self._conn.execute("PRAGMA cache_size=-8192")  # 8 Mo de cache
         self._max_order = self._detecter_ordre()
