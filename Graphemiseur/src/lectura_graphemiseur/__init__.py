@@ -3,8 +3,9 @@
 Architecture : BiLSTM char-level + word feedback multi-tete V6
   avec phone_lex_features (28d) + lex_select (2.56M params, ONNX INT8 = 2.6 Mo)
 
-Pipeline complet : raw → lex_select → post-traitement (formules + coherence morpho + accents)
-  Word accuracy : 90.95% (dev set, pipeline complet avec formules)
+Modele core : raw → lex_select → post-traitement (coherence morpho + accents)
+  Les formules (nombres, sigles) et noms propres sont dans lectura-p2g
+  (pipeline couche 2).
 
 Copyright (C) 2025 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
@@ -35,7 +36,7 @@ import logging
 import os
 from pathlib import Path
 
-__version__ = "4.1.1"
+__version__ = "4.2.0"
 
 logger = logging.getLogger(__name__)
 
