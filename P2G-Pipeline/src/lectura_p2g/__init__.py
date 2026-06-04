@@ -24,7 +24,7 @@ import json
 import unicodedata
 from importlib import resources
 
-__version__ = "4.1.0"
+__version__ = "4.2.0"
 
 # ── Re-exports depuis le graphemiseur (couche 1) ─────────────────────
 
@@ -48,6 +48,7 @@ def _appliquer_formules(
     n: int,
     _in_lex,
     formule_mode: str = "num",
+    formule_tolerance: str = "exact",
 ) -> set[int]:
     """Detecte et remplace les formules (nombres, sigles) dans la sortie P2G.
 
@@ -60,6 +61,10 @@ def _appliquer_formules(
         Mode d'affichage des formules :
         - ``"num"``   : chiffres/symboles (35, SNCF) — defaut
         - ``"texte"`` : texte epele (trente-cinq, esse-enne-ce-effe)
+    formule_tolerance : str
+        Tolerance de reconnaissance IPA :
+        - ``"exact"`` : IPA exact (defaut, pour texte IPA propre)
+        - ``"stt"``   : tolerant STT (normalisation vocalique, Levenshtein)
 
     Modifie ``result`` in-place.
     Returns: set de positions traitees (a proteger des corrections suivantes).
@@ -69,12 +74,23 @@ def _appliquer_formules(
     except ImportError:
         return set()
 
+    stt = (formule_tolerance == "stt")
+
+    if stt:
+        try:
+            from lectura_formules import detect_formula_spans_stt
+        except ImportError:
+            stt = False
+
     use_num = (formule_mode != "texte")
     formule_positions: set[int] = set()
 
     # ── Formules math (avant nombres, pour eviter la fragmentation) ──
     try:
-        math_spans = detect_formula_spans(ipa_words, min_span=3, max_span=20)
+        if stt:
+            math_spans = detect_formula_spans_stt(ipa_words, min_span=3, max_span=20)
+        else:
+            math_spans = detect_formula_spans(ipa_words, min_span=3, max_span=20)
     except Exception:
         math_spans = []
     for start, end, formula_result in math_spans:
@@ -585,6 +601,7 @@ def corriger_phrase_pipeline(
     ipa_words: list[str] | None = None,
     phone_lexicon: object | None = None,
     formule_mode: str = "num",
+    formule_tolerance: str = "exact",
     **kwargs,
 ) -> list[str]:
     """Pipeline post-traitement complet P2G (couche 2).
@@ -612,6 +629,10 @@ def corriger_phrase_pipeline(
         Mode d'affichage des formules :
         - ``"num"``   : chiffres/symboles (35, SNCF) — defaut
         - ``"texte"`` : texte epele (trente-cinq)
+    formule_tolerance : str
+        Tolerance de reconnaissance IPA :
+        - ``"exact"`` : IPA exact (defaut)
+        - ``"stt"``   : tolerant STT (normalisation vocalique, Levenshtein)
     **kwargs
         Arguments supplementaires passes a corriger_phrase_v3
         (lexique, lexique_index, freq_map, lex_candidates).
@@ -633,6 +654,7 @@ def corriger_phrase_pipeline(
         formule_positions = _appliquer_formules(
             result, ipa_words, pos_tags, n, _in_lex,
             formule_mode=formule_mode,
+            formule_tolerance=formule_tolerance,
         )
 
     # Etape 0b : fusion de mots composes
@@ -662,6 +684,7 @@ def analyser(
     *,
     engine: object | None = None,
     formule_mode: str = "num",
+    formule_tolerance: str = "exact",
 ) -> dict:
     """Analyse P2G complete d'une liste de mots IPA.
 
@@ -677,6 +700,10 @@ def analyser(
         Mode d'affichage des formules :
         - ``"num"``   : chiffres/symboles (35, SNCF) — defaut
         - ``"texte"`` : texte epele (trente-cinq)
+    formule_tolerance : str
+        Tolerance de reconnaissance IPA :
+        - ``"exact"`` : IPA exact (defaut)
+        - ``"stt"``   : tolerant STT (normalisation vocalique, Levenshtein)
 
     Returns
     -------
@@ -692,5 +719,6 @@ def analyser(
         ipa_words=ipa_words,
         phone_lexicon=getattr(engine, "phone_lexicon", None),
         formule_mode=formule_mode,
+        formule_tolerance=formule_tolerance,
     )
     return result
