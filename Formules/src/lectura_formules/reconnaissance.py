@@ -19,6 +19,10 @@ from lectura_formules._chargeur import (
     inv_phone_devise,
     inv_phone_lettre,
     inv_phone_ordinal,
+    inv_phone_symbole,
+    inv_phone_grec,
+    symboles as _load_symboles,
+    grec as _load_grec,
     heure_words as _load_heure_words,
     pourcent_words as _load_pourcent_words,
     devises as _load_devises,
@@ -32,6 +36,7 @@ from lectura_formules.lecture_formules import (
     lire_pourcentage,
     lire_ordinal,
     lire_sigle,
+    lire_maths,
 )
 
 
@@ -545,6 +550,41 @@ def _reconstruct_sigle(tokens: list[IpaToken]) -> str | None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Distance d'edition (Levenshtein) — zero dependance
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _levenshtein(s1: str, s2: str) -> int:
+    """Calcule la distance de Levenshtein entre deux chaines."""
+    if len(s1) < len(s2):
+        return _levenshtein(s2, s1)
+    if not s2:
+        return len(s1)
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            curr.append(min(
+                prev[j + 1] + 1,      # deletion
+                curr[j] + 1,           # insertion
+                prev[j] + (c1 != c2),  # substitution
+            ))
+        prev = curr
+    return prev[-1]
+
+
+def _stt_max_distance(phone_len: int) -> int:
+    """Tolerance de distance en fonction de la longueur de la chaine IPA.
+
+    - < 5 phones : 0 (match exact requis)
+    - >= 5 phones : floor(len * 0.1) — environ 10% d'erreur tolere
+    """
+    if phone_len < 5:
+        return 0
+    return phone_len // 10
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Normalisation IPA pour comparaison
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -563,6 +603,14 @@ _RE_SCHWA = _re.compile("ə")
 # ɑ̃ (U+0251 + U+0303) est une voyelle nasale, on la garde
 _RE_ALPHA_STANDALONE = _re.compile("ɑ(?!\u0303)")
 
+# ɔ (U+0254) non suivi de combining tilde → normaliser en o (U+006F)
+# ɔ̃ (U+0254 + U+0303) est une voyelle nasale, on la garde
+_RE_OPEN_O_STANDALONE = _re.compile("ɔ(?!\u0303)")
+
+# ɛ (U+025B) non suivi de combining tilde → normaliser en e (U+0065)
+# ɛ̃ (U+025B + U+0303) est une voyelle nasale, on la garde
+_RE_OPEN_E_STANDALONE = _re.compile("ɛ(?!\u0303)")
+
 
 def _normalize_ipa_for_stt(ipa: str) -> str:
     """Normalise une chaine IPA pour la reconnaissance STT.
@@ -571,11 +619,15 @@ def _normalize_ipa_for_stt(ipa: str) -> str:
     - Strip espaces
     - Supprime les schwas (ə) inseres par le CTC/lexique
     - Normalise ɑ (U+0251) standalone en a (U+0061)
+    - Normalise ɔ (U+0254) standalone en o (U+006F)
+    - Normalise ɛ (U+025B) standalone en e (U+0065)
     - Normalise g (U+0067) en ɡ (U+0261)
     """
     s = _nfc(_strip_spaces(ipa))
     s = _RE_SCHWA.sub("", s)
     s = _RE_ALPHA_STANDALONE.sub("a", s)
+    s = _RE_OPEN_O_STANDALONE.sub("o", s)
+    s = _RE_OPEN_E_STANDALONE.sub("e", s)
     s = s.replace("g", "ɡ")  # ASCII g → IPA script g
     return s
 
@@ -831,11 +883,17 @@ def reconnaitre_ipa_stt(
     except Exception:
         return None
 
-    # Verification relaxee : compare apres normalisation STT (strip schwas, ɑ→a)
+    # Verification relaxee : compare apres normalisation STT (schwas, ɑ→a, ɔ→o, ɛ→e)
     forward_norm = _normalize_ipa_for_stt(result.phone)
     input_norm = _normalize_ipa_for_stt(ipa)
 
     if forward_norm == input_norm:
+        return result
+
+    # Tolerance par distance d'edition pour les chaines longues
+    # (grands nombres multi-mots ou la probabilite d'erreur STT augmente)
+    max_dist = _stt_max_distance(len(input_norm))
+    if max_dist > 0 and _levenshtein(forward_norm, input_norm) <= max_dist:
         return result
 
     return None
@@ -983,5 +1041,905 @@ def detect_sigle_spans(
                 break  # passer au span suivant (greedy)
 
     # Trier par position
+    results.sort(key=lambda x: x[0])
+    return results
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Reconnaissance de formules mathematiques (IPA → formule math)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Categories de symboles pour le classement dans la table math
+_FUNC_SYMS = frozenset({"sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs"})
+_BRACKET_SYMS = frozenset({"(", ")", "[", "]", "{", "}"})
+_UNIT_SYMS = frozenset({
+    "kg", "km", "cm", "mm", "mg", "ml", "°C", "°F",
+    "g", "m", "s", "h", "L", "min",
+})
+
+# Operateurs binaires (attendent operande a gauche et a droite)
+_BINARY_OPS = frozenset({
+    "+", "-", "−", "±", "=", "≠", "<", ">", "≤", "≥",
+    "×", "*", "÷", "/", "^",
+    "→", "←", "↔", "⇒", "⇔",
+    "≈", "≃", "≡",
+    "<=", ">=", "!=", "==",
+    "∈", "∉", "⊂",
+    "∪", "∩",
+})
+
+# Operateurs postfix (attendent operande a gauche)
+_POSTFIX_OPS = frozenset({"²", "³", "!", "°", "%", "‰"})
+
+# Operateurs prefix (attendent operande a droite)
+_PREFIX_OPS = frozenset({"√", "∑", "∏", "∫", "∂", "∇"})
+
+
+# ── Table etendue pour les formules math ──────────────────────────────
+
+_math_lookup_table: list[tuple[str, IpaToken]] | None = None
+
+
+def _build_math_lookup_table() -> list[tuple[str, IpaToken]]:
+    """Construit la table etendue IPA->token pour les formules math.
+
+    Herite de la table standard (nombres, lettres, etc.) et ajoute
+    les symboles, fonctions, brackets, unites et lettres grecques.
+    """
+    global _math_lookup_table
+    if _math_lookup_table is not None:
+        return _math_lookup_table
+
+    # Partir de la table standard
+    base = dict(_build_lookup_table())
+
+    # -- Symboles math --
+    for sym, (ortho, phone) in _load_symboles().items():
+        nphone = _nfc(_strip_spaces(phone))
+        if not nphone:
+            continue
+        # Les tokens existants (nombre, lettre, special) ont priorite
+        if nphone in base:
+            continue
+        # Classifier le symbole
+        if sym in _FUNC_SYMS:
+            cat = "fonction"
+        elif sym in _BRACKET_SYMS:
+            cat = "bracket"
+        elif sym in _UNIT_SYMS:
+            cat = "unite"
+        else:
+            cat = "symbole"
+        base[nphone] = IpaToken(cat, sym, sym, nphone)
+
+    # -- Lettres grecques (preference pour les minuscules) --
+    for char, (ortho, phone) in _load_grec().items():
+        nphone = _nfc(_strip_spaces(phone))
+        if not nphone:
+            continue
+        if nphone in base:
+            # Remplacer par la minuscule si l'existant est grec uppercase
+            existing = base[nphone]
+            if existing.category == "grec" and isinstance(existing.value, str) and not existing.value.islower() and char.islower():
+                base[nphone] = IpaToken("grec", char, char, nphone)
+            continue
+        base[nphone] = IpaToken("grec", char, char, nphone)
+
+    # -- Connecteur "de" pour smart parens inverses --
+    de_phone = _nfc("də")
+    if de_phone not in base:
+        base[de_phone] = IpaToken("connecteur", "de", "de", de_phone)
+
+    # -- Connecteur "par" pour unites (km/h → "kilometre par heure") --
+    par_phone = _nfc("paʁ")
+    if par_phone not in base:
+        base[par_phone] = IpaToken("connecteur", "par", "par", par_phone)
+
+    # -- "indice" pour subscripts --
+    indice_phone = _nfc(_strip_spaces("ɛ̃dis"))
+    if indice_phone not in base:
+        base[indice_phone] = IpaToken("symbole", "indice", "indice", indice_phone)
+
+    # -- "puissance" pour exposants generaux --
+    puissance_phone = _nfc(_strip_spaces("pɥisɑ̃s"))
+    if puissance_phone not in base:
+        base[puissance_phone] = IpaToken("symbole", "puissance", "puissance", puissance_phone)
+
+    # -- "enne" pour exposant n --
+    enne_phone = _nfc("ɛn")
+    if enne_phone not in base:
+        base[enne_phone] = IpaToken("symbole", "enne", "enne", enne_phone)
+
+    # -- "prime" (′) --
+    prime_phone = _nfc("pʁim")
+    if prime_phone not in base:
+        base[prime_phone] = IpaToken("symbole", "prime", "prime", prime_phone)
+
+    # -- "facteur de" pour paren_facteur --
+    facteur_de_phone = _nfc(_strip_spaces("faktœʁ də"))
+    if facteur_de_phone not in base:
+        base[facteur_de_phone] = IpaToken("connecteur", "facteur_de", "facteur_de", facteur_de_phone)
+
+    # -- "valeur absolue de" pour abs pipes --
+    abs_de_phone = _nfc(_strip_spaces("valœʁ apsoly də"))
+    if abs_de_phone not in base:
+        base[abs_de_phone] = IpaToken("connecteur", "abs_de", "abs_de", abs_de_phone)
+
+    # -- Fragments de tokens multi-mots (pour le pre-filtre _is_math_token) --
+    # "kaʁe" seul (fragment de "o kaʁe" = ²) ne matche pas dans la table,
+    # mais doit etre reconnu comme token math potentiel pour le pre-filtre.
+    # On les ajoute comme "fragment" — ils ne seront jamais matche en greedy
+    # (car "okaʁe" est plus long) mais permettent au pre-filtre de fonctionner.
+    _math_fragments = {
+        "kaʁe": IpaToken("fragment", "carré", "carré", _nfc("kaʁe")),
+        "kyb": IpaToken("fragment", "cube", "cube", _nfc("kyb")),
+        "ʁasin": IpaToken("fragment", "racine", "racine", _nfc("ʁasin")),
+    }
+    for frag_phone, frag_token in _math_fragments.items():
+        nfrag = _nfc(frag_phone)
+        if nfrag not in base:
+            base[nfrag] = frag_token
+
+    # Trier par longueur decroissante (greedy longest-match)
+    _math_lookup_table = sorted(base.items(), key=lambda x: len(x[0]), reverse=True)
+    return _math_lookup_table
+
+
+# ── Tokenisation math ─────────────────────────────────────────────────
+
+def _tokenize_ipa_math(ipa: str) -> list[IpaToken] | None:
+    """Tokenise une chaine IPA avec la table etendue math.
+
+    Retourne None si la tokenisation echoue.
+    """
+    table = _build_math_lookup_table()
+    normalized = _nfc(_strip_spaces(ipa))
+
+    if not normalized:
+        return None
+
+    tokens: list[IpaToken] = []
+    pos = 0
+    length = len(normalized)
+
+    while pos < length:
+        matched = False
+        for entry_key, entry_token in table:
+            entry_len = len(entry_key)
+            if pos + entry_len <= length and normalized[pos:pos + entry_len] == entry_key:
+                tokens.append(entry_token)
+                pos += entry_len
+                matched = True
+                break
+        if not matched:
+            return None
+
+    return tokens
+
+
+# ── Garde contre faux positifs ────────────────────────────────────────
+
+# Categories considerees comme operandes (gauche/droite d'un operateur)
+_OPERAND_CATS = frozenset({
+    "nombre", "lettre", "grec", "bracket", "connecteur", "fonction", "unite",
+})
+
+
+def _is_valid_math_sequence(tokens: list[IpaToken]) -> bool:
+    """Verifie qu'une sequence de tokens forme une formule math valide.
+
+    Regles :
+    1. Au moins 2 tokens (pour prefix comme √9) ou 3 pour le cas general
+    2. Au moins un token symbole/fonction/grec (sinon c'est nombre/sigle)
+    3. Operateurs binaires : operande a gauche ET a droite
+       (sauf - ou + en position 0 = unaire)
+    4. Operateurs postfix : operande a gauche
+    5. Operateurs prefix : operande a droite
+    """
+    if len(tokens) < 2:
+        return False
+
+    # Regle 2 : au moins un token specifiquement math
+    has_math = False
+    for tok in tokens:
+        if tok.category in ("symbole", "fonction", "grec", "bracket", "connecteur", "unite"):
+            has_math = True
+            break
+    if not has_math:
+        return False
+
+    # Si seulement 2 tokens, au moins un doit etre un operateur prefix/postfix,
+    # une fonction, ou un connecteur (pour eviter "2 x" → faux positif)
+    if len(tokens) == 2:
+        values = {tok.value for tok in tokens if tok.category == "symbole"}
+        cats = {tok.category for tok in tokens}
+        has_prefix_or_postfix = bool(values & (_PREFIX_OPS | _POSTFIX_OPS))
+        has_function = "fonction" in cats
+        has_connecteur = "connecteur" in cats
+        if not (has_prefix_or_postfix or has_function or has_connecteur):
+            return False
+
+    # Verifier la structure operateurs/operandes
+    n = len(tokens)
+    for i, tok in enumerate(tokens):
+        if tok.category != "symbole":
+            continue
+        sym = tok.value
+
+        # Ignorer les tokens speciaux non-operateur
+        if sym in ("indice", "puissance", "enne", "prime",
+                    "racine_carree", "factorielle"):
+            continue
+
+        if sym in _BINARY_OPS:
+            # Signe unaire en debut de formule
+            if i == 0 and sym in ("+", "-", "−"):
+                if i + 1 >= n:
+                    return False
+                continue
+            # Operande a gauche
+            if i == 0:
+                return False
+            left = tokens[i - 1]
+            if left.category not in _OPERAND_CATS and left.value not in _POSTFIX_OPS and left.category != "symbole":
+                # Accepter aussi si le token precedent est un symbole postfix
+                if left.value not in ("²", "³", "!", "°", "%", "‰",
+                                      "enne", "prime", "factorielle"):
+                    return False
+            # Operande a droite
+            if i + 1 >= n:
+                return False
+
+        elif sym in _POSTFIX_OPS:
+            if i == 0:
+                return False
+
+        elif sym in _PREFIX_OPS:
+            if i + 1 >= n:
+                return False
+
+    return True
+
+
+# ── Reconstruction de la formule ──────────────────────────────────────
+
+def _reconstruct_maths(tokens: list[IpaToken]) -> str | None:
+    """Reconstruit une formule mathematique depuis les tokens IPA.
+
+    Gere : nombres, lettres (variables), grec, symboles, fonctions,
+    brackets, connecteurs (smart parens), multiplication implicite.
+    """
+    parts: list[str] = []
+    n = len(tokens)
+    i = 0
+
+    while i < n:
+        tok = tokens[i]
+        cat = tok.category
+        val = tok.value
+
+        if cat == "nombre":
+            # Reconstruire le nombre : accumuler les tokens nombre consecutifs
+            num_tokens: list[IpaToken] = []
+            while i < n and tokens[i].category == "nombre":
+                num_tokens.append(tokens[i])
+                i += 1
+            # Verifier si "virgule" suit pour decimal
+            while i < n and tokens[i].category == "special" and tokens[i].value in ("virgule", "et"):
+                if tokens[i].value == "virgule" and i + 1 < n and tokens[i + 1].category == "nombre":
+                    num_tokens.append(tokens[i])
+                    i += 1
+                    while i < n and tokens[i].category == "nombre":
+                        num_tokens.append(tokens[i])
+                        i += 1
+                else:
+                    break
+            num_str = _reconstruct_nombre(num_tokens)
+            if num_str is None:
+                return None
+            parts.append(num_str)
+            continue
+
+        elif cat == "lettre":
+            # Variable dans une formule → minuscule
+            parts.append(val.lower() if isinstance(val, str) and len(val) == 1 else str(val).lower())
+            i += 1
+
+        elif cat == "grec":
+            parts.append(str(val))
+            i += 1
+
+        elif cat == "symbole":
+            sym = str(val)
+            if sym == "√":
+                # √ — son IPA inclut deja le "de" (ʁasin kaʁe də)
+                parts.append("√")
+                i += 1
+            elif sym == "racine_carree":
+                # Forme sans "de" (si rencontree)
+                parts.append("√")
+                if i + 1 < n and tokens[i + 1].category == "connecteur" and tokens[i + 1].value == "de":
+                    i += 1
+                i += 1
+            elif sym == "indice":
+                # Subscript : _contenu
+                parts.append("_")
+                i += 1
+                # Consommer le contenu du subscript (chiffres/lettres)
+                sub_parts: list[str] = []
+                while i < n:
+                    if tokens[i].category == "nombre":
+                        sub_num: list[IpaToken] = []
+                        while i < n and tokens[i].category == "nombre":
+                            sub_num.append(tokens[i])
+                            i += 1
+                        sub_val = _reconstruct_number(sub_num)
+                        sub_parts.append(str(sub_val))
+                    elif tokens[i].category == "lettre":
+                        sub_parts.append(str(tokens[i].value).lower())
+                        i += 1
+                    else:
+                        break
+                parts.append("".join(sub_parts))
+                continue
+            elif sym == "puissance":
+                # Exposant general : ^contenu → superscript
+                i += 1
+                # Consommer signe eventuel
+                exp_sign = ""
+                if i < n and tokens[i].category == "special" and tokens[i].value == "moins":
+                    exp_sign = "⁻"
+                    i += 1
+                # Consommer "enne" → n
+                if i < n and tokens[i].category == "symbole" and tokens[i].value == "enne":
+                    parts.append(exp_sign + "ⁿ")
+                    i += 1
+                elif i < n and tokens[i].category == "nombre":
+                    exp_num: list[IpaToken] = []
+                    while i < n and tokens[i].category == "nombre":
+                        exp_num.append(tokens[i])
+                        i += 1
+                    exp_val = _reconstruct_number(exp_num)
+                    # Convertir en superscript unicode
+                    sup_map = {"0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+                               "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"}
+                    exp_str = "".join(sup_map.get(c, c) for c in str(exp_val))
+                    parts.append(exp_sign + exp_str)
+                else:
+                    # Pas de contenu apres puissance → juste ^
+                    parts.append("^")
+                continue
+            elif sym == "enne":
+                # "enne" seul (variable n en contexte exposant)
+                parts.append("n")
+                i += 1
+            elif sym == "prime":
+                parts.append("′")
+                i += 1
+            elif sym == "factorielle":
+                parts.append("!")
+                i += 1
+            elif sym == "∞":
+                parts.append("∞")
+                i += 1
+            else:
+                # Symbole normal (operateur, etc.)
+                parts.append(sym)
+                i += 1
+
+        elif cat == "fonction":
+            # Nom de fonction
+            func_name = str(val)
+            parts.append(func_name)
+            i += 1
+
+        elif cat == "bracket":
+            parts.append(str(val))
+            i += 1
+
+        elif cat == "unite":
+            parts.append(str(val))
+            i += 1
+
+        elif cat == "connecteur":
+            conn = str(val)
+            if conn == "de":
+                # Smart paren inverse : lettre/fonction + "de" + operande → f(x)
+                # Ouvrir une parenthese
+                parts.append("(")
+                i += 1
+                # Collecter l'operande + decorateurs
+                inner_parts: list[str] = []
+                depth = 1
+                while i < n and depth > 0:
+                    t = tokens[i]
+                    # Un autre "de" ouvre un niveau de profondeur
+                    if t.category == "connecteur" and t.value == "de":
+                        depth += 1
+                        inner_parts.append("(")
+                        i += 1
+                        continue
+                    # Fin de l'operande : operateur binaire ou autre connecteur
+                    if t.category == "symbole" and t.value in _BINARY_OPS:
+                        break
+                    if t.category == "connecteur" and t.value == "par":
+                        break
+                    # Token qui fait partie de l'operande
+                    if t.category == "nombre":
+                        num_tokens2: list[IpaToken] = []
+                        while i < n and tokens[i].category == "nombre":
+                            num_tokens2.append(tokens[i])
+                            i += 1
+                        # Gerer virgule decimale
+                        while i < n and tokens[i].category == "special" and tokens[i].value == "virgule":
+                            if i + 1 < n and tokens[i + 1].category == "nombre":
+                                num_tokens2.append(tokens[i])
+                                i += 1
+                                while i < n and tokens[i].category == "nombre":
+                                    num_tokens2.append(tokens[i])
+                                    i += 1
+                            else:
+                                break
+                        ns = _reconstruct_nombre(num_tokens2)
+                        if ns:
+                            inner_parts.append(ns)
+                        continue
+                    elif t.category == "lettre":
+                        inner_parts.append(str(t.value).lower())
+                        i += 1
+                    elif t.category == "grec":
+                        inner_parts.append(str(t.value))
+                        i += 1
+                    elif t.category == "symbole":
+                        sv = str(t.value)
+                        if sv in ("²", "³"):
+                            inner_parts.append(sv)
+                            i += 1
+                        elif sv == "puissance":
+                            # Exposant dans l'operande
+                            i += 1
+                            esign = ""
+                            if i < n and tokens[i].category == "special" and tokens[i].value == "moins":
+                                esign = "⁻"
+                                i += 1
+                            if i < n and tokens[i].category == "symbole" and tokens[i].value == "enne":
+                                inner_parts.append(esign + "ⁿ")
+                                i += 1
+                            elif i < n and tokens[i].category == "nombre":
+                                en: list[IpaToken] = []
+                                while i < n and tokens[i].category == "nombre":
+                                    en.append(tokens[i])
+                                    i += 1
+                                ev = _reconstruct_number(en)
+                                smap = {"0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+                                        "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"}
+                                inner_parts.append(esign + "".join(smap.get(c, c) for c in str(ev)))
+                            else:
+                                inner_parts.append("^")
+                            continue
+                        elif sv == "prime":
+                            inner_parts.append("′")
+                            i += 1
+                        elif sv in _POSTFIX_OPS:
+                            inner_parts.append(sv)
+                            i += 1
+                        else:
+                            # Fin de l'operande (operateur non-decorateur)
+                            break
+                    elif t.category == "fonction":
+                        inner_parts.append(str(t.value))
+                        i += 1
+                    elif t.category == "bracket":
+                        inner_parts.append(str(t.value))
+                        i += 1
+                    else:
+                        break
+                # Fermer les parens
+                for _ in range(depth):
+                    inner_parts.append(")")
+                parts.extend(inner_parts)
+                continue
+            elif conn == "par":
+                # "par" entre unites → /
+                parts.append("/")
+                i += 1
+            elif conn == "facteur_de":
+                # facteur de → ouvrir parenthese (meme logique que "de")
+                parts.append("(")
+                i += 1
+                fd_parts: list[str] = []
+                while i < n:
+                    t = tokens[i]
+                    if t.category == "symbole" and t.value in _BINARY_OPS:
+                        break
+                    if t.category == "connecteur":
+                        break
+                    if t.category == "nombre":
+                        nt: list[IpaToken] = []
+                        while i < n and tokens[i].category == "nombre":
+                            nt.append(tokens[i])
+                            i += 1
+                        ns2 = _reconstruct_nombre(nt)
+                        if ns2:
+                            fd_parts.append(ns2)
+                        continue
+                    elif t.category == "lettre":
+                        fd_parts.append(str(t.value).lower())
+                        i += 1
+                    elif t.category == "grec":
+                        fd_parts.append(str(t.value))
+                        i += 1
+                    elif t.category == "symbole" and t.value in ("²", "³", "prime"):
+                        fd_parts.append("²" if t.value == "²" else ("³" if t.value == "³" else "′"))
+                        i += 1
+                    else:
+                        break
+                fd_parts.append(")")
+                parts.extend(fd_parts)
+                continue
+            elif conn == "abs_de":
+                # Valeur absolue → |...|
+                parts.append("|")
+                i += 1
+                abs_parts: list[str] = []
+                while i < n:
+                    t = tokens[i]
+                    if t.category == "symbole" and t.value in _BINARY_OPS:
+                        break
+                    if t.category == "connecteur" and t.value not in ("de",):
+                        break
+                    if t.category == "nombre":
+                        nt2: list[IpaToken] = []
+                        while i < n and tokens[i].category == "nombre":
+                            nt2.append(tokens[i])
+                            i += 1
+                        ns3 = _reconstruct_nombre(nt2)
+                        if ns3:
+                            abs_parts.append(ns3)
+                        continue
+                    elif t.category == "lettre":
+                        abs_parts.append(str(t.value).lower())
+                        i += 1
+                    elif t.category == "grec":
+                        abs_parts.append(str(t.value))
+                        i += 1
+                    elif t.category == "symbole":
+                        sv = str(t.value)
+                        if sv in _BINARY_OPS:
+                            abs_parts.append(sv)
+                            i += 1
+                        elif sv in _POSTFIX_OPS:
+                            abs_parts.append(sv)
+                            i += 1
+                        else:
+                            break
+                    else:
+                        break
+                abs_parts.append("|")
+                parts.extend(abs_parts)
+                continue
+            else:
+                i += 1
+
+        elif cat == "special":
+            sp = str(val)
+            if sp == "moins":
+                parts.append("-")
+                i += 1
+            elif sp == "et":
+                # Absorbe (ne produit rien dans une formule math)
+                i += 1
+            else:
+                i += 1
+
+        else:
+            # Token inconnu — echec
+            return None
+
+    formula = "".join(parts)
+    return formula if formula else None
+
+
+# ── Verification aller-retour (API publique) ──────────────────────────
+
+def reconnaitre_maths_ipa(ipa: str) -> LectureFormuleResult | None:
+    """Reconnait une formule mathematique a partir de sa transcription IPA.
+
+    Etapes :
+    1. Tokenisation avec la table math etendue
+    2. Validation de la sequence (garde contre faux positifs)
+    3. Reconstruction de la formule
+    4. Forward pass (lire_maths) pour verification aller-retour
+    5. Comparaison IPA forward vs IPA input
+
+    Returns:
+        LectureFormuleResult si reconnu et verifie, None sinon.
+    """
+    tokens = _tokenize_ipa_math(ipa)
+    if not tokens:
+        return None
+
+    if not _is_valid_math_sequence(tokens):
+        return None
+
+    formula_str = _reconstruct_maths(tokens)
+    if not formula_str:
+        return None
+
+    try:
+        result = lire_maths(formula_str)
+    except Exception:
+        return None
+
+    # Verification aller-retour
+    forward_ipa = _normalize_ipa_for_compare(result.phone)
+    input_ipa = _normalize_ipa_for_compare(ipa)
+
+    if forward_ipa == input_ipa:
+        return result
+
+    return None
+
+
+# ── Detection de spans math dans les phrases ──────────────────────────
+
+def _is_math_token(ipa_word: str) -> bool:
+    """Verifie si un mot IPA individuel peut etre un token math.
+
+    Retourne True si le mot se tokenise entierement en tokens
+    de categories math (nombre, lettre, symbole, fonction, grec,
+    bracket, connecteur, special, unite).
+    """
+    tokens = _tokenize_ipa_math(ipa_word)
+    if not tokens:
+        return False
+    for tok in tokens:
+        if tok.category in ("nombre", "lettre", "symbole", "fonction",
+                            "grec", "bracket", "connecteur", "special",
+                            "unite", "fragment"):
+            continue
+        return False
+    return True
+
+
+def detect_formula_spans(
+    ipa_words: list[str],
+    *,
+    min_span: int = 3,
+    max_span: int = 20,
+) -> list[tuple[int, int, LectureFormuleResult]]:
+    """Detecte les spans de mots IPA formant des formules mathematiques.
+
+    Meme patron que detect_number_spans (greedy longest-first).
+    Pre-filtre avec _is_math_token, puis valide avec reconnaitre_maths_ipa.
+
+    Args:
+        ipa_words: Liste de mots IPA.
+        min_span: Taille minimum de span (defaut: 3).
+        max_span: Taille maximum de span (defaut: 20).
+
+    Returns:
+        Liste de (start, end, LectureFormuleResult) triee par position.
+        Les spans ne se chevauchent pas (greedy plus long d'abord).
+    """
+    n = len(ipa_words)
+    if n < min_span:
+        return []
+
+    # Phase 1 : pre-filtrer les mots qui sont des tokens math
+    is_math = [_is_math_token(w) for w in ipa_words]
+
+    # Phase 2 : greedy longest-first
+    results: list[tuple[int, int, LectureFormuleResult]] = []
+    used: set[int] = set()
+
+    for span_len in range(min(max_span, n), min_span - 1, -1):
+        for i in range(n - span_len + 1):
+            end = i + span_len
+            if any(j in used for j in range(i, end)):
+                continue
+            if not all(is_math[j] for j in range(i, end)):
+                continue
+
+            merged_ipa = " ".join(ipa_words[i:end])
+            result = reconnaitre_maths_ipa(merged_ipa)
+            if result is not None:
+                results.append((i, end, result))
+                used.update(range(i, end))
+                break  # passer au span suivant (greedy)
+
+    results.sort(key=lambda x: x[0])
+    return results
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tolerance STT pour les formules math
+# ══════════════════════════════════════════════════════════════════════════════
+
+_math_stt_lookup_table: list[tuple[str, IpaToken]] | None = None
+
+
+def _build_math_stt_lookup_table() -> list[tuple[str, IpaToken]]:
+    """Table de lookup math etendue avec normalisation STT.
+
+    Part de la table math standard et :
+    - Ajoute les variantes CTC (wit→8, diz→10, kat→4)
+    - Ajoute les versions normalisees STT (ɑ→a, ɔ→o, ɛ→e, schwa removal)
+    """
+    global _math_stt_lookup_table
+    if _math_stt_lookup_table is not None:
+        return _math_stt_lookup_table
+
+    # Partir de la table math standard
+    base = dict(_build_math_lookup_table())
+
+    # Ajouter les variantes CTC (seulement si pas deja presentes)
+    variants = _build_stt_variants()
+    for phone, (val, key) in variants.items():
+        nphone = _nfc(phone)
+        if nphone not in base:
+            base[nphone] = IpaToken("nombre", val, key, nphone)
+
+    # Re-normaliser les entrees existantes (strip schwas, ɑ→a, ɔ→o, ɛ→e)
+    extended: dict[str, IpaToken] = {}
+    for ipa_key, token in base.items():
+        if ipa_key:
+            extended[ipa_key] = token
+        norm_key = _normalize_ipa_for_stt(ipa_key)
+        if norm_key and norm_key != ipa_key and norm_key not in extended:
+            extended[norm_key] = token
+
+    _math_stt_lookup_table = sorted(
+        extended.items(), key=lambda x: len(x[0]), reverse=True,
+    )
+    return _math_stt_lookup_table
+
+
+def _tokenize_ipa_math_stt(ipa: str) -> list[IpaToken] | None:
+    """Tokenise une chaine IPA math avec tolerance STT.
+
+    Pre-normalise l'IPA (schwas, ɑ→a, ɔ→o, ɛ→e) et utilise
+    la table math etendue avec variantes CTC.
+    """
+    table = _build_math_stt_lookup_table()
+    normalized = _normalize_ipa_for_stt(ipa)
+
+    if not normalized:
+        return None
+
+    tokens: list[IpaToken] = []
+    pos = 0
+    length = len(normalized)
+
+    while pos < length:
+        matched = False
+        for entry_key, entry_token in table:
+            entry_len = len(entry_key)
+            if pos + entry_len <= length and normalized[pos:pos + entry_len] == entry_key:
+                tokens.append(entry_token)
+                pos += entry_len
+                matched = True
+                break
+        if not matched:
+            return None
+
+    return tokens
+
+
+def _is_math_token_stt(ipa_word: str) -> bool:
+    """Verifie si un mot IPA peut etre un token math (version STT tolerante)."""
+    tokens = _tokenize_ipa_math_stt(ipa_word)
+    if not tokens:
+        return False
+    for tok in tokens:
+        if tok.category in ("nombre", "lettre", "symbole", "fonction",
+                            "grec", "bracket", "connecteur", "special",
+                            "unite", "fragment"):
+            continue
+        return False
+    return True
+
+
+def reconnaitre_maths_ipa_stt(ipa: str) -> LectureFormuleResult | None:
+    """Reconnait une formule math a partir d'IPA produit par un pipeline STT.
+
+    Version tolerante aux variantes CTC :
+    - Schwas (ə) inseres entre consonnes
+    - ɑ standalone normalise en a, ɔ en o, ɛ en e
+    - Variantes de phone (wit pour huit, diz pour dix, etc.)
+    - Verification aller-retour relaxee (compare apres normalisation STT)
+    - Tolerance Levenshtein pour les formules longues
+
+    Returns:
+        LectureFormuleResult si reconnu, None sinon.
+    """
+    tokens = _tokenize_ipa_math_stt(ipa)
+    if not tokens:
+        return None
+
+    # Filtrer les tokens "lettre" parasites causes par le schwa → E
+    has_nombre = any(t.category == "nombre" for t in tokens)
+    has_lettre_e = any(
+        t.category == "lettre" and t.value == "E" for t in tokens
+    )
+    if has_nombre and has_lettre_e:
+        # Ne filtrer que les lettres E (schwas residuels), garder les autres
+        filtered = [
+            t for t in tokens
+            if not (t.category == "lettre" and t.value == "E")
+        ]
+        if filtered:
+            tokens = filtered
+
+    if not _is_valid_math_sequence(tokens):
+        return None
+
+    formula_str = _reconstruct_maths(tokens)
+    if not formula_str:
+        return None
+
+    try:
+        result = lire_maths(formula_str)
+    except Exception:
+        return None
+
+    # Verification relaxee : compare apres normalisation STT
+    forward_norm = _normalize_ipa_for_stt(result.phone)
+    input_norm = _normalize_ipa_for_stt(ipa)
+
+    if forward_norm == input_norm:
+        return result
+
+    # Tolerance Levenshtein pour les formules longues
+    max_dist = _stt_max_distance(len(input_norm))
+    if max_dist > 0 and _levenshtein(forward_norm, input_norm) <= max_dist:
+        return result
+
+    return None
+
+
+def detect_formula_spans_stt(
+    ipa_words: list[str],
+    *,
+    min_span: int = 3,
+    max_span: int = 20,
+) -> list[tuple[int, int, LectureFormuleResult]]:
+    """Detecte les spans de formules math avec tolerance STT.
+
+    Version tolerante de detect_formula_spans pour l'IPA produit
+    par un pipeline STT (schwas, variantes CTC, normalisation vocalique).
+
+    Args:
+        ipa_words: Liste de mots IPA.
+        min_span: Taille minimum de span (defaut: 3).
+        max_span: Taille maximum de span (defaut: 20).
+
+    Returns:
+        Liste de (start, end, LectureFormuleResult) triee par position.
+    """
+    n = len(ipa_words)
+    if n < min_span:
+        return []
+
+    is_math = [_is_math_token_stt(w) for w in ipa_words]
+
+    results: list[tuple[int, int, LectureFormuleResult]] = []
+    used: set[int] = set()
+
+    for span_len in range(min(max_span, n), min_span - 1, -1):
+        for i in range(n - span_len + 1):
+            end = i + span_len
+            if any(j in used for j in range(i, end)):
+                continue
+            if not all(is_math[j] for j in range(i, end)):
+                continue
+
+            merged_ipa = " ".join(ipa_words[i:end])
+            result = reconnaitre_maths_ipa_stt(merged_ipa)
+            if result is not None:
+                results.append((i, end, result))
+                used.update(range(i, end))
+                break
+
     results.sort(key=lambda x: x[0])
     return results

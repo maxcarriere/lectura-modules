@@ -42,5 +42,6 @@ from lectura_formules.lecture_formules import (
 )
 from lectura_formules.tables import TablesStore, UniteDef, get_store, get_sound_path, get_sounds_dir, set_sounds_dir
 from lectura_formules.romains import int_to_roman, roman_to_int
+from lectura_formules.reconnaissance import reconnaitre_ipa, reconnaitre_ipa_stt, detect_number_spans, detect_sigle_spans, reconnaitre_maths_ipa, detect_formula_spans, reconnaitre_maths_ipa_stt, detect_formula_spans_stt
 
-__version__ = "3.0.1"
+__version__ = "3.2.2"
