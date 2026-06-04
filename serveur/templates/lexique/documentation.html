@@ -1,0 +1,574 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}Documentation — Lexique Lectura{% endblock %}
+{% block meta_description %}Documentation du Lexique Lectura : présentation, sources de données, structure, orthocode, fréquences, relations sémantiques, entités nommées.{% endblock %}
+
+{% block content %}
+<div class="doc-layout">
+
+  <nav class="doc-toc">
+    <h2 class="doc-toc-title">Sommaire</h2>
+    <ol class="doc-toc-list">
+      <li><a href="#presentation">Présentation</a></li>
+      <li><a href="#contenu">Contenu de la base</a></li>
+      <li><a href="#sources">Sources de données</a></li>
+      <li><a href="#structure">Champs et structure</a></li>
+      <li><a href="#pos">Catégories grammaticales</a></li>
+      <li><a href="#multext">Tags MULTEXT</a></li>
+      <li><a href="#orthocode">Orthocode</a></li>
+      <li><a href="#frequences">Fréquences</a></li>
+      <li><a href="#relations">Relations sémantiques</a></li>
+      <li><a href="#entites">Entités nommées</a></li>
+      <li><a href="#licence">Licence et attribution</a></li>
+    </ol>
+  </nav>
+
+  <div class="doc-content">
+
+    <h1 class="page-title">Documentation</h1>
+
+    <!-- §1 Présentation -->
+    <section id="presentation" class="doc-section">
+      <h2>1. Présentation</h2>
+      <p>
+        Le <strong>Lexique Lectura</strong> est une base de données lexicale française libre et complète,
+        développée dans le cadre du <a href="https://www.lec-tu-ra.com">projet Lectura</a>.
+        Elle combine lexique, phonétique IPA, morphologie, sémantique et entités nommées Wikidata
+        dans une base SQLite unique.
+      </p>
+      <p>
+        Conçue pour des applications de traitement automatique du langage, d'aide à la lecture
+        et d'exploration linguistique, elle est accessible librement via ce site web
+        et via une <a href="https://api.lec-tu-ra.com/docs">API REST</a>.
+      </p>
+    </section>
+
+    <!-- §2 Contenu -->
+    <section id="contenu" class="doc-section">
+      <h2>2. Contenu de la base</h2>
+      <p>Le lexique contient actuellement :</p>
+      <div class="doc-stats-grid">
+        <div class="doc-stat">
+          <span class="doc-stat-number">{{ '{:,}'.format(stats.nb_lemmes).replace(',', ' ') }}</span>
+          <span class="doc-stat-label">lemmes</span>
+        </div>
+        <div class="doc-stat">
+          <span class="doc-stat-number">{{ '{:,}'.format(stats.nb_formes).replace(',', ' ') }}</span>
+          <span class="doc-stat-label">formes fléchies</span>
+        </div>
+        <div class="doc-stat">
+          <span class="doc-stat-number">{{ '{:,}'.format(stats.nb_definitions).replace(',', ' ') }}</span>
+          <span class="doc-stat-label">définitions</span>
+        </div>
+        <div class="doc-stat">
+          <span class="doc-stat-number">{{ '{:,}'.format(stats.nb_entites).replace(',', ' ') }}</span>
+          <span class="doc-stat-label">entités nommées</span>
+        </div>
+        <div class="doc-stat">
+          <span class="doc-stat-number">{{ '{:,}'.format(stats.nb_categories).replace(',', ' ') }}</span>
+          <span class="doc-stat-label">catégories</span>
+        </div>
+      </div>
+      <p>Relations sémantiques :</p>
+      <ul>
+        <li><strong>{{ '{:,}'.format(stats.nb_synonymes).replace(',', ' ') }}</strong> synonymes</li>
+        <li><strong>{{ '{:,}'.format(stats.nb_derives).replace(',', ' ') }}</strong> dérivés</li>
+        <li><strong>{{ '{:,}'.format(stats.nb_apparentes).replace(',', ' ') }}</strong> apparentés</li>
+        <li><strong>{{ '{:,}'.format(stats.nb_hyperonymes).replace(',', ' ') }}</strong> hyperonymes</li>
+        <li><strong>{{ '{:,}'.format(stats.nb_antonymes).replace(',', ' ') }}</strong> antonymes</li>
+      </ul>
+    </section>
+
+    <!-- §3 Sources -->
+    <section id="sources" class="doc-section">
+      <h2>3. Sources de données</h2>
+      <p>Le lexique est construit à partir des sources libres suivantes :</p>
+      <table class="doc-table">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Usage</th>
+            <th>Licence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="http://redac.univ-tlse2.fr/lexiques/glaff.html">GLAFF 1.2.2</a></td>
+            <td>Lexique de base (lemmes, formes, morphologie)</td>
+            <td>CC BY-SA 3.0</td>
+          </tr>
+          <tr>
+            <td><a href="https://fr.wiktionary.org/">Wiktionnaire</a></td>
+            <td>Définitions, étymologies, exemples</td>
+            <td>CC BY-SA 3.0</td>
+          </tr>
+          <tr>
+            <td><a href="http://www.lexique.org/">Lexique 3.83</a></td>
+            <td>Fréquences, phonétique complémentaire</td>
+            <td>CC BY-SA 4.0</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/open-dict-data/ipa-dict">ipa-dict</a></td>
+            <td>Phonétique IPA complémentaire</td>
+            <td>MIT</td>
+          </tr>
+          <tr>
+            <td><a href="https://kaikki.org/dictionary/French/">Kaikki.org</a></td>
+            <td>Définitions, synonymes, antonymes</td>
+            <td>CC BY-SA 3.0</td>
+          </tr>
+          <tr>
+            <td><a href="http://alpage.inria.fr/~sagot/wolf-en.html">WOLF 1.0b4</a></td>
+            <td>Catégories sémantiques, co-synonymes</td>
+            <td>CeCILL-C</td>
+          </tr>
+          <tr>
+            <td><a href="https://extensions.libreoffice.org/">Thésaurus LibreOffice</a></td>
+            <td>Synonymes (complément)</td>
+            <td>LGPL 2.1+</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/hermitdave/FrequencyWords">OpenSubtitles</a></td>
+            <td>Fréquences orales</td>
+            <td>CC BY-SA 4.0</td>
+          </tr>
+          <tr>
+            <td><a href="https://shs.hal.science/halshs-00419728v1">CHACQFAM</a></td>
+            <td>Âge d'acquisition estimé</td>
+            <td>CC BY-SA 4.0</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.wikidata.org/">Wikidata</a></td>
+            <td>Entités nommées, catégories, propriétés</td>
+            <td>CC0 1.0</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.jeuxdemots.org/">JeuxDeMots</a></td>
+            <td>Relations sémantiques complémentaires</td>
+            <td>CC BY-SA 4.0</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- §4 Champs et structure -->
+    <section id="structure" class="doc-section">
+      <h2>4. Champs et structure</h2>
+      <p>La base est organisée en deux couches principales :</p>
+
+      <h3>Lemme (forme canonique)</h3>
+      <p>Chaque lemme représente une unité lexicale (ex. <em>chat</em>, <em>manger</em>, <em>petit</em>).</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>lemme</td><td>Forme canonique du mot</td><td>chat</td></tr>
+          <tr><td>cgram</td><td>Catégorie grammaticale</td><td>NOM</td></tr>
+          <tr><td>genre</td><td>Genre grammatical</td><td>m</td></tr>
+          <tr><td>freq_composite</td><td>Fréquence composite (par million)</td><td>62.3</td></tr>
+          <tr><td>etymologie</td><td>Origine du mot</td><td>Du latin <em>cattus</em></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Forme fléchie</h3>
+      <p>Chaque lemme possède une ou plusieurs formes fléchies (pluriel, féminin, conjugaison, etc.).</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ortho</td><td>Graphie</td><td>chats</td></tr>
+          <tr><td>phone</td><td>Transcription phonétique IPA</td><td><span class="ipa">/ʃa/</span></td></tr>
+          <tr><td>syllabes</td><td>Découpage syllabique</td><td><span class="ipa">ʃa</span></td></tr>
+          <tr><td>multext</td><td>Tag morphosyntaxique MULTEXT</td><td>Ncmp</td></tr>
+          <tr><td>orthocode</td><td>Code orthographique syllabique</td><td>cha°</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Définition</h3>
+      <p>Les définitions sont issues du Wiktionnaire et peuvent inclure un registre de langue et un domaine thématique.</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>definition</td><td>Texte de la définition</td><td>Petit mammifère domestique...</td></tr>
+          <tr><td>registre</td><td>Niveau de langue</td><td>familier, soutenu, vieilli</td></tr>
+          <tr><td>theme</td><td>Domaine thématique</td><td>zoologie, cuisine, droit</td></tr>
+        </tbody>
+      </table>
+
+      <div class="doc-example">
+        <h4>Exemple : le mot "chat"</h4>
+        <p>
+          <strong>Lemme :</strong> chat (NOM, masculin)<br>
+          <strong>Formes :</strong> chat <span class="ipa">/ʃa/</span>, chats <span class="ipa">/ʃa/</span>, chatte <span class="ipa">/ʃat/</span>, chattes <span class="ipa">/ʃat/</span><br>
+          <strong>Définition :</strong> Petit mammifère carnivore domestique de la famille des Felidae.
+        </p>
+      </div>
+    </section>
+
+    <!-- §5 Catégories grammaticales -->
+    <section id="pos" class="doc-section">
+      <h2>5. Catégories grammaticales</h2>
+      <p>
+        Chaque lemme est associé à une catégorie grammaticale (champ <code>cgram</code>).
+        Le lexique utilise les catégories suivantes :
+      </p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Code</th><th>Catégorie</th><th>Exemples</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>NOM</code></td><td>Nom commun</td><td>chat, maison, idée</td></tr>
+          <tr><td><code>NOM PROPRE</code></td><td>Nom propre</td><td>Paris, Victor, Sahara</td></tr>
+          <tr><td><code>VER</code></td><td>Verbe</td><td>manger, être, courir</td></tr>
+          <tr><td><code>AUX</code></td><td>Auxiliaire</td><td>avoir, être</td></tr>
+          <tr><td><code>ADJ</code></td><td>Adjectif</td><td>grand, bleu, ancien</td></tr>
+          <tr><td><code>ADV</code></td><td>Adverbe</td><td>très, bien, rapidement</td></tr>
+          <tr><td><code>DET</code></td><td>Déterminant</td><td>le, un, mon, ce</td></tr>
+          <tr><td><code>PRO</code></td><td>Pronom</td><td>je, celui, lequel</td></tr>
+          <tr><td><code>PRE</code></td><td>Préposition</td><td>de, à, dans, pour</td></tr>
+          <tr><td><code>CON</code></td><td>Conjonction</td><td>et, mais, que, si</td></tr>
+          <tr><td><code>ONO</code></td><td>Onomatopée / Interjection</td><td>oh, hélas, boum</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- §6 Tags MULTEXT -->
+    <section id="multext" class="doc-section">
+      <h2>6. Tags MULTEXT</h2>
+      <p>
+        Chaque forme fléchie porte un tag <strong>MULTEXT</strong> (champ <code>multext</code>)
+        qui encode la catégorie grammaticale et les traits flexionnels dans une chaîne positionnelle.
+        Ce système est basé sur le standard MULTEXT-GRACE / EAGLES.
+      </p>
+
+      <h3>Principe</h3>
+      <p>
+        Chaque caractère du tag correspond à un trait, selon sa position.
+        Le premier caractère indique toujours la catégorie majeure :
+      </p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Position 0</th><th>Catégorie</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>N</code></td><td>Nom</td></tr>
+          <tr><td><code>V</code></td><td>Verbe</td></tr>
+          <tr><td><code>A</code></td><td>Adjectif</td></tr>
+          <tr><td><code>D</code></td><td>Déterminant</td></tr>
+          <tr><td><code>P</code></td><td>Pronom</td></tr>
+          <tr><td><code>R</code></td><td>Adverbe</td></tr>
+          <tr><td><code>S</code></td><td>Préposition</td></tr>
+          <tr><td><code>C</code></td><td>Conjonction</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Noms (<code>N</code>)</h3>
+      <p>Format : <code>N</code> + sous-type + genre + nombre</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Position</th><th>Trait</th><th>Valeurs</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Sous-type</td><td><code>c</code> commun, <code>p</code> propre</td></tr>
+          <tr><td>2</td><td>Genre</td><td><code>m</code> masculin, <code>f</code> féminin</td></tr>
+          <tr><td>3</td><td>Nombre</td><td><code>s</code> singulier, <code>p</code> pluriel</td></tr>
+        </tbody>
+      </table>
+      <div class="doc-example">
+        <p>
+          <code>Ncms</code> = Nom commun masculin singulier (ex. <em>chat</em>)<br>
+          <code>Ncfp</code> = Nom commun féminin pluriel (ex. <em>maisons</em>)<br>
+          <code>Np</code> = Nom propre (ex. <em>Paris</em>)
+        </p>
+      </div>
+
+      <h3>Verbes (<code>V</code>)</h3>
+      <p>Format : <code>V</code> + sous-type + mode + temps + personne + nombre + genre</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Position</th><th>Trait</th><th>Valeurs</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Sous-type</td><td><code>m</code> principal, <code>a</code> auxiliaire</td></tr>
+          <tr><td>2</td><td>Mode</td><td><code>i</code> indicatif, <code>s</code> subjonctif, <code>m</code> impératif, <code>c</code> conditionnel, <code>n</code> infinitif, <code>p</code> participe, <code>g</code> gérondif</td></tr>
+          <tr><td>3</td><td>Temps</td><td><code>p</code> présent, <code>i</code> imparfait, <code>f</code> futur, <code>s</code> passé simple</td></tr>
+          <tr><td>4</td><td>Personne</td><td><code>1</code>, <code>2</code>, <code>3</code></td></tr>
+          <tr><td>5</td><td>Nombre</td><td><code>s</code> singulier, <code>p</code> pluriel</td></tr>
+          <tr><td>6</td><td>Genre</td><td><code>m</code> masculin, <code>f</code> féminin (participes)</td></tr>
+        </tbody>
+      </table>
+      <div class="doc-example">
+        <p>
+          <code>Vmip3s</code> = Verbe principal, indicatif présent, 3<sup>e</sup> personne singulier (ex. <em>mange</em>)<br>
+          <code>Vmii1p</code> = Verbe principal, indicatif imparfait, 1<sup>re</sup> personne pluriel (ex. <em>mangions</em>)<br>
+          <code>Vmps--m</code> = Verbe principal, participe passé, masculin (ex. <em>mangé</em>)<br>
+          <code>Vmn</code> = Verbe principal, infinitif (ex. <em>manger</em>)
+        </p>
+      </div>
+
+      <h3>Adjectifs (<code>A</code>)</h3>
+      <p>Format : <code>A</code> + sous-type + degré + genre + nombre</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Position</th><th>Trait</th><th>Valeurs</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Sous-type</td><td><code>f</code> qualificatif, <code>o</code> ordinal, <code>i</code> indéfini</td></tr>
+          <tr><td>2</td><td>Degré</td><td><code>p</code> positif, <code>c</code> comparatif, <code>s</code> superlatif</td></tr>
+          <tr><td>3</td><td>Genre</td><td><code>m</code> masculin, <code>f</code> féminin</td></tr>
+          <tr><td>4</td><td>Nombre</td><td><code>s</code> singulier, <code>p</code> pluriel</td></tr>
+        </tbody>
+      </table>
+      <div class="doc-example">
+        <p>
+          <code>Afpms</code> = Adjectif qualificatif positif masculin singulier (ex. <em>grand</em>)<br>
+          <code>Afpfp</code> = Adjectif qualificatif positif féminin pluriel (ex. <em>grandes</em>)
+        </p>
+      </div>
+    </section>
+
+    <!-- §7 Orthocode -->
+    <section id="orthocode" class="doc-section">
+      <h2>7. Orthocode</h2>
+      <p>
+        L'<strong>orthocode</strong> est un système de codage syllabique orthographique développé pour Lectura.
+        Il permet de découper un mot en syllabes en se basant sur sa graphie (et non sur la phonétique seule),
+        tout en marquant les lettres muettes et les particularités orthographiques.
+      </p>
+
+      <h3>Marqueurs</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Marqueur</th><th>Signification</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>.</code></td><td>Séparateur de syllabes</td><td>pe.ti° &rarr; pe / ti</td></tr>
+          <tr><td><code>°</code></td><td>Lettre(s) muette(s) en fin de syllabe</td><td>cha° &rarr; le <em>t</em> est muet</td></tr>
+          <tr><td><code>(y)</code></td><td>Lettre-pont (appartient aux deux syllabes)</td><td>ba.la(y).yer &rarr; le <em>y</em> fait liaison</td></tr>
+          <tr><td><code>²</code></td><td>Consonne doublée non séparée</td><td>a.l²u.mer &rarr; les deux <em>l</em> restent ensemble</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Exemples</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Mot</th><th>Orthocode</th><th>Syllabes IPA</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>chat</td><td><code>cha°</code></td><td><span class="ipa">/ʃa/</span></td></tr>
+          <tr><td>petit</td><td><code>pe.ti°</code></td><td><span class="ipa">/pə.ti/</span></td></tr>
+          <tr><td>balayer</td><td><code>ba.la(y).yer</code></td><td><span class="ipa">/ba.le.je/</span></td></tr>
+          <tr><td>maison</td><td><code>mai.son</code></td><td><span class="ipa">/mɛ.zɔ̃/</span></td></tr>
+          <tr><td>allumer</td><td><code>a.l²u.mer</code></td><td><span class="ipa">/a.ly.me/</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- §8 Fréquences -->
+    <section id="frequences" class="doc-section">
+      <h2>8. Fréquences</h2>
+      <p>
+        Le lexique intègre quatre sources de fréquence complémentaires, couvrant différents registres d'usage.
+        Toutes les valeurs sont exprimées en <strong>occurrences par million de mots</strong>.
+      </p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Champ</th><th>Source</th><th>Registre</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>freq_opensubs</code></td>
+            <td>OpenSubtitles</td>
+            <td>Oral / informel</td>
+            <td>Sous-titres de films et séries francophones</td>
+          </tr>
+          <tr>
+            <td><code>freq_frantext</code></td>
+            <td>Frantext</td>
+            <td>Littéraire</td>
+            <td>Corpus de textes littéraires français</td>
+          </tr>
+          <tr>
+            <td><code>freq_lm10</code></td>
+            <td>LM10</td>
+            <td>Livres modernes</td>
+            <td>Corpus de livres contemporains</td>
+          </tr>
+          <tr>
+            <td><code>freq_frwac</code></td>
+            <td>FrWaC</td>
+            <td>Web</td>
+            <td>Corpus de pages web francophones</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Score composite</h3>
+      <p>
+        Le champ <code>freq_composite</code> combine les quatre sources en un score unique,
+        calculé par <strong>moyenne géométrique</strong> des sources disponibles :
+      </p>
+      <div class="doc-example">
+        <p>
+          composite = exp( (log(f<sub>1</sub>) + log(f<sub>2</sub>) + ... + log(f<sub>n</sub>)) / max(n, 2) )
+        </p>
+      </div>
+      <p>
+        Le dénominateur est plafonné à min 2 : si un mot n'apparaît que dans une seule source,
+        la formule prend la racine carrée plutôt que la valeur brute, pénalisant les mots
+        attestés dans un seul corpus. Le résultat est également exprimé en occurrences par million.
+      </p>
+      <p>
+        Par exemple, un mot très courant comme <em>de</em> a un composite d'environ 30 000 par million,
+        tandis qu'un terme technique rare aura un composite inférieur à 1.
+      </p>
+    </section>
+
+    <!-- §9 Relations sémantiques -->
+    <section id="relations" class="doc-section">
+      <h2>9. Relations sémantiques</h2>
+      <p>Le lexique contient cinq types de relations entre lemmes :</p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Relation</th><th>Description</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Synonymes</strong></td>
+            <td>Mots de sens proche ou identique</td>
+            <td>maison &rarr; habitation, demeure, logis</td>
+          </tr>
+          <tr>
+            <td><strong>Antonymes</strong></td>
+            <td>Mots de sens contraire</td>
+            <td>grand &rarr; petit</td>
+          </tr>
+          <tr>
+            <td><strong>Hyperonymes</strong></td>
+            <td>Terme plus général (relation "est un")</td>
+            <td>chat &rarr; mammifère &rarr; animal</td>
+          </tr>
+          <tr>
+            <td><strong>Dérivés</strong></td>
+            <td>Mots formés à partir du même radical</td>
+            <td>terre &rarr; terrestre, atterrir, enterrer</td>
+          </tr>
+          <tr>
+            <td><strong>Apparentés</strong></td>
+            <td>Mots sémantiquement liés sans lien morphologique direct</td>
+            <td>école &rarr; enseignant, élève, classe</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Ces relations proviennent de trois sources principales :
+        <a href="https://kaikki.org/dictionary/French/">Kaikki</a> (extraction du Wiktionnaire),
+        <a href="http://alpage.inria.fr/~sagot/wolf-en.html">WOLF</a> (WordNet français)
+        et <a href="https://www.jeuxdemots.org/">JeuxDeMots</a>.
+      </p>
+    </section>
+
+    <!-- §10 Entités nommées -->
+    <section id="entites" class="doc-section">
+      <h2>10. Entités nommées</h2>
+      <p>
+        Le lexique intègre <strong>{{ '{:,}'.format(stats.nb_entites).replace(',', ' ') }} entités nommées</strong>
+        issues de <a href="https://www.wikidata.org/">Wikidata</a>, organisées en
+        <strong>{{ '{:,}'.format(stats.nb_categories).replace(',', ' ') }} catégories</strong> hiérarchiques.
+      </p>
+
+      <h3>Types d'entités</h3>
+      <ul>
+        <li><strong>Personne</strong> : personnalités, artistes, scientifiques, sportifs...</li>
+        <li><strong>Lieu</strong> : villes, pays, régions, monuments, cours d'eau...</li>
+        <li><strong>Organisation</strong> : entreprises, institutions, associations...</li>
+        <li><strong>Oeuvre</strong> : livres, films, albums, tableaux...</li>
+        <li><strong>Événement</strong> : batailles, festivals, compétitions...</li>
+        <li><strong>Taxon</strong> : espèces animales et végétales...</li>
+      </ul>
+
+      <h3>Propriétés</h3>
+      <p>Chaque entité peut posséder des propriétés enrichies :</p>
+      <ul>
+        <li><strong>Image</strong> : photo ou illustration (Wikimedia Commons)</li>
+        <li><strong>Dates</strong> : naissance, décès, fondation...</li>
+        <li><strong>Coordonnées</strong> : latitude, longitude (pour les lieux)</li>
+        <li><strong>Extrait</strong> : résumé de l'article Wikipédia</li>
+        <li><strong>Notoriété</strong> et <strong>Popularité</strong> : deux mesures d'importance (voir ci-dessous)</li>
+      </ul>
+
+      <h3>Notoriété et Popularité</h3>
+      <p>
+        Le lexique fournit deux métriques complémentaires pour évaluer l'importance d'une entité.
+        Elles servent notamment à trier les résultats de recherche et à prioriser l'affichage.
+      </p>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Métrique</th><th>Source</th><th>Signification</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Notoriété</strong></td>
+            <td>Wikidata (<em>sitelinks</em>)</td>
+            <td>
+              Nombre d'éditions linguistiques de Wikipédia possédant un article sur cette entité.
+              Par exemple, « France » a un article dans plus de 300 Wikipédias (notoriété &asymp; 300),
+              tandis qu'une commune rurale n'en aura que quelques-uns.
+              C'est une mesure <strong>internationale et stable</strong> dans le temps.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Popularité</strong></td>
+            <td>Wikipédia francophone (<em>pageviews</em>)</td>
+            <td>
+              Nombre moyen de consultations quotidiennes de l'article Wikipédia en français.
+              Calculé par échantillonnage stratifié sur plusieurs années de dumps Wikimedia
+              (dates réparties sur toutes les saisons et jours de semaine pour éliminer les biais de périodicité).
+              C'est une mesure <strong>francophone et dynamique</strong>, reflétant l'intérêt du public français.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="doc-example">
+        <p>
+          <strong>Exemple :</strong> Victor Hugo a une notoriété élevée (~300 sitelinks) et une forte
+          popularité (~1 500 vues/jour en français). Une ville américaine peu connue en France
+          peut avoir une notoriété correcte (article dans 50 Wikipédias) mais une popularité faible
+          (quelques vues par jour sur le Wikipédia francophone).
+        </p>
+      </div>
+
+      <p>
+        Les entités sont liées aux lemmes du lexique, permettant de naviguer du vocabulaire
+        courant vers les connaissances encyclopédiques et inversement.
+        Explorez les entités par <a href="/categories">catégories</a>.
+      </p>
+    </section>
+
+    <!-- §11 Licence et attribution -->
+    <section id="licence" class="doc-section">
+      <h2>11. Licence et attribution</h2>
+      <p>
+        Le Lexique Lectura est un assemblage de sources ouvertes. La licence dominante est
+        <strong>CC BY-SA</strong> (versions 3.0 et 4.0). Les entités Wikidata sont sous
+        <strong>CC0</strong> (domaine public). WOLF est sous licence
+        <strong>CeCILL-C</strong> (compatible LGPL).
+      </p>
+      <p>
+        Les données sont redistribuées conformément aux termes de chaque source.
+        Si vous utilisez le lexique dans un projet, merci de citer les sources pertinentes
+        (voir le tableau dans la section <a href="#sources">Sources de données</a>).
+      </p>
+      <p>
+        Le code source du projet Lectura est disponible sur
+        <a href="https://www.lec-tu-ra.com">lec-tu-ra.com</a>.
+      </p>
+    </section>
+
+  </div>
+</div>
+{% endblock %}
