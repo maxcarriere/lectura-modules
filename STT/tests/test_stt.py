@@ -78,6 +78,27 @@ class TestParseCTC(unittest.TestCase):
         r = parse_ctc_output("ʒ ['] e")
         self.assertEqual(r.mots_ipa, ["ʒ'e"])
 
+    def test_elision_multi_phones_split(self):
+        """CTC fusionne pronom + clitique : 'ɛ m [']' → separe en ["ɛ", "m'..."]."""
+        r = parse_ctc_output("ɛ m ['] a p ɛ l")
+        self.assertEqual(r.mots_ipa, ["ɛ", "m'apɛl"])
+        self.assertEqual(len(r.liaisons), 2)
+
+    def test_elision_multi_phones_tu(self):
+        """CTC fusionne tu + m' : 't y m [']' → ["ty", "m'..."]."""
+        r = parse_ctc_output("t y m ['] a p ɛ l")
+        self.assertEqual(r.mots_ipa, ["ty", "m'apɛl"])
+
+    def test_elision_multi_phones_il(self):
+        """CTC fusionne il + s' : 'i l s [']' → ["il", "s'..."]."""
+        r = parse_ctc_output("i l s ['] a p ɛ l")
+        self.assertEqual(r.mots_ipa, ["il", "s'apɛl"])
+
+    def test_elision_single_phone_unchanged(self):
+        """Un seul phone avant ['] reste identique (pas de split)."""
+        r = parse_ctc_output("l ['] o m")
+        self.assertEqual(r.mots_ipa, ["l'om"])
+
     def test_mot_compose(self):
         """Mot compose avec [-]."""
         r = parse_ctc_output("ɡ ʁ ɑ̃ [-] p ɛ ʁ")
