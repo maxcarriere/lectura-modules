@@ -87,14 +87,23 @@ def parse_ctc_output(ipa_str: str) -> ParseResult:
             pending_liaison = tok[1:-1]  # "[z]" → "z"
 
         elif tok == ELISION_MARKER:
-            # Elision : le clitique precedent est rattache au mot suivant
-            # On ajoute une apostrophe au mot courant pour marquer l'elision
+            # Elision : le clitique precedent est rattache au mot suivant.
+            # Un clitique valide est toujours un seul phone (l, d, ʒ, k, m,
+            # n, s, t).  Si le CTC a fusionne le mot precedent avec le
+            # clitique (ex: "ɛ m [']" au lieu de "ʒ ə | m [']"), on separe :
+            # seul le dernier phone est le clitique, les phones precedents
+            # forment un mot distinct.
             if current_phones:
-                # Rattacher le clitique avec apostrophe au mot suivant
-                clitic_ipa = "".join(current_phones)
-                current_phones.clear()
-                # On stocke le clitique avec apostrophe pour le prochain mot
-                current_phones.append(clitic_ipa + "'")
+                if len(current_phones) > 1:
+                    clitic_phone = current_phones[-1]
+                    mots_ipa.append("".join(current_phones[:-1]))
+                    liaisons.append(pending_liaison)
+                    current_phones.clear()
+                    current_phones.append(clitic_phone + "'")
+                else:
+                    clitic_ipa = current_phones[0]
+                    current_phones.clear()
+                    current_phones.append(clitic_ipa + "'")
             pending_liaison = ""
 
         elif tok == COMPOUND_MARKER:
