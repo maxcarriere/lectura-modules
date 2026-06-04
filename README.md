@@ -21,6 +21,7 @@ Installez tout d'un coup avec `pip install lectura` ou chaque module independamm
 | Module | Description | Version | pip install |
 |--------|-------------|---------|-------------|
 | **[G2P-Pipeline](G2P-Pipeline/)** | Pipeline complet texte → phonetique (tokeniseur + formules + phonemiseur) | 1.0.0 | `pip install lectura-g2p` |
+| **[STT](STT/)** | Pipeline complet audio → texte (CTC + P2G) | 1.0.0 | `pip install lectura-stt` |
 
 ## Synthese vocale
 

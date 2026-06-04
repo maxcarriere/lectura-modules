@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-stt"
+version = "1.0.0"
+description = "Pipeline STT complet du francais — audio vers texte (CTC + P2G)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+keywords = ["stt", "asr", "french", "speech-to-text", "pipeline", "ctc", "p2g"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = ["lectura-ctc>=1.0"]
+
+[project.optional-dependencies]
+p2g = ["lectura-p2g>=1.0"]
+onnx = ["lectura-ctc[onnx]", "lectura-graphemiseur[onnx]"]
+micro = ["lectura-ctc[micro]"]
+
+[project.urls]
+Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/STT"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
