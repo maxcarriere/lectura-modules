@@ -4,7 +4,10 @@ Strategies :
 - corriger_p2g() : correction par mot via predictions morpho
 - corriger_phrase_v2() : correction contextuelle inter-mots + lexique
 - forcer_coherence_ortho_morpho() : coherence ortho-morpho par regles
-- corriger_phrase_v3() : pipeline V6 complet (formules + coherence morpho + accents)
+- corriger_phrase_v3() : pipeline V6 core (coherence morpho + accents)
+
+Note : les formules (nombres, sigles) et noms propres sont dans
+lectura-p2g (pipeline couche 2).
 """
 
 from __future__ import annotations
@@ -620,89 +623,7 @@ def corriger_par_lexique_ortho(
     return ortho
 
 
-# ── Pipeline complet Phase 3+ ────────────────────────────────────
-
-# ── Reconnaissance de formules (nombres, sigles) ────────────────────
-
-def _appliquer_formules(
-    result: list[str],
-    ipa_words: list[str],
-    pos_tags: list[str],
-    n: int,
-    _in_lex,
-) -> set[int]:
-    """Detecte et remplace les formules (nombres, sigles) dans la sortie P2G.
-
-    Utilise lectura_formules.detect_number_spans et detect_sigle_spans
-    pour identifier les sequences IPA correspondant a des formules.
-    Remplace les mots P2G par le texte correct (display_fr).
-
-    Modifie ``result`` in-place.
-    Returns: set de positions traitees (a proteger des corrections suivantes).
-    """
-    try:
-        from lectura_formules import detect_number_spans, detect_sigle_spans
-    except ImportError:
-        return set()
-
-    formule_positions: set[int] = set()
-
-    # ── Nombres (min_span=1 pour les nombres simples aussi) ──
-    number_spans = detect_number_spans(ipa_words, min_span=1, max_span=8)
-    for start, end, formula_result in number_spans:
-        display_words = formula_result.display_fr.split()
-        span_len = end - start
-        for k in range(span_len):
-            if k < len(display_words):
-                result[start + k] = display_words[k]
-            else:
-                result[start + k] = ""
-            formule_positions.add(start + k)
-
-    # ── Sigles (min_span=2, lettres epelees) ──
-    sigle_spans = detect_sigle_spans(ipa_words, min_span=2, max_span=8)
-    for start, end, formula_result in sigle_spans:
-        # Pas de chevauchement avec les nombres
-        if any(i in formule_positions for i in range(start, end)):
-            continue
-        # Pour les sigles, display_num contient l'acronyme (ex: "SNCF")
-        result[start] = formula_result.display_num or formula_result.display_fr
-        for k in range(1, end - start):
-            result[start + k] = ""
-        for k in range(end - start):
-            formule_positions.add(start + k)
-
-    # ── Regles contextuelles post-formules ──
-    for start, end, formula_result in number_spans:
-        valeur = formula_result.valeur
-        if not isinstance(valeur, (int, float)):
-            continue
-
-        next_idx = end
-        if next_idx >= n or next_idx in formule_positions:
-            continue
-
-        next_pos = pos_tags[next_idx] if next_idx < len(pos_tags) else ""
-
-        # Regle: nombre + "en" (POS=NOM) → "ans"
-        # Corrige l'homophone /ɑ̃/ quand le contexte est "X ans".
-        # AVANT la regle pluriel, car sinon "en" → "ens" empeche le match.
-        if next_pos == "NOM" and result[next_idx].lower() == "en":
-            result[next_idx] = "ans"
-
-        # Regle: nombre > 1 → NOM/ADJ suivant doit etre pluriel
-        if valeur > 1 and next_pos in ("NOM", "ADJ"):
-            curr = result[next_idx]
-            if (
-                not curr.endswith(("s", "x", "z"))
-                and len(curr) > 1
-                and curr.lower() not in _NO_PLURAL_S
-            ):
-                candidate = curr + "s"
-                if _in_lex(candidate):
-                    result[next_idx] = candidate
-
-    return formule_positions
+# ── Pipeline Phase 3+ ────────────────────────────────────────────
 
 
 def corriger_phrase_v3(
@@ -713,35 +634,34 @@ def corriger_phrase_v3(
     lexique_index: dict[str, list[str]] | None = None,
     freq_map: dict[str, float] | None = None,
     lex_candidates: list[list[tuple[str, float]]] | None = None,
-    ipa_words: list[str] | None = None,
-    phone_lexicon: object | None = None,
+    skip_positions: set[int] | None = None,
 ) -> list[str]:
-    """Pipeline post-traitement pour le modele P2G v6.
+    """Pipeline post-traitement core pour le modele P2G v6.
 
-    Etape 0  : reconnaissance de formules (nombres, sigles via lectura_formules)
     Etape 1  : forcer_coherence_ortho_morpho() (coherence ortho vs morpho predite)
     Etape 1b : corrections contextuelles inter-mots (det/pro pluriel)
     Etape 1c : corrections d'accent par POS (a/a, ou/ou)
-    Etape 1d : majuscules pour noms propres (via phone_lexicon cgram='NOM PROPRE')
 
     Les etapes 1b et 1c s'appliquent uniquement quand la morpho predite
     est incoherente avec le contexte (ex: morpho=Sing mais det=pluriel),
     ce qui evite les regressions sur les cas ou morpho est deja correct.
 
-    L'etape 0 (formules) est deterministe et prioritaire : les positions
-    reconnues comme formules sont protegees des corrections suivantes.
+    Parameters
+    ----------
+    skip_positions : set[int] | None
+        Positions a ne pas modifier (ex: formules detectees par le pipeline
+        couche 2 lectura-p2g). Ces positions sont protegees de toutes les
+        corrections.
+
+    Note : les formules (nombres, sigles) et les noms propres sont geres
+    par lectura-p2g (pipeline couche 2).
     """
     result = list(ortho_words)
     n = len(result)
 
     _in_lex = (lambda w: w.lower() in lexique) if lexique is not None else (lambda w: True)
 
-    # Etape 0 : reconnaissance de formules (nombres, sigles)
-    formule_positions: set[int] = set()
-    if ipa_words is not None and len(ipa_words) == n:
-        formule_positions = _appliquer_formules(
-            result, ipa_words, pos_tags, n, _in_lex,
-        )
+    formule_positions = skip_positions or set()
 
     # Etape 1 : coherence ortho-morpho (regles Phase 3c)
     # Ne s'applique qu'aux mots HORS lexique : si lex_select a produit un
@@ -834,56 +754,6 @@ def corriger_phrase_v3(
             result[i] = "où"
         elif lower == "où" and pos == "CON":
             result[i] = "ou"
-
-    # Etape 1d : majuscules pour noms propres
-    # Si le phone_lexicon contient une entree NOM PROPRE correspondant
-    # au mot predit, on capitalise (le modele ne gere pas la casse).
-    if phone_lexicon is not None and ipa_words is not None and hasattr(phone_lexicon, "all_entries"):
-        for i in range(n):
-            if i in formule_positions:
-                continue
-            if i >= len(ipa_words):
-                continue
-            phone = ipa_words[i]
-            word = result[i]
-            # Pour les elisions (j'..., l'...), verifier la base
-            if "'" in word:
-                parts = word.split("'", 1)
-                ortho_base = parts[1]
-            else:
-                ortho_base = word
-            if "'" in phone:
-                apo_idx = phone.index("'")
-                base_phone = phone[apo_idx + 1:]
-            else:
-                base_phone = phone
-            if not base_phone or not ortho_base:
-                continue
-            entries = phone_lexicon.all_entries(base_phone)
-            if not entries:
-                continue
-            # Capitaliser si l'ortho predit correspond exclusivement a un
-            # NOM PROPRE dans le lexique (pas de sens commun pour la meme ortho).
-            # Ex: "antoine" n'existe qu'en NOM PROPRE → capitaliser.
-            # Ex: "paris" existe en NOM + NOM PROPRE → ne pas capitaliser.
-            # Ex: "appelle" existe en VER → ne pas capitaliser.
-            ortho_lower = ortho_base.lower()
-            has_propre = False
-            has_commun = False
-            for e in entries:
-                if (e.get("ortho") or "").lower() != ortho_lower:
-                    continue
-                if (e.get("cgram") or "").strip() == "NOM PROPRE":
-                    has_propre = True
-                else:
-                    has_commun = True
-            is_propre = has_propre and not has_commun
-            if is_propre:
-                if "'" in word:
-                    parts = word.split("'", 1)
-                    result[i] = parts[0] + "'" + parts[1].capitalize()
-                else:
-                    result[i] = word.capitalize()
 
     # Note: les etapes lex_cand et fallback ortho-lexique ont ete retirees.
     # Benchmark montrait des regressions nettes (-286 et -1988 respectivement) :
