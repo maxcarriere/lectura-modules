@@ -25,7 +25,7 @@ import numpy as np
 from lectura_stt._parse_ctc import parse_ctc_output
 from lectura_stt._assembler import assembler_texte
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 
 @dataclass
@@ -70,10 +70,12 @@ class STTEngine:
         ctc_engine: object,
         p2g_engine: object | None = None,
         p2g_analyser: object | None = None,
+        formule_tolerance: str = "stt",
     ) -> None:
         self.ctc = ctc_engine
         self.p2g = p2g_engine
         self._p2g_analyser = p2g_analyser  # lectura_p2g.analyser (avec formules)
+        self.formule_tolerance = formule_tolerance
 
     def transcrire(self, audio: np.ndarray, sr: int = 16000) -> ResultatSTT:
         """Transcrit un signal audio en texte.
@@ -154,7 +156,10 @@ class STTEngine:
 
         # 1. Pipeline P2G complet (formules + noms propres + entites)
         if self._p2g_analyser is not None:
-            result = self._p2g_analyser(mots_clean, engine=self.p2g)
+            result = self._p2g_analyser(
+                mots_clean, engine=self.p2g,
+                formule_tolerance=self.formule_tolerance,
+            )
             return result.get("ortho", mots_clean)
 
         # 2. Graphemiseur seul (sans formules)
@@ -177,6 +182,7 @@ def creer_engine(
     mode: str = "auto",
     ctc_kwargs: dict | None = None,
     p2g_kwargs: dict | None = None,
+    formule_tolerance: str = "stt",
 ) -> STTEngine:
     """Factory pour creer un engine STT.
 
@@ -190,6 +196,10 @@ def creer_engine(
         Arguments supplementaires pour ``lectura_ctc.creer_engine()``.
     p2g_kwargs : dict | None
         Arguments supplementaires pour le P2G engine.
+    formule_tolerance : str
+        Tolerance de reconnaissance des formules :
+        - ``"stt"``   : tolerant STT (defaut — normalisation vocalique, Levenshtein)
+        - ``"exact"`` : IPA exact uniquement
 
     Returns
     -------
@@ -210,7 +220,7 @@ def creer_engine(
     p2g_kw = dict(p2g_kwargs) if p2g_kwargs else {}
     p2g_engine, p2g_analyser = _creer_p2g(**p2g_kw)
 
-    return STTEngine(ctc_engine, p2g_engine, p2g_analyser)
+    return STTEngine(ctc_engine, p2g_engine, p2g_analyser, formule_tolerance=formule_tolerance)
 
 
 def _creer_p2g(**kwargs: object) -> tuple[object | None, object | None]:
