@@ -1,0 +1,231 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}{{ categorie.label }} — catégorie | {{ total }} entités{% endblock %}
+{% block meta_description %}{{ total }} entités dans la catégorie « {{ categorie.label }} ».{% if categorie.description %} {{ categorie.description[:120] }}{% endif %}{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Catégories", "url": "/categories"}, {"label": categorie.label, "url": ""}] %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+<div class="cat-layout">
+  <aside class="cat-sidebar">
+    <div class="cat-toolbar">
+      <input type="text" id="cat-filter" placeholder="Filtrer..." class="cat-filter-input">
+      <label class="cat-toggle"><input type="checkbox" id="cat-hide-empty" checked> Masquer vides</label>
+    </div>
+    <div class="cat-tree" id="cat-tree">
+      <p style="color:var(--c-text-light)">Chargement…</p>
+    </div>
+  </aside>
+
+  <div class="cat-content">
+    <h1 class="page-title">{{ categorie.label }}</h1>
+    {% if categorie.description %}
+    <p class="page-subtitle">{{ categorie.description }}</p>
+    {% endif %}
+    <div class="cat-options">
+      <label class="cat-toggle"><input type="checkbox" id="cat-include-sub"{{ ' checked' if sous_categories }}> Inclure les sous-catégories</label>
+      <span class="page-subtitle" style="margin:0">{{ total }} entité{{ 's' if total > 1 else '' }}</span>
+    </div>
+
+    {% if entites %}
+    {% macro sort_link(col, label) %}
+    {% set next_ordre = 'desc' if tri == col and ordre == 'asc' else 'asc' %}
+    {% set arrow = '▲' if tri == col and ordre == 'asc' else ('▼' if tri == col and ordre == 'desc' else '') %}
+    <a href="{{ base_url }}?tri={{ col }}&ordre={{ next_ordre }}{% if sous_categories %}&sous_categories=1{% endif %}" class="sort-link{% if tri == col %} sort-active{% endif %}">{{ label }} <span class="sort-icon">{{ arrow }}</span></a>
+    {% endmacro %}
+    <table class="data-table sortable-table" id="entites-table">
+      <thead>
+        <tr>
+          <th class="sortable">{{ sort_link('label', 'Nom') }}</th>
+          <th>Type</th>
+          <th class="sortable col-num">{{ sort_link('notoriete', 'Notoriété') }}</th>
+          <th class="sortable col-num">{{ sort_link('pageviews', 'Popularité') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entites %}
+        <tr>
+          <td><a href="/entite/{{ e.qid or e.id }}/{{ (e.label or '')|replace(' ', '-')|lower }}">{{ e.label }}</a></td>
+          <td><span class="cgram-tag">{{ (e.type_entite or '')|title }}</span></td>
+          <td class="col-num">{{ e.notoriete|default(0)|int }}</td>
+          <td class="col-num">{{ e.pageviews_fr|default(0)|round(1) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% include "lexique/partials/_pagination.html" %}
+    {% else %}
+    <p>Aucune entité dans cette catégorie.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  // === Inclure sous-catégories ===
+  var subCb = document.getElementById('cat-include-sub');
+  if (subCb) {
+    subCb.addEventListener('change', function() {
+      var url = new URL(window.location.href);
+      if (subCb.checked) {
+        url.searchParams.set('sous_categories', '1');
+      } else {
+        url.searchParams.delete('sous_categories');
+      }
+      url.searchParams.delete('page');
+      window.location.href = url.toString();
+    });
+  }
+
+  // === Category tree (sidebar) ===
+  var tree = document.getElementById('cat-tree');
+  var filterInput = document.getElementById('cat-filter');
+  var hideEmpty = document.getElementById('cat-hide-empty');
+  var currentCat = {{ categorie.label|tojson }}.toLowerCase();
+
+  function slugify(s) {
+    return s.toLowerCase().replace(/[^\w\sàâäéèêëïîôùûüÿçœæ-]/g, '').replace(/[\s_]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function renderNode(node, depth) {
+    var hasChildren = node.children && node.children.length > 0;
+    var isCurrent = node.label.toLowerCase() === currentCat;
+    var li = document.createElement('li');
+    li.className = 'cat-node' + (hasChildren ? ' cat-branch' : ' cat-leaf');
+    li.dataset.label = node.label.toLowerCase();
+    li.dataset.rc = node.rc;
+
+    var row = document.createElement('div');
+    row.className = 'cat-row';
+
+    if (hasChildren) {
+      var toggle = document.createElement('span');
+      toggle.className = 'cat-toggle-icon';
+      toggle.textContent = '\u25B6';
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var ul = li.querySelector(':scope > ul');
+        if (!ul) return;
+        var open = ul.style.display !== 'none';
+        ul.style.display = open ? 'none' : '';
+        toggle.textContent = open ? '\u25B6' : '\u25BC';
+      });
+      row.appendChild(toggle);
+    } else {
+      var spacer = document.createElement('span');
+      spacer.className = 'cat-toggle-icon cat-spacer';
+      spacer.textContent = '\u2022';
+      row.appendChild(spacer);
+    }
+
+    var link = document.createElement('a');
+    link.href = '/categorie/' + slugify(node.label);
+    link.className = 'cat-label' + (isCurrent ? ' active' : '');
+    link.textContent = node.label;
+    row.appendChild(link);
+
+    var count = document.createElement('span');
+    count.className = 'cat-count';
+    count.textContent = node.rc > 0 ? '(' + node.rc + ')' : '';
+    row.appendChild(count);
+
+    li.appendChild(row);
+
+    if (hasChildren) {
+      var ul = document.createElement('ul');
+      ul.className = 'cat-children';
+      ul.style.display = 'none';
+      var containsCurrent = false;
+      for (var i = 0; i < node.children.length; i++) {
+        var childLi = renderNode(node.children[i], depth + 1);
+        ul.appendChild(childLi);
+        if (childLi.dataset.containsCurrent === 'true' || node.children[i].label.toLowerCase() === currentCat) {
+          containsCurrent = true;
+        }
+      }
+      if (isCurrent || containsCurrent) {
+        ul.style.display = '';
+        if (toggle) toggle.textContent = '\u25BC';
+        li.dataset.containsCurrent = 'true';
+      }
+      li.appendChild(ul);
+    }
+    if (isCurrent) li.dataset.containsCurrent = 'true';
+
+    return li;
+  }
+
+  function renderTree(roots) {
+    var ul = document.createElement('ul');
+    ul.className = 'cat-root';
+    for (var i = 0; i < roots.length; i++) {
+      ul.appendChild(renderNode(roots[i], 0));
+    }
+    tree.innerHTML = '';
+    tree.appendChild(ul);
+    applyFilters();
+    // Scroll to active
+    var active = tree.querySelector('.cat-label.active');
+    if (active) active.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }
+
+  function applyFilters() {
+    var q = filterInput.value.toLowerCase().trim();
+    var hide = hideEmpty.checked;
+    var nodes = tree.querySelectorAll('.cat-node');
+    nodes.forEach(function(node) {
+      var label = node.dataset.label;
+      var rc = parseInt(node.dataset.rc, 10) || 0;
+      var matchText = !q || label.indexOf(q) !== -1;
+      var matchEmpty = !hide || rc > 0;
+      node.style.display = (matchText && matchEmpty) ? '' : 'none';
+      if (q && matchText) {
+        var parent = node.parentElement;
+        while (parent && parent.classList) {
+          if (parent.classList.contains('cat-children')) {
+            parent.style.display = '';
+            var icon = parent.parentElement.querySelector(':scope > .cat-row > .cat-toggle-icon');
+            if (icon && icon.textContent === '\u25B6') icon.textContent = '\u25BC';
+          }
+          parent = parent.parentElement;
+        }
+      }
+    });
+  }
+
+  filterInput.addEventListener('input', applyFilters);
+  hideEmpty.addEventListener('change', applyFilters);
+
+  fetch('/api/categories/arbre')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { renderTree(d); })
+    .catch(function() { tree.innerHTML = '<p>Erreur.</p>'; });
+})();
+</script>
+{% endblock %}
+
+{% block json_ld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "name": {{ categorie.label|tojson }},
+  "url": "https://lexique.lec-tu-ra.com/categorie/{{ categorie.label|replace(' ', '-')|lower }}",
+  "numberOfItems": {{ total }}{% if categorie.description %},
+  "description": {{ categorie.description|tojson }}{% endif %}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Accueil", "item": "https://lexique.lec-tu-ra.com/"},
+    {"@type": "ListItem", "position": 2, "name": "Catégories", "item": "https://lexique.lec-tu-ra.com/categories"},
+    {"@type": "ListItem", "position": 3, "name": {{ categorie.label|tojson }}, "item": "https://lexique.lec-tu-ra.com/categorie/{{ categorie.label|replace(' ', '-')|lower }}"}
+  ]
+}
+</script>
+{% endblock %}

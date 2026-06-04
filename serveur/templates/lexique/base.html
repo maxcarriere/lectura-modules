@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Lexique Lectura{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Lexique Lectura — dictionnaire français : définitions, phonétique IPA, conjugaisons, synonymes, rimes.{% endblock %}">
+  <link rel="canonical" href="https://lexique.lec-tu-ra.com{{ request.url.path }}">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:title" content="{{ self.title() }}">
+  <meta property="og:description" content="{{ self.meta_description() }}">
+  <meta property="og:url" content="https://lexique.lec-tu-ra.com{{ request.url.path }}">
+  <meta property="og:site_name" content="Lexique Lectura">
+  <meta property="og:locale" content="fr_FR">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="/static/lexique/style.css?v=8">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="site-logo">Lexique Lectura</a>
+      <nav class="site-nav">
+        <a href="/">Rechercher</a>
+        <a href="/categories">Catégories</a>
+        <a href="/documentation">Documentation</a>
+        <a href="https://www.lec-tu-ra.com" rel="external">Lectura</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      Lexique Lectura &mdash; <a href="https://www.lec-tu-ra.com">Projet Lectura</a>
+    </div>
+  </footer>
+
+  {% block json_ld %}{% endblock %}
+</body>
+</html>

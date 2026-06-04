@@ -1,0 +1,172 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}{{ lemme }} — définition, synonymes, phonétique{% endblock %}
+{% block meta_description %}{% if first_def %}{{ first_def[:160] }}{% else %}Définition, phonétique IPA, synonymes et formes fléchies de « {{ lemme }} ».{% endif %}{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Mot", "url": "#"}, {"label": lemme, "url": ""}] %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+<h1 class="page-title">{{ lemme }}</h1>
+
+{% if entries|length > 1 %}
+<div class="homograph-tabs">
+  {% for e in entries %}
+  <span class="homograph-tab{% if loop.first %} active{% endif %}" id="tab-{{ loop.index }}">
+    {{ e.cgram or '?' }}{% if e.genre %} ({{ e.genre }}){% endif %}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for entry in entries %}
+<article class="homograph-entry" id="entry-{{ loop.index }}">
+  {% if entries|length > 1 %}
+  <h2>{{ entry.cgram or '' }}{% if entry.genre %} — {{ entry.genre }}{% endif %}</h2>
+  {% else %}
+  <p><span class="cgram-tag">{{ entry.cgram or '' }}</span>{% if entry.genre %} — {{ entry.genre }}{% endif %}</p>
+  {% endif %}
+
+  {% if entry.phone %}
+  <p class="ipa">/{{ entry.phone }}/</p>
+  {% endif %}
+
+  {% set canon = namespace(syllabes='', orthocode='') %}
+  {% for f in entry.formes if f.ortho|lower == lemme|lower %}
+    {% if f.syllabes and not canon.syllabes %}{% set canon.syllabes = f.syllabes %}{% endif %}
+    {% if f.orthocode and not canon.orthocode %}{% set canon.orthocode = f.orthocode %}{% endif %}
+  {% endfor %}
+  {% if canon.syllabes or canon.orthocode %}
+  <div class="mot-lectura">
+    {% if canon.syllabes %}<span>Syllabes : <strong class="ipa">{{ canon.syllabes }}</strong></span>{% endif %}
+    {% if canon.orthocode %}<span>Orthocode : <strong>{{ canon.orthocode }}</strong></span>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if entry.freq_composite or entry.freq_opensubs or entry.freq_frantext or entry.freq_lm10 or entry.freq_frwac %}
+  <div class="section freq-section">
+    <h2 class="section-title">Fréquence</h2>
+    <div class="freq-grid">
+      {% if entry.freq_composite %}
+      <div class="freq-item freq-composite">
+        <span class="freq-value">{{ '%.1f'|format(entry.freq_composite) }}</span>
+        <span class="freq-label">composite <small>/M</small></span>
+      </div>
+      {% endif %}
+      {% if entry.freq_opensubs %}
+      <div class="freq-item">
+        <span class="freq-value">{{ '%.1f'|format(entry.freq_opensubs) }}</span>
+        <span class="freq-label">OpenSubtitles</span>
+      </div>
+      {% endif %}
+      {% if entry.freq_frantext %}
+      <div class="freq-item">
+        <span class="freq-value">{{ '%.1f'|format(entry.freq_frantext) }}</span>
+        <span class="freq-label">Frantext</span>
+      </div>
+      {% endif %}
+      {% if entry.freq_lm10 %}
+      <div class="freq-item">
+        <span class="freq-value">{{ '%.1f'|format(entry.freq_lm10) }}</span>
+        <span class="freq-label">LM10</span>
+      </div>
+      {% endif %}
+      {% if entry.freq_frwac %}
+      <div class="freq-item">
+        <span class="freq-value">{{ '%.1f'|format(entry.freq_frwac) }}</span>
+        <span class="freq-label">FrWaC</span>
+      </div>
+      {% endif %}
+    </div>
+    <p class="freq-help">Fréquences par million de mots. Composite = moyenne géométrique des sources disponibles. <a href="/documentation#frequences">En savoir plus</a></p>
+  </div>
+  {% endif %}
+
+  {% if entry.is_verb %}
+  <div class="section">
+    <a href="/mot/{{ lemme }}/conjugaison">Voir la conjugaison complète &rarr;</a>
+  </div>
+  {% endif %}
+
+  {% with definitions=entry.definitions %}
+  {% include "lexique/partials/_definitions.html" %}
+  {% endwith %}
+
+  {% if entry.get('etymologie') %}
+  <div class="section">
+    <h2 class="section-title">Étymologie</h2>
+    <p class="def-text">{{ entry.etymologie }}</p>
+  </div>
+  {% endif %}
+
+  {% if entry.get('proverbes') %}
+  <div class="section">
+    <h2 class="section-title">Proverbes et locutions</h2>
+    <ul class="proverbe-list">
+      {% for p in entry.proverbes %}
+      <li>{{ p }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% with synonymes=entry.synonymes, antonymes=entry.antonymes, derives=entry.derives, hyperonymes=entry.hyperonymes, apparentes=entry.apparentes %}
+  {% include "lexique/partials/_relations.html" %}
+  {% endwith %}
+
+  {% with formes=entry.formes %}
+  {% include "lexique/partials/_formes_table.html" %}
+  {% endwith %}
+</article>
+{% endfor %}
+
+{% include "lexique/partials/_entites_liees.html" %}
+
+{% if entries|length > 1 %}
+<script>
+(function() {
+  var tabs = document.querySelectorAll('.homograph-tab');
+  var entries = document.querySelectorAll('.homograph-entry');
+  // Hide all entries except the first
+  entries.forEach(function(el, i) { if (i > 0) el.style.display = 'none'; });
+  tabs.forEach(function(tab, i) {
+    tab.style.cursor = 'pointer';
+    tab.addEventListener('click', function() {
+      tabs.forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      entries.forEach(function(el, j) { el.style.display = (j === i) ? '' : 'none'; });
+    });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}
+
+{% block json_ld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "DefinedTerm",
+  "name": "{{ lemme }}",
+  "url": "https://lexique.lec-tu-ra.com/mot/{{ lemme }}",
+  "inDefinedTermSet": {
+    "@type": "DefinedTermSet",
+    "name": "Lexique Lectura",
+    "url": "https://lexique.lec-tu-ra.com/"
+  }{% if first_def %},
+  "description": {{ first_def[:300]|tojson }}{% endif %}{% if entries and entries[0].cgram %},
+  "termCode": {{ entries[0].cgram|tojson }}{% endif %}{% if entries and entries[0].phone %},
+  "pronunciation": {{ ('/'+entries[0].phone+'/')|tojson }}{% endif %}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Accueil", "item": "https://lexique.lec-tu-ra.com/"},
+    {"@type": "ListItem", "position": 2, "name": {{ lemme|tojson }}, "item": "https://lexique.lec-tu-ra.com/mot/{{ lemme }}"}
+  ]
+}
+</script>
+{% endblock %}

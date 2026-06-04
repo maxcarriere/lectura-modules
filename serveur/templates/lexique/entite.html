@@ -1,0 +1,132 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}{{ entite.label }} — {{ entite.type_entite or 'entité' }}{% endblock %}
+{% block meta_description %}{% if entite.description %}{{ entite.description[:160] }}{% else %}Fiche de l'entité « {{ entite.label }} » dans le Lexique Lectura.{% endif %}{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Entité", "url": "#"}, {"label": entite.label, "url": ""}] %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+{% if image_url %}
+<div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap">
+  <div style="flex:1;min-width:200px">
+{% endif %}
+
+<h1 class="page-title">{{ entite.label }}</h1>
+{% if entite.type_entite %}
+<p class="page-subtitle">{{ entite.type_entite }}</p>
+{% endif %}
+
+{% if entite.description %}
+<div class="section">
+  <p>{{ entite.description }}</p>
+</div>
+{% endif %}
+
+{% set extrait = entite.get('_proprietes', {}).get('extrait_wikipedia', '') %}
+{% if extrait %}
+<div class="section">
+  <p>{{ extrait }}</p>
+</div>
+{% endif %}
+
+{% set wiki_url = entite.get('_proprietes', {}).get('wikipedia_url', '') %}
+{% if entite.qid or wiki_url %}
+{% set wp_link = wiki_url or ('https://fr.wikipedia.org/wiki/' + entite.label|replace(' ', '_')) %}
+{% set wd_link = 'https://www.wikidata.org/wiki/' + entite.qid if entite.qid else '' %}
+<div class="section external-links">
+  <h2 class="section-title">Liens externes</h2>
+  <p>Lien Wikipedia : <a href="{{ wp_link }}" target="_blank" rel="noopener">{{ wp_link }}</a></p>
+  {% if wd_link %}<p>Lien Wikidata : <a href="{{ wd_link }}" target="_blank" rel="noopener">{{ wd_link }}</a></p>{% endif %}
+</div>
+{% endif %}
+
+{% if image_url %}
+  </div>
+  <div style="flex:0 0 auto">
+    <img src="{{ image_url }}"
+         alt="{{ entite.label }}"
+         style="max-width:300px;border-radius:8px"
+         loading="lazy">
+  </div>
+</div>
+{% endif %}
+
+{% set props_masquees = ('image', 'notoriete', 'pageviews_fr', 'aliases', 'p31_types', 'p31_labels', 'wikipedia_url', 'extrait_wikipedia', 'description') %}
+{% if entite.get('_proprietes') %}
+<div class="section">
+  <h2 class="section-title">Propriétés</h2>
+  <dl class="entite-props">
+    {% for cle, val in entite._proprietes.items() if cle not in props_masquees %}
+    <dt>{{ cle }}</dt>
+    <dd>{{ val }}</dd>
+    {% endfor %}
+  </dl>
+</div>
+{% endif %}
+
+{% if entite.get('_categories') %}
+<div class="section">
+  <h2 class="section-title">Catégories</h2>
+  <div class="chip-list">
+    {% for cat in entite._categories %}
+    {% set cat_label = cat.label if cat is mapping else cat %}
+    <a href="/categorie/{{ cat_label|replace(' ', '-')|lower }}" class="chip">{{ cat_label }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if entite.get('_composants') %}
+<div class="section">
+  <h2 class="section-title">Mots liés</h2>
+  <div class="chip-list">
+    {% for comp in entite._composants %}
+    {% set comp_name = comp.get('comp_lemme', '') or comp.get('lemme', '') or comp.get('_lemme', '') %}
+    <a href="/mot/{{ comp_name }}" class="chip">{{ comp_name }}{% if comp.get('comp_cgram') %} <span class="cgram-tag">{{ comp.comp_cgram }}</span>{% endif %}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block og_type %}article{% endblock %}
+
+{% block head_extra %}
+{% if image_url %}<meta property="og:image" content="{{ image_url }}">{% endif %}
+{% endblock %}
+
+{% block json_ld %}
+{% set schema_types = {
+  'personne': 'Person', 'personnage_fictif': 'Person',
+  'lieu': 'Place', 'bâtiment': 'Place', 'rivière': 'Place',
+  'relief': 'Place', 'montagne': 'Place', 'lac': 'Place', 'site': 'Place',
+  'organisation': 'Organization', 'musée': 'Organization',
+  'oeuvre': 'CreativeWork', 'événement': 'Event', 'véhicule': 'Vehicle'
+} %}
+{% set schema_type = schema_types.get(entite.type_entite, 'Thing') %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": {{ schema_type|tojson }},
+  "name": {{ entite.label|tojson }},
+  "url": "https://lexique.lec-tu-ra.com/entite/{{ entite.qid or entite.id }}/{{ entite.label|replace(' ', '-')|lower }}"{% if entite.description %},
+  "description": {{ entite.description[:300]|tojson }}{% endif %}{% if image_url %},
+  "image": {{ image_url|tojson }}{% endif %}{% if entite.qid %},
+  "sameAs": [
+    "https://www.wikidata.org/wiki/{{ entite.qid }}",
+    "https://fr.wikipedia.org/wiki/{{ entite.label|replace(' ', '_') }}"
+  ]{% endif %}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Accueil", "item": "https://lexique.lec-tu-ra.com/"},
+    {"@type": "ListItem", "position": 2, "name": {{ entite.label|tojson }}, "item": "https://lexique.lec-tu-ra.com/entite/{{ entite.qid or entite.id }}/{{ entite.label|replace(' ', '-')|lower }}"}
+  ]
+}
+</script>
+{% endblock %}
