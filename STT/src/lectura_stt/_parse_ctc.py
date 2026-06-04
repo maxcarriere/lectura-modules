@@ -17,6 +17,17 @@ ELISION_MARKER = "[']"
 COMPOUND_MARKER = "[-]"
 PUNCT_TOKENS = {",", ".", "?", "!", "…"}
 
+# --- Post-traitement : confusion CTC pronom + ɛm --------------------
+# Phones IPA vocaliques (premier caractere Unicode du token).
+_VOWELS_IPA = frozenset("aeɛəioɔuyøœɑ")
+
+# Pronoms sujets en IPA (formes exactes pour le cas 2 : mot separe).
+_PRONOUN_IPA = frozenset(("ʒə", "ty", "il", "ɛl", "ɔ̃", "nu", "vu"))
+
+# Prefixes pronominaux pour le cas 1 (mot fusionne).
+# Du plus long au plus court pour eviter les correspondances partielles.
+_PRONOUN_PREFIXES = ("ʒə", "ty", "il", "ɛl", "nu", "vu", "ɔ̃")
+
 
 @dataclass
 class ParseResult:
@@ -123,8 +134,74 @@ def parse_ctc_output(ipa_str: str) -> ParseResult:
     # Flush le dernier mot
     _flush_word()
 
+    # Post-traitement : corriger les confusions CTC connues
+    mots_ipa, liaisons = _postprocess_em_confusion(mots_ipa, liaisons)
+
     return ParseResult(
         mots_ipa=mots_ipa,
         ponctuation_finale=ponctuation_finale,
         liaisons=liaisons,
     )
+
+
+# ── Post-traitement ɛm ──────────────────────────────────────────────
+
+
+def _is_vowel_start(s: str) -> bool:
+    """Teste si une chaine IPA commence par un phone vocalique."""
+    return bool(s) and s[0] in _VOWELS_IPA
+
+
+def _postprocess_em_confusion(
+    mots_ipa: list[str],
+    liaisons: list[str],
+) -> tuple[list[str], list[str]]:
+    """Corrige la confusion CTC ou le decodeur produit ɛm au lieu de m'.
+
+    Le CTC confond regulierement le clitique m' (me) avec le nom de la
+    lettre M (/ɛm/) dans les constructions pronom + m' + verbe, et ne
+    produit ni separateur ``|`` ni marqueur d'elision ``[']``.
+
+    Deux cas sont traites :
+
+    1. **Mot fusionne** — le pronom et le clitique sont dans le meme mot.
+       ``"tyɛmapɛl"`` → ``["ty", "m'apɛl"]``
+
+    2. **Mot separe** — le pronom est un mot a part, mais le mot suivant
+       commence par ``ɛm`` + voyelle.
+       ``["ty", "ɛmapɛl"]`` → ``["ty", "m'apɛl"]``
+    """
+    new_mots: list[str] = []
+    new_liaisons: list[str] = []
+
+    for i, mot in enumerate(mots_ipa):
+        liaison = liaisons[i] if i < len(liaisons) else ""
+        handled = False
+
+        # Cas 1 : mot fusionne — pronom + ɛm + voyelle dans un seul mot
+        for prefix in _PRONOUN_PREFIXES:
+            marker = prefix + "ɛm"
+            if mot.startswith(marker):
+                rest = mot[len(marker):]
+                if _is_vowel_start(rest):
+                    new_mots.append(prefix)
+                    new_liaisons.append(liaison)
+                    new_mots.append("m'" + rest)
+                    new_liaisons.append("")
+                    handled = True
+                    break
+
+        # Cas 2 : mot separe — le mot precedent est un pronom sujet,
+        # le mot courant commence par ɛm + voyelle
+        if not handled and mot.startswith("ɛm") and len(mot) > 2:
+            rest = mot[2:]
+            if _is_vowel_start(rest) and new_mots and new_mots[-1] in _PRONOUN_IPA:
+                new_mots.append("m'" + rest)
+                new_liaisons.append(liaison)
+                handled = True
+
+        if not handled:
+            new_mots.append(mot)
+            new_liaisons.append(liaison)
+
+    return new_mots, new_liaisons
