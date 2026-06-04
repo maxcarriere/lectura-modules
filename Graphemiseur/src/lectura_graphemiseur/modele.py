@@ -38,6 +38,10 @@ class UnifiedP2G(nn.Module):
         word_num_layers: int = 1,
         dropout: float = 0.3,
         word_feedback: bool = False,
+        n_attn_layers: int = 0,
+        attn_nhead: int = 6,
+        attn_ff_dim: int = 512,
+        attn_dropout: float = 0.1,
     ):
         super().__init__()
         self.n_chars = n_chars
@@ -83,6 +87,24 @@ class UnifiedP2G(nn.Module):
         for feat_name, n_labels in morpho_label_sizes.items():
             self.morpho_heads[feat_name] = nn.Linear(word_out_dim, n_labels)
 
+        # ── Self-Attention (optional, V7) ──
+        self.n_attn_layers = n_attn_layers
+        self.self_attention = None
+        if n_attn_layers > 0:
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=word_out_dim,
+                nhead=attn_nhead,
+                dim_feedforward=attn_ff_dim,
+                dropout=attn_dropout,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.self_attention = nn.TransformerEncoder(
+                encoder_layer,
+                num_layers=n_attn_layers,
+            )
+
         # Store config for serialization
         self._config = {
             "n_chars": n_chars,
@@ -96,6 +118,10 @@ class UnifiedP2G(nn.Module):
             "word_num_layers": word_num_layers,
             "dropout": dropout,
             "word_feedback": word_feedback,
+            "n_attn_layers": n_attn_layers,
+            "attn_nhead": attn_nhead,
+            "attn_ff_dim": attn_ff_dim,
+            "attn_dropout": attn_dropout,
         }
 
     def forward(
@@ -184,6 +210,20 @@ class UnifiedP2G(nn.Module):
             word_out, _ = self.word_lstm(word_repr)
 
         word_out = self.word_dropout(word_out)
+
+        # ── Self-Attention (V7) ──
+        if self.self_attention is not None:
+            if word_lengths is not None and not torch.onnx.is_in_onnx_export():
+                max_w = word_out.size(1)
+                src_key_padding_mask = (
+                    torch.arange(max_w, device=word_out.device).unsqueeze(0)
+                    >= word_lengths.unsqueeze(1)
+                )
+            else:
+                src_key_padding_mask = None
+            word_out = self.self_attention(
+                word_out, src_key_padding_mask=src_key_padding_mask,
+            )
 
         # ── P2G logits (per character) ──
         if self.word_feedback:

@@ -155,8 +155,18 @@ class CorrecteurV6Config:
     # Preprocessing
     bypass_markdown: bool = True  # Bypass correction sur phrases markdown/LaTeX
 
-    # Negation (insertion de ne/n')
-    activer_negation: bool = True  # True = inserer ne/n' devant verbe si absent
+    # Etape 3 — Activation des regles (True = actif)
+    activer_p2g_global: bool = True        # P2G source de verite
+    activer_homophones_p2g: bool = True    # Homophones via divergence P2G
+    activer_accords: bool = True           # Accord morpho (ADJ/PART nombre/genre)
+    activer_accord_det_nom: bool = True    # Accord DET-NOM (les chien -> chiens)
+    activer_accord_attribut: bool = True   # ADJ accord via verbe d'etat
+    activer_pp_etre: bool = True           # PP accord avec sujet (auxiliaire etre)
+    activer_verbe_p2g: bool = True         # Correction verbe via P2G
+    activer_accent_p2g: bool = True        # Accent via P2G
+    activer_accent_lexique: bool = True    # Accent fallback lexique
+    activer_negation: bool = True          # Insertion de ne/n' devant verbe si absent
+    activer_homophones_struct: bool = True # Homophones structurels (sans P2G)
 
     # Debug
     mode_analyse: bool = False  # True = analyser() retourne les MotV6 sans corriger

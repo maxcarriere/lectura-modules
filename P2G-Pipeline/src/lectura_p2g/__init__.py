@@ -24,7 +24,7 @@ import json
 import unicodedata
 from importlib import resources
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 
 # ── Re-exports depuis le graphemiseur (couche 1) ─────────────────────
 
@@ -65,16 +65,38 @@ def _appliquer_formules(
     Returns: set de positions traitees (a proteger des corrections suivantes).
     """
     try:
-        from lectura_formules import detect_number_spans, detect_sigle_spans
+        from lectura_formules import detect_number_spans, detect_sigle_spans, detect_formula_spans
     except ImportError:
         return set()
 
     use_num = (formule_mode != "texte")
     formule_positions: set[int] = set()
 
+    # ── Formules math (avant nombres, pour eviter la fragmentation) ──
+    try:
+        math_spans = detect_formula_spans(ipa_words, min_span=3, max_span=20)
+    except Exception:
+        math_spans = []
+    for start, end, formula_result in math_spans:
+        if use_num and formula_result.display_num:
+            display = formula_result.display_num
+        else:
+            display = formula_result.display_fr
+        display_words = display.split()
+        span_len = end - start
+        for k in range(span_len):
+            if k < len(display_words):
+                result[start + k] = display_words[k]
+            else:
+                result[start + k] = ""
+            formule_positions.add(start + k)
+
     # ── Nombres (min_span=1 pour les nombres simples aussi) ──
-    number_spans = detect_number_spans(ipa_words, min_span=1, max_span=8)
+    number_spans = detect_number_spans(ipa_words, min_span=1, max_span=15)
     for start, end, formula_result in number_spans:
+        # Pas de chevauchement avec les formules math
+        if any(i in formule_positions for i in range(start, end)):
+            continue
         if use_num and formula_result.display_num:
             display = formula_result.display_num
         else:
@@ -89,7 +111,7 @@ def _appliquer_formules(
             formule_positions.add(start + k)
 
     # ── Sigles (min_span=2, lettres epelees) ──
-    sigle_spans = detect_sigle_spans(ipa_words, min_span=2, max_span=8)
+    sigle_spans = detect_sigle_spans(ipa_words, min_span=2, max_span=15)
     for start, end, formula_result in sigle_spans:
         # Pas de chevauchement avec les nombres
         if any(i in formule_positions for i in range(start, end)):
