@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "lectura-graphemiseur>=4.2",
-    "lectura-formules>=3.0",
+    "lectura-formules>=3.2",
 ]
 
 [project.urls]

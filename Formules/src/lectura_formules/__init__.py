@@ -44,4 +44,4 @@ from lectura_formules.tables import TablesStore, UniteDef, get_store, get_sound_
 from lectura_formules.romains import int_to_roman, roman_to_int
 from lectura_formules.reconnaissance import reconnaitre_ipa, reconnaitre_ipa_stt, detect_number_spans, detect_sigle_spans
 
-__version__ = "3.2.0"
+__version__ = "3.2.2"
