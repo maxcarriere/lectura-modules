@@ -99,6 +99,66 @@ class TestParseCTC(unittest.TestCase):
         r = parse_ctc_output("l ['] o m")
         self.assertEqual(r.mots_ipa, ["l'om"])
 
+    # ── Tests confusion ɛm (pronom + clitique m') ────────────────────
+
+    def test_em_confusion_fused_je(self):
+        """CTC fusionne 'je m'appelle' sans | ni [']."""
+        r = parse_ctc_output("ʒ ə ɛ m a p ɛ l")
+        self.assertEqual(r.mots_ipa, ["ʒə", "m'apɛl"])
+
+    def test_em_confusion_fused_tu(self):
+        """CTC fusionne 'tu m'as bien entendu' — cas reel."""
+        r = parse_ctc_output("t y ɛ m a b j ɛ̃ [n] ɑ̃ t ɑ̃ d y .")
+        self.assertEqual(r.mots_ipa[0], "ty")
+        self.assertTrue(r.mots_ipa[1].startswith("m'"))
+        self.assertEqual(r.ponctuation_finale, ".")
+
+    def test_em_confusion_fused_tu_question(self):
+        """CTC fusionne 'tu m'envoie le courrier ?' — cas reel."""
+        r = parse_ctc_output("t y ɛ m ɑ̃ v w a l ə k u ʁ j e ?")
+        self.assertEqual(r.mots_ipa[0], "ty")
+        self.assertTrue(r.mots_ipa[1].startswith("m'"))
+        self.assertEqual(r.ponctuation_finale, "?")
+
+    def test_em_confusion_fused_il(self):
+        """CTC fusionne 'il m'ont attrape' — cas reel."""
+        r = parse_ctc_output("i l ɛ m ɔ̃ a t ʁ a p e .")
+        self.assertEqual(r.mots_ipa[0], "il")
+        self.assertTrue(r.mots_ipa[1].startswith("m'"))
+
+    def test_em_confusion_separated(self):
+        """CTC separe pronom et ɛm avec |."""
+        r = parse_ctc_output("ʒ ə | ɛ m a p ɛ l")
+        self.assertEqual(r.mots_ipa, ["ʒə", "m'apɛl"])
+
+    def test_em_confusion_fused_on(self):
+        """CTC fusionne 'on m'a dit'."""
+        r = parse_ctc_output("ɔ̃ ɛ m a d i")
+        self.assertEqual(r.mots_ipa[0], "ɔ̃")
+        self.assertTrue(r.mots_ipa[1].startswith("m'"))
+
+    def test_em_no_trigger_consonant_after(self):
+        """ɛm suivi de consonne → pas de correction (c'est 'aime')."""
+        r = parse_ctc_output("t y ɛ m | b j ɛ̃")
+        self.assertEqual(r.mots_ipa, ["tyɛm", "bjɛ̃"])
+
+    def test_em_no_trigger_no_pronoun(self):
+        """ɛm sans pronom precedent → pas de correction."""
+        r = parse_ctc_output("ɛ m a")
+        self.assertEqual(r.mots_ipa, ["ɛma"])
+
+    def test_em_no_trigger_word_end(self):
+        """ɛm en fin de mot (pas de voyelle apres) → pas de correction."""
+        r = parse_ctc_output("t y ɛ m .")
+        self.assertEqual(r.mots_ipa, ["tyɛm"])
+
+    def test_em_confusion_in_phrase(self):
+        """Phrase complete avec confusion ɛm au milieu."""
+        r = parse_ctc_output("b ɔ̃ ʒ u ʁ , ʒ ə ɛ m a p ɛ l m a k s i m .")
+        self.assertEqual(r.mots_ipa[0], "bɔ̃ʒuʁ")
+        self.assertEqual(r.mots_ipa[1], "ʒə")
+        self.assertTrue(r.mots_ipa[2].startswith("m'"))
+
     def test_mot_compose(self):
         """Mot compose avec [-]."""
         r = parse_ctc_output("ɡ ʁ ɑ̃ [-] p ɛ ʁ")
