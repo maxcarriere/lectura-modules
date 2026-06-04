@@ -143,16 +143,21 @@ def forcer_coherence_ortho_morpho(
     5. masc_avec_ee : VER/ADJ + Gender=Masc + Part + -ee -> retirer -e
     6. inf_forme : VER + VerbForm=Inf + -e final -> -er
     7. 1pl/2pl : VER + Person=1/2 + Plur + Fin -> -ons/-ez
+    8. 2sg_sans_s : VER/AUX + Person=2 + Sing + Fin + Mood!=Imp + pas -s/-x -> +s
     """
-    if not ortho or len(ortho) < 2:
+    if not ortho:
         return ortho
 
     number = morpho.get("Number", "_")
     gender = morpho.get("Gender", "_")
     person = morpho.get("Person", "_")
     verbform = morpho.get("VerbForm", "_")
+    mood = morpho.get("Mood", "_")
 
-    # Ne pas toucher les mots fonctionnels
+    # Ne pas toucher les mots fonctionnels ni les mots trop courts
+    # (sauf verbes : "a" -> "as" pour 2sg)
+    if len(ortho) < 2 and pos not in ("VER", "AUX"):
+        return ortho
     if pos in ("PRE", "CON", "ART:def", "ART:ind", "PRO:rel", "PRO:dem",
                "PRO:per", "ADV", "INT", "PRE:det", "ADJ:pos", "ADJ:dem",
                "ADJ:ind", "ADJ:num"):
@@ -272,6 +277,22 @@ def forcer_coherence_ortho_morpho(
             for cand in candidates:
                 if _in_lexique(cand):
                     return cand
+
+    # ── Regle 8 : 2sg_sans_s ──
+    # En francais, les verbes a la 2e personne du singulier finissent
+    # toujours par -s ou -x (tu manges, tu peux), SAUF a l'imperatif
+    # des verbes du 1er groupe (mange !, donne !).
+    if (
+        pos in ("VER", "AUX")
+        and person == "2"
+        and number == "Sing"
+        and verbform == "Fin"
+        and mood != "Imp"
+        and not ortho.endswith(("s", "x"))
+    ):
+        candidate = ortho + "s"
+        if _in_lexique(candidate):
+            return candidate
 
     return ortho
 

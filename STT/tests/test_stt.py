@@ -234,17 +234,29 @@ class TestCommenceParVoyelle(unittest.TestCase):
 class TestSTTEngine(unittest.TestCase):
     """Tests d'integration avec mocks."""
 
-    def _make_engine(self, ipa_output: str, p2g_output: list[str] | None = None):
-        """Cree un STTEngine avec des mocks."""
+    def _make_engine(
+        self,
+        ipa_output: str,
+        p2g_output: list[str] | None = None,
+        use_pipeline: bool = False,
+    ):
+        """Cree un STTEngine avec des mocks.
+
+        Si use_pipeline=True, simule lectura_p2g.analyser (pipeline complet).
+        Sinon, utilise le graphemiseur seul.
+        """
         ctc = MagicMock()
         ctc.transcrire.return_value = ipa_output
 
         p2g = None
+        p2g_analyser = None
         if p2g_output is not None:
             p2g = MagicMock()
             p2g.analyser.return_value = {"ortho": p2g_output}
+            if use_pipeline:
+                p2g_analyser = MagicMock(return_value={"ortho": p2g_output})
 
-        return STTEngine(ctc, p2g)
+        return STTEngine(ctc, p2g, p2g_analyser)
 
     def test_transcription_sans_p2g(self):
         """Sans P2G, texte et mots sont None."""
@@ -321,6 +333,25 @@ class TestSTTEngine(unittest.TestCase):
         self.assertEqual(r.texte, "Bonjour")
         self.assertEqual(r.ponctuation, [])
 
+    def test_pipeline_utilise_p2g_analyser(self):
+        """Avec pipeline P2G, _p2g_analyser est appele (pas le graphemiseur)."""
+        engine = self._make_engine(
+            "b ɔ̃ ʒ u ʁ .",
+            ["bonjour"],
+            use_pipeline=True,
+        )
+        audio = np.zeros(16000, dtype=np.float32)
+        r = engine.transcrire(audio)
+
+        engine._p2g_analyser.assert_called_once()
+        engine.p2g.analyser.assert_not_called()
+        self.assertEqual(r.texte, "Bonjour.")
+
+    def test_repr_avec_pipeline(self):
+        """Le repr indique +formules si pipeline disponible."""
+        engine = self._make_engine("test", ["test"], use_pipeline=True)
+        self.assertIn("+formules", repr(engine))
+
 
 # ── TestFactory ──────────────────────────────────────────────────────
 
@@ -331,13 +362,15 @@ class TestFactory(unittest.TestCase):
     @patch("lectura_stt.creer_engine.__module__", "lectura_stt")
     def test_factory_sans_p2g(self):
         """Si P2G non installe, engine fonctionne sans."""
-        with patch("lectura_stt._creer_p2g", return_value=None):
+        with patch("lectura_stt._creer_p2g", return_value=(None, None)):
             with patch("lectura_ctc.creer_engine") as mock_ctc:
                 mock_ctc.return_value = MagicMock()
                 from lectura_stt import creer_engine
                 engine = creer_engine()
                 self.assertIsInstance(engine, STTEngine)
                 self.assertIsNone(engine.p2g)
+                self.assertIsNone(engine._p2g_analyser)
+
 
 
 if __name__ == "__main__":

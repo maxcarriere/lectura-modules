@@ -25,7 +25,7 @@ import numpy as np
 from lectura_stt._parse_ctc import parse_ctc_output
 from lectura_stt._assembler import assembler_texte
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 @dataclass
@@ -65,9 +65,15 @@ class STTEngine:
     (conversion phonetique → orthographe).
     """
 
-    def __init__(self, ctc_engine: object, p2g_engine: object | None = None) -> None:
+    def __init__(
+        self,
+        ctc_engine: object,
+        p2g_engine: object | None = None,
+        p2g_analyser: object | None = None,
+    ) -> None:
         self.ctc = ctc_engine
         self.p2g = p2g_engine
+        self._p2g_analyser = p2g_analyser  # lectura_p2g.analyser (avec formules)
 
     def transcrire(self, audio: np.ndarray, sr: int = 16000) -> ResultatSTT:
         """Transcrit un signal audio en texte.
@@ -128,17 +134,17 @@ class STTEngine:
         return [self.transcrire(audio, sr=sr) for audio in audios]
 
     def _p2g_convertir(self, mots_ipa: list[str]) -> list[str]:
-        """Convertit des mots IPA en orthographe via le P2G engine.
+        """Convertit des mots IPA en orthographe via le P2G.
 
-        Tente d'abord le pipeline complet (lectura_p2g.analyser),
-        sinon utilise le graphemiseur directement.
+        Utilise le pipeline complet (lectura_p2g.analyser) si disponible,
+        incluant formules (nombres, sigles), noms propres et entites.
+        Sinon utilise le graphemiseur directement (sans formules).
         """
         # Nettoyer les apostrophes d'elision du parsing CTC
         # (l'elision est geree par _assembler.py)
         mots_clean = []
         for mot in mots_ipa:
             if "'" in mot:
-                # Separer clitique et mot : "l'ami" → "l", "ami"
                 parts = mot.split("'", 1)
                 mots_clean.append(parts[0])
                 if parts[1]:
@@ -146,9 +152,13 @@ class STTEngine:
             else:
                 mots_clean.append(mot)
 
-        # Utiliser le P2G engine
+        # 1. Pipeline P2G complet (formules + noms propres + entites)
+        if self._p2g_analyser is not None:
+            result = self._p2g_analyser(mots_clean, engine=self.p2g)
+            return result.get("ortho", mots_clean)
+
+        # 2. Graphemiseur seul (sans formules)
         if hasattr(self.p2g, "analyser"):
-            # lectura_p2g / lectura_graphemiseur avec analyser()
             result = self.p2g.analyser(mots_clean)
             return result.get("ortho", mots_clean)
 
@@ -159,7 +169,8 @@ class STTEngine:
 
     def __repr__(self) -> str:
         p2g_status = type(self.p2g).__name__ if self.p2g else "None"
-        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status})"
+        pipeline = "+formules" if self._p2g_analyser else ""
+        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline})"
 
 
 def creer_engine(
@@ -197,32 +208,35 @@ def creer_engine(
     ctc_engine = creer_ctc(**ctc_kw)
 
     p2g_kw = dict(p2g_kwargs) if p2g_kwargs else {}
-    p2g_engine = _creer_p2g(**p2g_kw)
+    p2g_engine, p2g_analyser = _creer_p2g(**p2g_kw)
 
-    return STTEngine(ctc_engine, p2g_engine)
+    return STTEngine(ctc_engine, p2g_engine, p2g_analyser)
 
 
-def _creer_p2g(**kwargs: object) -> object | None:
+def _creer_p2g(**kwargs: object) -> tuple[object | None, object | None]:
     """Tente de creer un engine P2G selon les packages installes.
 
+    Retourne (engine, analyser_fn) ou (None, None).
+
     Cascade :
-    1. lectura_p2g (pipeline complet)
-    2. lectura_graphemiseur (modele core)
+    1. lectura_p2g (pipeline complet avec formules, sigles, noms propres)
+    2. lectura_graphemiseur (modele core seul)
     3. None
     """
     # 1. Pipeline P2G complet (formules + noms propres)
     try:
         from lectura_p2g import creer_engine as creer_p2g
-        return creer_p2g(**kwargs)
+        from lectura_p2g import analyser as p2g_analyser
+        return creer_p2g(**kwargs), p2g_analyser
     except ImportError:
         pass
 
     # 2. Graphemiseur seul (sans formules)
     try:
         from lectura_graphemiseur import creer_engine as creer_graphemiseur
-        return creer_graphemiseur(**kwargs)
+        return creer_graphemiseur(**kwargs), None
     except ImportError:
         pass
 
     # 3. Pas de P2G disponible
-    return None
+    return None, None
