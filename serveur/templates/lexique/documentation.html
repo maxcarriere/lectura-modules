@@ -491,6 +491,41 @@
         <li><strong>Taxon</strong> : espèces animales et végétales...</li>
       </ul>
 
+      <h3>Catégorisation</h3>
+      <p>
+        Wikidata classe ses entités à l'aide de la propriété <em>instance of</em> (P31),
+        qui renvoie à des milliers de classes hétérogènes — de « ville de plus de 100 000 habitants »
+        à « groupe de rock indépendant ». Ce système encyclopédique est trop fragmenté
+        pour un usage lexical.
+      </p>
+      <p>
+        Le Lexique Lectura construit sa propre <strong>taxonomie</strong> en trois étapes :
+      </p>
+      <ol>
+        <li>
+          <strong>Projection automatique</strong> — chaque classe P31 est associée à une catégorie
+          Lectura via une table de correspondance maintenue manuellement
+          (environ 1 500 règles de projection).
+        </li>
+        <li>
+          <strong>Reclassification profonde</strong> — 72 fichiers de reclassification
+          réattribuent des entités individuelles (par QID) à des catégories plus précises
+          lorsque la projection automatique est insuffisante (animaux classifiés, plantes,
+          personnages fictifs, boissons, fromages, etc.).
+        </li>
+        <li>
+          <strong>Élagage</strong> — les catégories vides ou ne contenant qu'une seule entité
+          sont supprimées pour maintenir une taxonomie exploitable.
+        </li>
+      </ol>
+      <p>
+        Le résultat est une arborescence de <strong>{{ '{:,}'.format(stats.nb_categories).replace(',', ' ') }} catégories</strong>
+        organisées en 16 domaines racines (personnes, lieux, œuvres, êtres vivants, alimentation, etc.)
+        sur jusqu'à 4 niveaux de profondeur.
+        Chaque entité peut appartenir à plusieurs catégories simultanément.
+        Explorez la taxonomie complète sur la page <a href="/categories">catégories</a>.
+      </p>
+
       <h3>Propriétés</h3>
       <p>Chaque entité peut posséder des propriétés enrichies :</p>
       <ul>
