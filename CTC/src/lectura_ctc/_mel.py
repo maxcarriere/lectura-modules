@@ -39,35 +39,38 @@ def _creer_filtres_mel(
     fmin: float = FMIN,
     fmax: float = FMAX,
 ) -> np.ndarray:
-    """Cree la matrice de filtres mel triangulaires (n_mels, n_fft//2+1).
+    """Cree la matrice de filtres mel triangulaires (n_freqs, n_mels).
 
-    Compatible avec torchaudio.transforms.MelSpectrogram.
+    Reproduit exactement l'algorithme de torchaudio.functional.melscale_fbanks
+    avec norm="slaney" et mel_scale="htk".
     """
     n_freqs = n_fft // 2 + 1
 
+    # Grille de frequences STFT (Hz) — linspace continu, pas d'arrondi en bins
+    all_freqs = np.linspace(0, sr // 2, n_freqs, dtype=np.float64)
+
+    # Points mel espaces lineairement
     mel_min = _hz_to_mel(fmin)
     mel_max = _hz_to_mel(fmax)
-    mels = np.linspace(mel_min, mel_max, n_mels + 2)
-    hz = np.array([_mel_to_hz(m) for m in mels])
+    m_pts = np.linspace(mel_min, mel_max, n_mels + 2)
+    f_pts = np.array([_mel_to_hz(m) for m in m_pts])
 
-    # Indices FFT correspondants
-    bins = np.floor((n_fft + 1) * hz / sr).astype(np.intp)
+    # Differences entre points mel consecutifs
+    f_diff = f_pts[1:] - f_pts[:-1]  # (n_mels + 1,)
 
-    filtres = np.zeros((n_mels, n_freqs), dtype=np.float32)
-    for i in range(n_mels):
-        low, center, high = bins[i], bins[i + 1], bins[i + 2]
-        # Pente montante
-        if center > low:
-            filtres[i, low:center] = np.linspace(0.0, 1.0, center - low, endpoint=False)
-        # Pente descendante
-        if high > center:
-            filtres[i, center:high] = np.linspace(1.0, 0.0, high - center, endpoint=False)
+    # Pentes : distance de chaque freq STFT a chaque point mel
+    slopes = f_pts[np.newaxis, :] - all_freqs[:, np.newaxis]  # (n_freqs, n_mels+2)
 
-    # Normalisation slaney (aire constante)
-    enorm = 2.0 / (hz[2 : n_mels + 2] - hz[:n_mels])
-    filtres *= enorm[:, np.newaxis]
+    # Filtres triangulaires (identique a torchaudio)
+    down_slopes = (-1.0 * slopes[:, :-2]) / f_diff[:-1]  # (n_freqs, n_mels)
+    up_slopes = slopes[:, 2:] / f_diff[1:]                # (n_freqs, n_mels)
+    fb = np.maximum(0.0, np.minimum(down_slopes, up_slopes))  # (n_freqs, n_mels)
 
-    return filtres
+    # Normalisation slaney
+    enorm = 2.0 / (f_pts[2 : n_mels + 2] - f_pts[:n_mels])
+    fb *= enorm[np.newaxis, :]
+
+    return fb.T.astype(np.float32)  # (n_mels, n_freqs)
 
 
 # Cache du filtre mel (calcule une seule fois)
@@ -104,8 +107,8 @@ def mel_spectrogram(audio: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
     if audio.ndim != 1:
         raise ValueError(f"Audio doit etre 1D, shape recu : {audio.shape}")
 
-    # Fenetre de Hann
-    window = np.hanning(WIN_LENGTH).astype(np.float32)
+    # Fenetre de Hann periodique (comme torch.hann_window(periodic=True))
+    window = (0.5 - 0.5 * np.cos(2.0 * np.pi * np.arange(WIN_LENGTH) / WIN_LENGTH)).astype(np.float32)
 
     # Padding pour centrer les frames (comme torchaudio center=True)
     pad_len = N_FFT // 2
