@@ -14,6 +14,7 @@ Installez tout d'un coup avec `pip install lectura` ou chaque module independamm
 | **[Graphemiseur](Graphemiseur/)** | Graphemiseur neural : P2G + POS + Morpho (IPA vers orthographe) | 4.0.0 | `pip install lectura-graphemiseur` |
 | **[Aligneur-Syllabeur](Aligneur/)** | Alignement grapheme-phoneme, syllabation | 4.0.0 | `pip install lectura-aligneur` |
 | **[Correcteur](Correcteur/)** | Correcteur orthographique et grammatical du francais | 1.0.0 | `pip install lectura-correcteur` |
+| **[CTC](CTC/)** | Decodeur phonetique CTC : audio → phones IPA (CNN-BiGRU-CTC) | 1.0.0 | `pip install lectura-ctc` |
 
 ## Pipeline (couche 2)
 

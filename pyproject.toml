@@ -31,12 +31,14 @@ dependencies = [
     "lectura-formules>=2.0",
     "lectura-lexique>=1.0",
     "lectura-correcteur>=1.0",
+    "lectura-ctc>=1.0",
 ]
 
 [project.optional-dependencies]
 onnx = [
     "lectura-phonemiseur[onnx]>=4.0",
     "lectura-graphemiseur[onnx]>=4.0",
+    "lectura-ctc[onnx]>=1.0",
 ]
 
 [project.urls]
