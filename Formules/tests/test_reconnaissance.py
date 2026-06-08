@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from lectura_formules.reconnaissance import (
     reconnaitre_ipa,
+    reconnaitre_ipa_stt,
     _tokenize_ipa,
     reconnaitre_maths_ipa,
     reconnaitre_maths_ipa_stt,
@@ -720,15 +721,58 @@ class TestDetectNumberSpansMode:
         assert len(spans) == 1
         assert spans[0][2].display_num == "3000"
 
-    def test_auto_non_ambigu_isole_passe(self):
-        """mode=auto : 'trois' isole (non ambigu) est converti en 3."""
+    def test_auto_non_ambigu_isole_rejete(self):
+        """mode=auto : 'trois' isole (1 seul token) est rejete."""
         spans = detect_number_spans(["tʁwa"], min_span=1, mode="auto")
-        assert len(spans) == 1
-        assert spans[0][2].display_num == "3"
+        assert len(spans) == 0
 
     def test_auto_cette_maison_pas_nombre(self):
         """mode=auto : 'cette maison' ne doit pas etre detecte comme nombre."""
         # 'sɛt' est un token numerique mais 'mɛzɔ̃' ne l'est pas
         # → pas de span numerique possible
         spans = detect_number_spans(["sɛt", "mɛzɔ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tolerance CTC : variantes automatiques
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSTTVariantTolerance:
+    """Tests de tolerance aux variantes CTC (nasales, voisement, glides)."""
+
+    def test_un_million_nasal_confusion(self):
+        """ɛ̃ → ɑ̃ + missing j glide."""
+        r = reconnaitre_ipa_stt("ɑ̃ milɔ̃")
+        assert r is not None
+        assert r.display_num == "1'000'000"
+
+    def test_quarante_deux_exact(self):
+        r = reconnaitre_ipa_stt("kaʁɑ̃t dø")
+        assert r is not None
+        assert r.display_num == "42"
+
+    def test_voicing_k_g(self):
+        """k → ɡ dans kaʁ → ɡaʁ."""
+        r = reconnaitre_ipa_stt("ɡaʁɑ̃t dø")
+        assert r is not None
+        assert r.display_num == "42"
+
+    def test_auto_mode_min_2_words(self):
+        """mode=auto rejette 1 mot ambigu, accepte 2+."""
+        spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+        spans = detect_number_spans(["sɑ̃", "dø"], min_span=1, mode="auto")
+        assert len(spans) == 1
+
+    def test_million_missing_glide(self):
+        r = reconnaitre_ipa_stt("dø milɔ̃")
+        assert r is not None
+        assert r.display_num == "2'000'000"
+
+    def test_no_false_positive_single_word(self):
+        """Un mot isole ne doit pas etre converti abusivement."""
+        # "sɑ̃" seul ne doit pas devenir "100"
+        spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
         assert len(spans) == 0

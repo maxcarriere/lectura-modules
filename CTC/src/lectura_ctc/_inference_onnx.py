@@ -13,7 +13,11 @@ from pathlib import Path
 import numpy as np
 
 from lectura_ctc._mel import mel_spectrogram
-from lectura_ctc._decode import ctc_greedy_decode, ids_vers_phones
+from lectura_ctc._decode import (
+    ctc_greedy_decode,
+    ctc_greedy_decode_with_alternatives,
+    ids_vers_phones,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,35 @@ class OnnxCTCEngine:
         logits = self.session.run(None, {"mel": mel})[0]  # (1, T', V)
         ids = ctc_greedy_decode(logits[0], blank_id=self.blank_id)
         return ids_vers_phones(ids, self.vocab_inv)
+
+    def transcrire_avec_alternatives(
+        self, audio: np.ndarray, sr: int = 16000, top_k: int = 5,
+    ) -> tuple[str, list[dict]]:
+        """Transcrit avec top-K alternatives softmax par token.
+
+        Parameters
+        ----------
+        audio : np.ndarray
+            Signal PCM float32 mono.
+        sr : int
+            Sample rate (defaut 16000).
+        top_k : int
+            Nombre d'alternatives par token.
+
+        Returns
+        -------
+        tuple[str, list[dict]]
+            (ipa_str, tokens) ou tokens contient phone_id, confidence,
+            entropy, alternatives pour chaque token emis.
+        """
+        mel = mel_spectrogram(audio, sr)
+        logits = self.session.run(None, {"mel": mel})[0]  # (1, T', V)
+        tokens = ctc_greedy_decode_with_alternatives(
+            logits[0], blank_id=self.blank_id, top_k=top_k,
+        )
+        ids = [t["phone_id"] for t in tokens]
+        ipa_str = ids_vers_phones(ids, self.vocab_inv)
+        return ipa_str, tokens
 
     def transcrire_batch(
         self, audios: list[np.ndarray], sr: int = 16000,

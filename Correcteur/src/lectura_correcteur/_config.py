@@ -167,6 +167,7 @@ class CorrecteurV6Config:
     activer_accent_lexique: bool = True    # Accent fallback lexique
     activer_negation: bool = True          # Insertion de ne/n' devant verbe si absent
     activer_homophones_struct: bool = True # Homophones structurels (sans P2G)
+    activer_accord_sujet_verbe: bool = True  # Accord sujet-verbe (conjugaison)
 
     # P2G lex_select (v7)
     p2g_lex_select: bool = True       # Activer lex_select du P2G
