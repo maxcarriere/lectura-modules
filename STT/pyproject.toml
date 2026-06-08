@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-stt"
-version = "2.0.0"
+version = "3.0.0"
 description = "Pipeline STT complet du francais — audio vers texte (CTC + P2G)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
-dependencies = ["lectura-ctc>=1.0"]
+dependencies = ["lectura-ctc>=2.0"]
 
 [project.optional-dependencies]
 p2g = ["lectura-p2g>=1.0"]

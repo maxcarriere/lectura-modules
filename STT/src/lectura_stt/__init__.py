@@ -35,7 +35,7 @@ from lectura_stt._postprocess import (
     _shift_compound_joins,
 )
 
-__version__ = "2.1.0"
+__version__ = "3.0.0"
 
 
 @dataclass

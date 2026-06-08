@@ -1,6 +1,6 @@
 """Lectura CTC — Decodeur phonetique CTC du francais.
 
-Architecture : CNN-BiGRU-CTC (3.5M params, ONNX INT8 = 13 Mo)
+Architecture : CNN-BiGRU-CTC medium (10.6M params, ONNX INT8 = 38 Mo)
 
 Copyright (C) 2025 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
@@ -31,7 +31,7 @@ from typing import Protocol
 
 import numpy as np
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 _DATA_DIR = Path(__file__).parent / "data"
