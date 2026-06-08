@@ -44,7 +44,8 @@ LEX_FEATURE_DIM = len(ALL_LEX_POS) + 3
 # V3/V6 phone_lex_features: 28d (lookup par IPA)
 PHONE_LEX_FEATURE_DIM = 28
 
-CAND_FEAT_DIM = 30
+CAND_FEAT_DIM_FULL = 42   # V7 : 42d (POS+genre+nombre+freq+VerbForm+Tense+Person+is_lemme)
+CAND_FEAT_DIM_V6 = 30     # V6 : 30d (POS+genre+nombre+freq)
 K_MAX = 20
 
 # ── Elision : decomposition des phones avec apostrophe ────────────────
@@ -194,8 +195,18 @@ def _build_phone_lex_features(phone: str, phone_lexicon) -> list[float]:
 
 
 def _encode_candidate(entry: dict, total_freq: float, max_freq: float) -> list[float]:
-    """Encode une entrée lexique en vecteur 30d (même logique que entrainer_v2)."""
-    feats = [0.0] * CAND_FEAT_DIM
+    """Encode une entree lexique en vecteur 42d.
+
+    Dims 0-20:  POS one-hot (21d)
+    Dims 21-23: genre m/f/autre (3d)
+    Dims 24-26: nombre s/p/autre (3d)
+    Dims 27-29: frequence (3d)
+    Dims 30-34: VerbForm infinitif/participe/indicatif/subjonctif/imperatif (5d)
+    Dims 35-37: Tense present/passe/futur (3d)
+    Dims 38-40: Person 1/2/3 (3d)
+    Dim 41:     is_lemme flag (1d)
+    """
+    feats = [0.0] * CAND_FEAT_DIM_FULL
     cgram = entry.get("cgram", "")
     for i, pos in enumerate(ALL_LEX_POS):
         if cgram == pos or cgram.startswith(pos + ":") or pos.startswith(cgram + ":"):
@@ -218,6 +229,30 @@ def _encode_candidate(entry: dict, total_freq: float, max_freq: float) -> list[f
     feats[27] = min(1.0, math.log10(freq + 1) / 5.0)
     feats[28] = 1.0 if freq >= max_freq and max_freq > 0 else 0.0
     feats[29] = freq / total_freq if total_freq > 0 else 0.0
+
+    # ── Multext traits (12d) — verbes uniquement (V...) ──
+    multext = (entry.get("multext") or "").strip()
+    if len(multext) >= 3 and multext[0] == "V":
+        mood = multext[2]
+        if mood == "n":    feats[30] = 1.0  # infinitif
+        elif mood == "p":  feats[31] = 1.0  # participe
+        elif mood == "i":  feats[32] = 1.0  # indicatif
+        elif mood == "c":  feats[32] = 1.0  # conditionnel -> indicatif
+        elif mood == "s":  feats[33] = 1.0  # subjonctif
+        elif mood == "m":  feats[34] = 1.0  # imperatif
+        if len(multext) >= 4:
+            tense = multext[3]
+            if tense == "p":   feats[35] = 1.0  # present
+            elif tense == "i": feats[36] = 1.0  # imparfait -> passe
+            elif tense == "s": feats[36] = 1.0  # passe simple -> passe
+            elif tense == "f": feats[37] = 1.0  # futur
+        if len(multext) >= 5:
+            person = multext[4]
+            if person == "1":  feats[38] = 1.0
+            elif person == "2": feats[39] = 1.0
+            elif person == "3": feats[40] = 1.0
+
+    feats[41] = 1.0 if entry.get("is_lemme") else 0.0
     return feats
 
 
@@ -296,8 +331,20 @@ class OnnxInferenceEngineV2:
         input_names = [i.name for i in self.session.get_inputs()]
         self.has_word_mask = "word_mask" in input_names
 
+        # Detecter la dimension lex_cand_features du modele (30 pour V6, 42 pour V7)
+        self.cand_feat_dim = CAND_FEAT_DIM_FULL
+        for inp in self.session.get_inputs():
+            if inp.name == "lex_cand_features" and inp.shape and len(inp.shape) == 4:
+                dim = inp.shape[3]
+                if isinstance(dim, int):
+                    self.cand_feat_dim = dim
+                break
+
         # UNK word embedding (pour prediction contexte seul)
         self.unk_word_embedding = data.get("unk_word_embedding")
+
+        # Flag pour activer/desactiver l'application de lex_select
+        self.apply_lex_select = True
 
         # Lex select gating params (V6)
         if data.get("lex_select_threshold") is not None:
@@ -371,7 +418,7 @@ class OnnxInferenceEngineV2:
             resolved_maps: pour chaque mot, {ortho.lower(): source_phone}
         """
         n_words = len(ipa_words)
-        cand_features = np.zeros((1, n_words, K_MAX, CAND_FEAT_DIM), dtype=np.float32)
+        cand_features = np.zeros((1, n_words, K_MAX, self.cand_feat_dim), dtype=np.float32)
         cand_mask = np.zeros((1, n_words, K_MAX), dtype=np.float32)
         candidates_list: list[list[dict]] = []
         resolved_maps: list[dict[str, str]] = []
@@ -438,7 +485,8 @@ class OnnxInferenceEngineV2:
 
             word_cands = []
             for k, entry in enumerate(unique[:K_MAX]):
-                cand_features[0, w_idx, k] = _encode_candidate(entry, total_freq, max_freq)
+                feats_full = _encode_candidate(entry, total_freq, max_freq)
+                cand_features[0, w_idx, k] = feats_full[:self.cand_feat_dim]
                 cand_mask[0, w_idx, k] = 1.0
                 word_cands.append(entry)
             candidates_list.append(word_cands)
@@ -466,7 +514,7 @@ class OnnxInferenceEngineV2:
                 # Pas de phone_lexicon → zeros (lex_select inactif)
                 n_words = word_starts.shape[1]
                 feed["lex_cand_features"] = np.zeros(
-                    (1, n_words, K_MAX, CAND_FEAT_DIM), dtype=np.float32,
+                    (1, n_words, K_MAX, self.cand_feat_dim), dtype=np.float32,
                 )
                 feed["lex_cand_mask"] = np.zeros(
                     (1, n_words, K_MAX), dtype=np.float32,
@@ -655,15 +703,11 @@ class OnnxInferenceEngineV2:
 
         return score if checks > 0 else 0.0
 
-    # Parametres lex_select (V6)
-    LEX_SELECT_THRESHOLD = 0.95   # seuil softmax minimum pour remplacer
-    LEX_SELECT_MAX_EDIT = 2       # edit distance max entre P2G et candidat
-
-    # Seuil de confiance plus haut quand le P2G brut existe dans le lexique
-    LEX_SELECT_THRESHOLD_SAFE = 0.99
-
-    # Ratio de frequence max : ne pas remplacer un mot frequent par un mot rare
-    LEX_SELECT_FREQ_RATIO = 5.0
+    # Parametres lex_select (V7 smart mode)
+    LEX_SELECT_THRESHOLD = 0.80   # seuil pour remplacement quand brut absent des candidats
+    LEX_SELECT_THRESHOLD_MORPHO = 0.50  # seuil pour remplacement morpho-motive (brut in cands)
+    LEX_SELECT_MAX_EDIT = 3       # edit distance max entre P2G et candidat
+    LEX_SELECT_MORPHO_MIN_DELTA = 1.5  # delta morpho minimum pour overrider le P2G brut
 
     # Paires d'homophones grammaticaux que lex_select ne doit pas substituer
     # (c'est le role du POS, pas du lexique phonetique)
@@ -700,8 +744,19 @@ class OnnxInferenceEngineV2:
 
         lex_logits = output_dict["lex_select_logits"][0]  # (W, K)
 
-        # V6: confiance + edit distance filter + gardes
+        # V6/V7: smart mode + morpho-aware lex_select
         if self.is_v6:
+            # ── Extraire predictions morpho du modele ──
+            morpho_preds_per_word: list[dict[str, str]] = []
+            for w in range(n_words):
+                mp: dict[str, str] = {}
+                for feat_name, idx2label in self.idx2morpho.items():
+                    key = f"morpho_{feat_name}_logits"
+                    if key in output_dict:
+                        pred_idx = int(output_dict[key][0][w].argmax())
+                        mp[feat_name] = idx2label.get(pred_idx, "_")
+                morpho_preds_per_word.append(mp)
+
             result = list(ortho_results)
             for w in range(n_words):
                 cands = candidates_list[w]
@@ -711,48 +766,123 @@ class OnnxInferenceEngineV2:
                 # Softmax pour confiance
                 exp_l = np.exp(logits_w - logits_w.max())
                 probs = exp_l / exp_l.sum()
+
+                brut = result[w]
+                brut_lower = brut.lower()
+                morpho_w = morpho_preds_per_word[w]
+
+                # ── Trouver si P2G brut est parmi les candidats ──
+                brut_k = None
+                for k, c in enumerate(cands):
+                    if c.get("ortho", "").lower() == brut_lower:
+                        brut_k = k
+                        break
+
+                # ── Calculer scores morpho pour chaque candidat ──
+                morpho_scores = []
+                for k, c in enumerate(cands):
+                    ortho = c.get("ortho", "")
+                    if not ortho or ortho.startswith("-"):
+                        morpho_scores.append(-999.0)
+                        continue
+                    morpho_scores.append(self._morpho_score(c, morpho_w))
+
+                # ── Choisir le meilleur candidat (lex_select score) ──
                 best_k = int(np.argmax(probs))
                 confidence = float(probs[best_k])
                 cand_ortho = cands[best_k].get("ortho", "")
-                if not cand_ortho or cand_ortho.startswith("-"):
-                    continue
-                if cand_ortho == result[w]:
-                    continue  # deja identique
 
-                # ── Garde blacklist : homophones grammaticaux ──
-                pair = (result[w].lower(), cand_ortho.lower())
-                if pair in self._LEX_SELECT_BLACKLIST:
-                    continue
+                if brut_k is not None:
+                    # ═══ MODE SMART : P2G brut est un candidat valide ═══
+                    # On ne remplace que si morpho penalise fortement le brut
+                    # et qu'un autre candidat a un meilleur morpho
+                    brut_morpho = morpho_scores[brut_k]
 
-                # ── Garde de frequence : ne pas remplacer un mot frequent
-                #    par un mot rare si le P2G brut existe dans le lexique ──
-                brut_in_lexicon = False
-                if self.phone_lexicon and ipa_words and w < len(ipa_words):
-                    phone = ipa_words[w]
-                    brut_freq = self.phone_lexicon.best_freq(phone)
-                    if brut_freq > 0:
-                        # Le phone est connu : verifier si le P2G brut correspond
-                        # a une entree frequente
-                        brut_ortho_best = self.phone_lexicon.best_ortho(phone)
-                        if brut_ortho_best and brut_ortho_best.lower() == result[w].lower():
-                            brut_in_lexicon = True
-                            cand_freq = cands[best_k].get("freq", 0) or 0
-                            if cand_freq > 0 and brut_freq / cand_freq > self.LEX_SELECT_FREQ_RATIO:
-                                continue
+                    if brut_morpho >= 0:
+                        # Brut a un morpho acceptable → on le garde
+                        continue
 
-                # ── Seuil adaptatif : confiance plus haute si P2G brut est
-                #    dans le lexique (on est plus conservateur) ──
-                threshold = self.LEX_SELECT_THRESHOLD
-                if brut_in_lexicon:
-                    threshold = self.LEX_SELECT_THRESHOLD_SAFE
+                    # Brut a morpho negatif → chercher un candidat avec meilleur
+                    # morpho ET bonne confiance lex_select
+                    best_morpho_k = None
+                    best_morpho_combined = -999.0
+                    for k, c in enumerate(cands):
+                        if morpho_scores[k] <= brut_morpho:
+                            continue  # Pas mieux que le brut
+                        if morpho_scores[k] < 0:
+                            continue  # Pas assez bon
+                        ortho = c.get("ortho", "")
+                        if not ortho or ortho.startswith("-"):
+                            continue
+                        # Verifier edit distance par rapport au brut
+                        ed = _edit_distance(brut_lower, ortho.lower())
+                        if ed > self.LEX_SELECT_MAX_EDIT:
+                            continue
+                        # Blacklist
+                        pair = (brut_lower, ortho.lower())
+                        if pair in self._LEX_SELECT_BLACKLIST:
+                            continue
+                        # Score combine : confiance lex + bonus morpho
+                        combined = float(probs[k]) + morpho_scores[k]
+                        if combined > best_morpho_combined:
+                            best_morpho_combined = combined
+                            best_morpho_k = k
 
-                if confidence < threshold:
-                    continue
+                    if best_morpho_k is None:
+                        continue
 
-                # Edit distance entre P2G brut et candidat
-                ed = _edit_distance(result[w].lower(), cand_ortho.lower())
-                if ed <= self.LEX_SELECT_MAX_EDIT:
+                    # Delta morpho suffisant ?
+                    delta = morpho_scores[best_morpho_k] - brut_morpho
+                    if delta < self.LEX_SELECT_MORPHO_MIN_DELTA:
+                        continue
+
+                    # Confiance minimum pour override morpho
+                    if float(probs[best_morpho_k]) < self.LEX_SELECT_THRESHOLD_MORPHO:
+                        continue
+
+                    result[w] = cands[best_morpho_k]["ortho"]
+
+                else:
+                    # ═══ MODE SMART : P2G brut n'est PAS un candidat ═══
+                    # Remplacement avec seuil bas (le brut n'existe pas dans le lexique)
+
+                    # Trouver le meilleur candidat avec morpho positif ou neutre
+                    best_smart_k = None
+                    best_smart_score = -999.0
+                    for k, c in enumerate(cands):
+                        ortho = c.get("ortho", "")
+                        if not ortho or ortho.startswith("-"):
+                            continue
+                        # Blacklist
+                        pair = (brut_lower, ortho.lower())
+                        if pair in self._LEX_SELECT_BLACKLIST:
+                            continue
+                        # Edit distance
+                        ed = _edit_distance(brut_lower, ortho.lower())
+                        if ed > self.LEX_SELECT_MAX_EDIT:
+                            continue
+                        # Score: lex_select prob + morpho bonus leger
+                        score = float(probs[k])
+                        if morpho_scores[k] > 0:
+                            score += 0.05  # petit bonus morpho
+                        elif morpho_scores[k] < 0:
+                            score -= 0.05  # petite penalite
+                        if score > best_smart_score:
+                            best_smart_score = score
+                            best_smart_k = k
+
+                    if best_smart_k is None:
+                        continue
+
+                    cand_ortho = cands[best_smart_k].get("ortho", "")
+                    if cand_ortho.lower() == brut_lower:
+                        continue
+
+                    if float(probs[best_smart_k]) < self.LEX_SELECT_THRESHOLD:
+                        continue
+
                     result[w] = cand_ortho
+
             return result
 
         # POS predictions with confidence
@@ -874,7 +1004,7 @@ class OnnxInferenceEngineV2:
             ortho_results.append(ortho)
 
         # Apply lex_select (overrides P2G for words with candidates)
-        if candidates_list is not None:
+        if candidates_list is not None and self.apply_lex_select:
             ortho_results = self._apply_lex_select(
                 output_dict, word_starts, n_words, candidates_list, ortho_results,
                 ipa_words=ipa_words)
@@ -951,7 +1081,7 @@ class OnnxInferenceEngineV2:
             ortho_results.append(reconstruct_ortho(word_labels))
 
         # Apply lex_select
-        if candidates_list is not None:
+        if candidates_list is not None and self.apply_lex_select:
             ortho_results = self._apply_lex_select(
                 output_dict, word_starts, n_words, candidates_list, ortho_results,
                 ipa_words=ipa_words)
@@ -1139,7 +1269,7 @@ class OnnxInferenceEngineV2:
             alternatives_results.append(unique_alts[:k])
 
         # Apply lex_select (overrides P2G top1 for words with candidates)
-        if candidates_list is not None:
+        if candidates_list is not None and self.apply_lex_select:
             ortho_results = self._apply_lex_select(
                 output_dict, word_starts, n_words, candidates_list, ortho_results,
                 ipa_words=ipa_words)

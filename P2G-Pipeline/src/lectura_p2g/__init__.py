@@ -24,7 +24,7 @@ import json
 import unicodedata
 from importlib import resources
 
-__version__ = "4.2.0"
+__version__ = "4.3.0"
 
 # ── Re-exports depuis le graphemiseur (couche 1) ─────────────────────
 
@@ -49,6 +49,7 @@ def _appliquer_formules(
     _in_lex,
     formule_mode: str = "num",
     formule_tolerance: str = "exact",
+    number_mode: str = "auto",
 ) -> set[int]:
     """Detecte et remplace les formules (nombres, sigles) dans la sortie P2G.
 
@@ -65,6 +66,12 @@ def _appliquer_formules(
         Tolerance de reconnaissance IPA :
         - ``"exact"`` : IPA exact (defaut, pour texte IPA propre)
         - ``"stt"``   : tolerant STT (normalisation vocalique, Levenshtein)
+    number_mode : str
+        Mode de detection des nombres passe a ``detect_number_spans`` :
+        - ``"num"``   : agressif (tous les nombres isoles convertis)
+        - ``"texte"`` : pas de conversion numerique
+        - ``"auto"``  : rejette les homophones ambigus isoles (sept/cette,
+          cent/sang, vingt/vain, un/article) mais garde les spans >= 2 mots.
 
     Modifie ``result`` in-place.
     Returns: set de positions traitees (a proteger des corrections suivantes).
@@ -108,7 +115,7 @@ def _appliquer_formules(
             formule_positions.add(start + k)
 
     # ── Nombres (min_span=1 pour les nombres simples aussi) ──
-    number_spans = detect_number_spans(ipa_words, min_span=1, max_span=15)
+    number_spans = detect_number_spans(ipa_words, min_span=1, max_span=15, mode=number_mode)
     for start, end, formula_result in number_spans:
         # Pas de chevauchement avec les formules math
         if any(i in formule_positions for i in range(start, end)):
@@ -602,16 +609,19 @@ def corriger_phrase_pipeline(
     phone_lexicon: object | None = None,
     formule_mode: str = "num",
     formule_tolerance: str = "exact",
+    number_mode: str = "auto",
     **kwargs,
 ) -> list[str]:
     """Pipeline post-traitement complet P2G (couche 2).
 
     Orchestre les etapes de correction :
-      - Etape 0   : formules (nombres, sigles via lectura_formules)
-      - Etape 0b  : fusion de mots composes (aujourd'hui, peut-etre, etc.)
-      - Etapes 1-1c : coherence morpho + accents (delegue au graphemiseur)
-      - Etape 1d  : noms propres (capitalisation via phone_lexicon)
-      - Etape 2   : entites notables (dictionnaire IPA)
+      - Etape 0    : formules (nombres, sigles via lectura_formules)
+      - Etape 0b   : fusion de mots composes (aujourd'hui, peut-etre, etc.)
+      - Etape 0c   : correction neuronale (correcteur P2G, optionnel)
+      - Etapes 1-1c: coherence morpho + accents (delegue au graphemiseur)
+      - Etape 1d   : rescoring homophones par n-gramme POS (si pos_ngram fourni)
+      - Etape 1e   : noms propres (capitalisation via phone_lexicon)
+      - Etape 2    : entites notables (dictionnaire IPA)
 
     Parameters
     ----------
@@ -633,6 +643,11 @@ def corriger_phrase_pipeline(
         Tolerance de reconnaissance IPA :
         - ``"exact"`` : IPA exact (defaut)
         - ``"stt"``   : tolerant STT (normalisation vocalique, Levenshtein)
+    number_mode : str
+        Mode de detection des nombres :
+        - ``"num"``   : agressif (tous les nombres isoles convertis)
+        - ``"texte"`` : pas de conversion numerique
+        - ``"auto"``  : rejette les homophones ambigus isoles
     **kwargs
         Arguments supplementaires passes a corriger_phrase_v3
         (lexique, lexique_index, freq_map, lex_candidates).
@@ -655,19 +670,31 @@ def corriger_phrase_pipeline(
             result, ipa_words, pos_tags, n, _in_lex,
             formule_mode=formule_mode,
             formule_tolerance=formule_tolerance,
+            number_mode=number_mode,
         )
 
     # Etape 0b : fusion de mots composes
     if ipa_words is not None and len(ipa_words) == n and phone_lexicon is not None:
         _fusionner_composes(result, ipa_words, phone_lexicon, formule_positions)
 
-    # Etapes 1-1c : coherence morpho + accents (delegue au graphemiseur core)
+    # Etape 0c : correction neuronale (optionnel)
+    correcteur = kwargs.pop("correcteur", None)
+    if correcteur is not None:
+        try:
+            corrected = correcteur.corriger(result)
+            for i in range(n):
+                if i not in formule_positions and corrected[i]:
+                    result[i] = corrected[i]
+        except Exception:
+            pass  # Degradation gracieuse
+
+    # Etapes 1-1d : coherence morpho + accents + rescoring homophones
     result = corriger_phrase_v3(
         result, pos_tags, morpho_features,
         skip_positions=formule_positions, **kwargs,
     )
 
-    # Etape 1d : noms propres
+    # Etape 1e : noms propres
     _capitaliser_noms_propres(result, ipa_words, phone_lexicon, formule_positions)
 
     # Etape 2 : entites notables (dictionnaire IPA)
@@ -685,6 +712,7 @@ def analyser(
     engine: object | None = None,
     formule_mode: str = "num",
     formule_tolerance: str = "exact",
+    number_mode: str = "auto",
 ) -> dict:
     """Analyse P2G complete d'une liste de mots IPA.
 
@@ -704,6 +732,11 @@ def analyser(
         Tolerance de reconnaissance IPA :
         - ``"exact"`` : IPA exact (defaut)
         - ``"stt"``   : tolerant STT (normalisation vocalique, Levenshtein)
+    number_mode : str
+        Mode de detection des nombres :
+        - ``"num"``   : agressif (tous les nombres isoles convertis)
+        - ``"texte"`` : pas de conversion numerique
+        - ``"auto"``  : rejette les homophones ambigus isoles
 
     Returns
     -------
@@ -720,5 +753,7 @@ def analyser(
         phone_lexicon=getattr(engine, "phone_lexicon", None),
         formule_mode=formule_mode,
         formule_tolerance=formule_tolerance,
+        number_mode=number_mode,
+        correcteur=getattr(engine, "correcteur", None),
     )
     return result
