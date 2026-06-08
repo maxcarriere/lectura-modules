@@ -16,6 +16,7 @@ from lectura_formules.reconnaissance import (
     reconnaitre_maths_ipa_stt,
     detect_formula_spans,
     detect_formula_spans_stt,
+    detect_number_spans,
     _tokenize_ipa_math,
     _is_valid_math_sequence,
     _reconstruct_maths,
@@ -653,3 +654,81 @@ class TestMathsSpansSTT:
         spans = detect_formula_spans_stt(words, min_span=3, max_span=20)
         assert len(spans) == 1
         assert spans[0][2].display_num == "8+2=10"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# detect_number_spans — parametre mode
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestDetectNumberSpansMode:
+    """Tests du parametre mode de detect_number_spans."""
+
+    # ── mode "num" : comportement original (retro-compatible) ──
+
+    def test_mode_num_sept_isole(self):
+        """mode=num : 'sept' isole est converti en 7."""
+        spans = detect_number_spans(["sɛt"], min_span=1, mode="num")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "7"
+
+    def test_mode_num_sept_cent(self):
+        """mode=num : 'sept cent' est converti en 700."""
+        spans = detect_number_spans(["sɛt", "sɑ̃"], min_span=1, mode="num")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "700"
+
+    # ── mode "texte" : pas de conversion ──
+
+    def test_mode_texte_rien(self):
+        """mode=texte : aucune detection, retourne []."""
+        spans = detect_number_spans(["sɛt", "sɑ̃"], min_span=1, mode="texte")
+        assert spans == []
+
+    # ── mode "auto" : filtre les homophones ambigus isoles ──
+
+    def test_auto_sept_isole_rejete(self):
+        """mode=auto : 'sept' isole reste texte (homophone cette)."""
+        spans = detect_number_spans(["sɛt"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_cent_isole_rejete(self):
+        """mode=auto : 'cent' isole reste texte (homophone sang/sent)."""
+        spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_vingt_isole_rejete(self):
+        """mode=auto : 'vingt' isole reste texte (homophone vain)."""
+        spans = detect_number_spans(["vɛ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_sept_cent_accepte(self):
+        """mode=auto : 'sept cent' (span >= 2) est converti en 700."""
+        spans = detect_number_spans(["sɛt", "sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "700"
+
+    def test_auto_vingt_trois_accepte(self):
+        """mode=auto : 'vingt-trois' (span 2) est converti en 23."""
+        spans = detect_number_spans(["vɛ̃t", "tʁwa"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "23"
+
+    def test_auto_trois_mille_accepte(self):
+        """mode=auto : 'trois mille' (span 2) est converti en 3000."""
+        spans = detect_number_spans(["tʁwa", "mil"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "3000"
+
+    def test_auto_non_ambigu_isole_passe(self):
+        """mode=auto : 'trois' isole (non ambigu) est converti en 3."""
+        spans = detect_number_spans(["tʁwa"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "3"
+
+    def test_auto_cette_maison_pas_nombre(self):
+        """mode=auto : 'cette maison' ne doit pas etre detecte comme nombre."""
+        # 'sɛt' est un token numerique mais 'mɛzɔ̃' ne l'est pas
+        # → pas de span numerique possible
+        spans = detect_number_spans(["sɛt", "mɛzɔ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0

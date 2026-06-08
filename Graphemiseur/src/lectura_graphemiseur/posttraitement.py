@@ -661,7 +661,8 @@ def corriger_phrase_v3(
 
     Etape 1  : forcer_coherence_ortho_morpho() (coherence ortho vs morpho predite)
     Etape 1b : corrections contextuelles inter-mots (det/pro pluriel)
-    Etape 1c : corrections d'accent par POS (a/a, ou/ou)
+    Etape 1c : homophones par POS (a/a, ou/ou)
+    Etape 1d : homophones par morpho (il/ils, au/aux, etc.)
 
     Les etapes 1b et 1c s'appliquent uniquement quand la morpho predite
     est incoherente avec le contexte (ex: morpho=Sing mais det=pluriel),
@@ -757,7 +758,8 @@ def corriger_phrase_v3(
             if _in_lex(candidate):
                 result[i] = candidate
 
-    # Etape 1c : corrections d'accent par POS
+    # Etape 1c : homophones par POS
+    # Utilise directement la prediction POS du modele pour choisir la bonne forme.
     for i in range(n):
         if i in formule_positions:
             continue
@@ -775,6 +777,35 @@ def corriger_phrase_v3(
             result[i] = "où"
         elif lower == "où" and pos == "CON":
             result[i] = "ou"
+
+        # Note: ces/ses, ça/sa, son/sont, on/ont testes via benchmark_pos_morpho_optim
+        # mais net negatif ou neutre meme avec seuils de confiance POS.
+        # leur/leurs (POS+morpho) : net +1 mais trop marginal.
+
+    # Etape 1d : homophones par morpho
+    # Utilise la prediction morpho (Number) pour les paires dont la distinction
+    # est le nombre (il/ils, au/aux, leur/leurs, etc.).
+    from lectura_graphemiseur._homophones import _HOMOPHONES_MORPHO
+
+    for i in range(n):
+        if i in formule_positions:
+            continue
+        lower = result[i].lower()
+        if lower not in _HOMOPHONES_MORPHO:
+            continue
+        feature, mapping = _HOMOPHONES_MORPHO[lower]
+        feat_vals = morpho_features.get(feature, [])
+        feat_val = feat_vals[i] if i < len(feat_vals) else "_"
+        if feat_val == "_":
+            continue
+        correct = mapping.get(feat_val)
+        if correct is None or correct == lower:
+            continue
+        # Preserver la capitalisation
+        if result[i][0].isupper() and correct[0].islower():
+            result[i] = correct[0].upper() + correct[1:]
+        else:
+            result[i] = correct
 
     # Note: les etapes lex_cand et fallback ortho-lexique ont ete retirees.
     # Benchmark montrait des regressions nettes (-286 et -1988 respectivement) :

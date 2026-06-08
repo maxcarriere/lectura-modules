@@ -928,11 +928,42 @@ def _is_letter_token(ipa_word: str) -> bool:
     return len(tokens) == 1 and tokens[0].category == "lettre"
 
 
+
+# Phones IPA ambigus : homophones nombre/mot courant.
+# En mode "auto", les spans de 1 seul mot dont le phone normalise
+# (apres _normalize_ipa_for_stt) est dans cette liste sont rejetes.
+# Les spans >= 2 mots les contenant sont preserves (ex: "sept cent" → 700).
+_AMBIGUOUS_NUMBER_PHONES: frozenset[str] = frozenset()
+
+def _get_ambiguous_number_phones() -> frozenset[str]:
+    """Retourne l'ensemble des phones normalises ambigus (lazy init)."""
+    global _AMBIGUOUS_NUMBER_PHONES
+    if _AMBIGUOUS_NUMBER_PHONES:
+        return _AMBIGUOUS_NUMBER_PHONES
+
+    # IPA bruts des mots ambigus (nombre vs mot courant)
+    raw_ambiguous = [
+        "sɛt",   # sept (7) vs cette
+        "sɑ̃",    # cent (100) vs sang/sent/sans
+        "vɛ̃",    # vingt (20) vs vain
+        "œ̃",     # un (1) vs article un
+        "yn",    # une (1) vs article une
+    ]
+    normalized = set()
+    for raw in raw_ambiguous:
+        norm = _normalize_ipa_for_stt(raw)
+        if norm:
+            normalized.add(norm)
+    _AMBIGUOUS_NUMBER_PHONES = frozenset(normalized)
+    return _AMBIGUOUS_NUMBER_PHONES
+
+
 def detect_number_spans(
     ipa_words: list[str],
     *,
     min_span: int = 2,
     max_span: int = 8,
+    mode: str = "num",
 ) -> list[tuple[int, int, LectureFormuleResult]]:
     """Detecte les spans de mots IPA formant des nombres/formules.
 
@@ -944,11 +975,23 @@ def detect_number_spans(
         ipa_words: Liste de mots IPA.
         min_span: Taille minimum de span (defaut: 2).
         max_span: Taille maximum de span (defaut: 8).
+        mode: Mode de detection :
+            - ``"num"``   : agressif (min_span respecte tel quel, tous les
+              nombres isoles sont convertis) — comportement original.
+            - ``"texte"`` : pas de conversion numerique (retourne []).
+            - ``"auto"``  : detection intelligente — les spans de 1 seul mot
+              dont le phone est dans la liste d'homophones ambigus
+              (sept/cette, cent/sang, vingt/vain, un/article) sont rejetes.
+              Les spans >= 2 mots sont preserves meme s'ils contiennent
+              des homophones ambigus (ex: "sept cent" → 700).
 
     Returns:
         Liste de (start, end, LectureFormuleResult) triee par position.
         Les spans ne se chevauchent pas (greedy plus long d'abord).
     """
+    if mode == "texte":
+        return []
+
     n = len(ipa_words)
     if n < min_span:
         return []
@@ -962,6 +1005,11 @@ def detect_number_spans(
     # pourrait ne pas etre reconnu individuellement)
     results: list[tuple[int, int, LectureFormuleResult]] = []
     used: set[int] = set()
+
+    # En mode "auto", preparer le filtre d'homophones ambigus
+    ambiguous: frozenset[str] = frozenset()
+    if mode == "auto":
+        ambiguous = _get_ambiguous_number_phones()
 
     # Essayer les spans du plus long au plus court (greedy)
     for span_len in range(min(max_span, n), min_span - 1, -1):
@@ -980,6 +1028,12 @@ def detect_number_spans(
             merged_ipa = " ".join(ipa_words[i:end])
             result = reconnaitre_ipa_stt(merged_ipa, type_hint="nombre")
             if result is not None:
+                # Mode auto : rejeter les spans de 1 mot ambigus
+                if mode == "auto" and span_len == 1 and ambiguous:
+                    norm = _normalize_ipa_for_stt(ipa_words[i])
+                    if norm in ambiguous:
+                        continue
+
                 results.append((i, end, result))
                 used.update(range(i, end))
                 break  # passer au span suivant (greedy)

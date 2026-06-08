@@ -168,5 +168,9 @@ class CorrecteurV6Config:
     activer_negation: bool = True          # Insertion de ne/n' devant verbe si absent
     activer_homophones_struct: bool = True # Homophones structurels (sans P2G)
 
+    # P2G lex_select (v7)
+    p2g_lex_select: bool = True       # Activer lex_select du P2G
+    p2g_lex_threshold: float = 0.92   # Seuil softmax minimum pour lex_select
+
     # Debug
     mode_analyse: bool = False  # True = analyser() retourne les MotV6 sans corriger

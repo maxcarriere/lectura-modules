@@ -15,8 +15,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from lectura_stt._parse_ctc import parse_ctc_output, ParseResult
-from lectura_stt._assembler import assembler_texte, _commence_par_voyelle
+from lectura_stt._parse_ctc import parse_ctc_output, parse_ctc_v2, ParseResult
+from lectura_stt._assembler import assembler_texte, rejoin_elisions, _commence_par_voyelle
 from lectura_stt import STTEngine, ResultatSTT
 
 
@@ -371,6 +371,84 @@ class TestFactory(unittest.TestCase):
                 self.assertIsNone(engine.p2g)
                 self.assertIsNone(engine._p2g_analyser)
 
+
+
+# ── TestParseCTCv2 ────────────────────────────────────────────────
+
+
+class TestParseCTCv2(unittest.TestCase):
+    """Tests de parse_ctc_v2 (segments enrichis)."""
+
+    def test_phrase_simple(self):
+        segs = parse_ctc_v2("b ɔ̃ ʒ u ʁ | l ə | m ɔ̃ d")
+        word_segs = [s for s in segs if s["type"] == "word"]
+        self.assertEqual(len(word_segs), 3)
+        self.assertEqual(word_segs[0]["ipa"], "bɔ̃ʒuʁ")
+        self.assertEqual(word_segs[1]["ipa"], "lə")
+        self.assertEqual(word_segs[2]["ipa"], "mɔ̃d")
+
+    def test_liaison(self):
+        segs = parse_ctc_v2("l e [z] ɑ̃ f ɑ̃")
+        word_segs = [s for s in segs if s["type"] == "word"]
+        self.assertEqual(len(word_segs), 2)
+        self.assertNotIn("liaison_before", word_segs[0])
+        self.assertEqual(word_segs[1].get("liaison_before"), "z")
+
+    def test_elision(self):
+        segs = parse_ctc_v2("l ['] a m i")
+        word_segs = [s for s in segs if s["type"] == "word"]
+        self.assertEqual(len(word_segs), 2)
+        self.assertTrue(word_segs[0].get("is_clitic"))
+        self.assertTrue(word_segs[1].get("elision_before"))
+
+    def test_compound(self):
+        segs = parse_ctc_v2("ɡ ʁ ɑ̃ [-] p ɛ ʁ")
+        word_segs = [s for s in segs if s["type"] == "word"]
+        self.assertEqual(len(word_segs), 2)
+        self.assertTrue(word_segs[0].get("compound_after"))
+
+    def test_ponctuation(self):
+        segs = parse_ctc_v2("b ɔ̃ ʒ u ʁ .")
+        punct_segs = [s for s in segs if s["type"] == "punct"]
+        self.assertEqual(len(punct_segs), 1)
+        self.assertEqual(punct_segs[0]["value"], ".")
+
+    def test_vide(self):
+        self.assertEqual(parse_ctc_v2(""), [])
+        self.assertEqual(parse_ctc_v2("   "), [])
+
+
+# ── TestRejoinElisions ────────────────────────────────────────────
+
+
+class TestRejoinElisions(unittest.TestCase):
+    """Tests de rejoin_elisions."""
+
+    def test_elision_devant_voyelle(self):
+        """Clitique l + mot IPA commencant par voyelle → l'ami."""
+        r = rejoin_elisions(["le", "ami"], ["l", "ami"])
+        self.assertEqual(r, "L'ami")
+
+    def test_clitique_devant_consonne(self):
+        """Clitique l + mot commencant par consonne → le chat."""
+        r = rejoin_elisions(["le", "chat"], ["l", "ʃa"])
+        self.assertEqual(r, "Le chat")
+
+    def test_pas_clitique(self):
+        """Mot normal sans clitique IPA."""
+        r = rejoin_elisions(["bonjour", "le", "monde"], ["bɔ̃ʒuʁ", "lə", "mɔ̃d"])
+        self.assertEqual(r, "Bonjour le monde")
+
+    def test_compose_tiret(self):
+        """Mots composes joints par tiret."""
+        r = rejoin_elisions(
+            ["grand", "pere"], ["ɡʁɑ̃", "pɛʁ"],
+            compound_joins={0},
+        )
+        self.assertEqual(r, "Grand-pere")
+
+    def test_liste_vide(self):
+        self.assertEqual(rejoin_elisions([], []), "")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,12 @@
 Convertit une chaine IPA brute du decodeur CTC (ex: "b ɔ̃ ʒ u ʁ | l ə | m ɔ̃ d .")
 en une liste de mots IPA avec ponctuation et liaisons.
 
-Copyright (C) 2025 Max Carriere
+Deux niveaux de parsing :
+  - ``parse_ctc_output`` : retourne un ParseResult (mots_ipa + liaisons + ponctuation)
+  - ``parse_ctc_v2``     : retourne une liste de segments enrichis (type, liaison,
+    elision, compound) pour le pipeline avance
+
+Copyright (C) 2025-2026 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
 """
 
@@ -129,3 +134,89 @@ def parse_ctc_output(ipa_str: str) -> ParseResult:
         ponctuation_finale=ponctuation_finale,
         liaisons=liaisons,
     )
+
+
+def parse_ctc_v2(ipa_str: str) -> list[dict]:
+    """Parse une sequence CTC v2 avec marqueurs explicites.
+
+    Retourne une liste de segments enrichis ::
+
+        {"type": "word", "ipa": "il"}
+        {"type": "word", "ipa": "ɑ̃fɑ̃", "liaison_before": "z"}
+        {"type": "word", "ipa": "akademi", "elision_before": True}
+        {"type": "word", "ipa": "ɡʁɑ̃", "compound_after": True}
+        {"type": "punct", "value": "."}
+
+    Conventions CTC v2 :
+        - ``|``                : separateur de mot (groupe de lecture)
+        - ``[z]``, ``[t]``... : liaisons
+        - ``[']``             : elision (clitique → mot suivant)
+        - ``[-]``             : frontiere intra-compose
+        - ``,``, ``.``, ``?``, ``!``, ``…`` : ponctuation
+    """
+    if not ipa_str or not ipa_str.strip():
+        return []
+
+    tokens = ipa_str.split()
+    segments: list[dict] = []
+    current_phones: list[str] = []
+    pending_liaison: str | None = None
+    pending_elision = False
+
+    def _flush(extra: dict | None = None) -> None:
+        if current_phones:
+            seg: dict = {"type": "word", "ipa": "".join(current_phones)}
+            if pending_liaison:
+                seg["liaison_before"] = pending_liaison
+            if pending_elision:
+                seg["elision_before"] = True
+            if extra:
+                seg.update(extra)
+            segments.append(seg)
+            current_phones.clear()
+
+    for tok in tokens:
+        if tok == "|":
+            _flush()
+            pending_liaison = None
+            pending_elision = False
+
+        elif tok in LIAISON_MARKERS:
+            _flush()
+            pending_liaison = tok[1:-1]
+            pending_elision = False
+
+        elif tok == ELISION_MARKER:
+            if current_phones:
+                seg: dict = {"type": "word", "ipa": "".join(current_phones),
+                             "is_clitic": True}
+                segments.append(seg)
+                current_phones.clear()
+            pending_elision = True
+            pending_liaison = None
+
+        elif tok == COMPOUND_MARKER:
+            _flush({"compound_after": True})
+            pending_liaison = None
+            pending_elision = False
+
+        elif tok in PUNCT_TOKENS:
+            _flush()
+            pending_liaison = None
+            pending_elision = False
+            val = "." if tok == "…" else tok
+            segments.append({"type": "punct", "value": val})
+
+        else:
+            current_phones.append(tok)
+
+    # Flush le dernier mot
+    if current_phones:
+        seg_final: dict = {"type": "word", "ipa": "".join(current_phones)}
+        if pending_liaison:
+            seg_final["liaison_before"] = pending_liaison
+        if pending_elision:
+            seg_final["elision_before"] = True
+        segments.append(seg_final)
+
+    return segments
