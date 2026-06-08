@@ -576,12 +576,19 @@ def _levenshtein(s1: str, s2: str) -> int:
 def _stt_max_distance(phone_len: int) -> int:
     """Tolerance de distance en fonction de la longueur de la chaine IPA.
 
-    - < 5 phones : 0 (match exact requis)
-    - >= 5 phones : floor(len * 0.1) — environ 10% d'erreur tolere
+    - < 3 phones : 0 (match exact requis)
+    - 3-5 phones : 1 edit
+    - 6+ phones : ~30% d'erreur tolere (min 2)
+
+    La tokenisation avec variantes CTC gere les confusions simples ;
+    la verification aller-retour rattrape les residus de composition
+    multi-mots (2+ confusions empilees, ex: nasale + glide manquante).
     """
-    if phone_len < 5:
+    if phone_len < 3:
         return 0
-    return phone_len // 10
+    if phone_len <= 5:
+        return 1
+    return max(2, phone_len * 30 // 100)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -632,6 +639,49 @@ def _normalize_ipa_for_stt(ipa: str) -> str:
     return s
 
 
+# Regles de confusion CTC : substitutions plausibles (IPA canonique → variante CTC)
+_CTC_CONFUSION_RULES: list[tuple[str, str]] = [
+    # Nasales : ɛ̃ ↔ œ̃ ↔ ɑ̃
+    ("ɛ̃", "ɑ̃"),
+    ("ɛ̃", "œ̃"),
+    ("œ̃", "ɑ̃"),
+    ("ɑ̃", "œ̃"),
+    ("ɑ̃", "ɛ̃"),
+    ("œ̃", "ɛ̃"),
+    # Voisement
+    ("k", "ɡ"),
+    ("ɡ", "k"),
+    ("t", "d"),
+    ("d", "t"),
+    ("p", "b"),
+    ("b", "p"),
+    # Glides manquantes
+    ("lj", "l"),     # miljɔ̃ → milɔ̃
+    ("l", "lj"),     # reverse
+    # Consonnes finales
+    ("tʁ", "t"),     # katʁ → kat
+]
+
+
+def _generate_variants(canonical_ipa: str, max_variants: int = 12) -> list[str]:
+    """Variantes CTC plausibles d'un IPA canonique (1 regle a la fois)."""
+    variants: set[str] = set()
+    nfc = _nfc(_strip_spaces(canonical_ipa))
+    for pattern, replacement in _CTC_CONFUSION_RULES:
+        if pattern in nfc:
+            v = nfc.replace(pattern, replacement, 1)
+            if v != nfc:
+                variants.add(v)
+    # + versions STT-normalisees
+    extra: set[str] = set()
+    for v in variants:
+        nv = _normalize_ipa_for_stt(v)
+        if nv and nv != v and nv != nfc:
+            extra.add(nv)
+    variants.update(extra)
+    return list(variants)[:max_variants]
+
+
 # Table de variantes CTC supplementaires pour la tokenisation STT
 _STT_PHONE_VARIANTS: dict[str, list[tuple[str, int, str]]] | None = None
 
@@ -656,6 +706,14 @@ def _build_stt_variants() -> dict[str, list[tuple[str, int, str]]]:
     for phone, val, key in variants:
         normalized = _nfc(_strip_spaces(phone))
         _STT_PHONE_VARIANTS[normalized] = (val, key)
+
+    # Variantes auto-generees depuis les regles de confusion CTC
+    for canonical_phone, (val, unit_key) in inv_phone_nombre().items():
+        nfc = _nfc(_strip_spaces(canonical_phone))
+        for variant in _generate_variants(nfc):
+            if variant not in _STT_PHONE_VARIANTS:
+                _STT_PHONE_VARIANTS[variant] = (val, unit_key)
+
     return _STT_PHONE_VARIANTS
 
 
@@ -678,6 +736,14 @@ def _build_stt_lookup_table() -> list[tuple[str, IpaToken]]:
         nphone = _nfc(phone)
         if nphone not in base_table:
             base_table[nphone] = IpaToken("nombre", val, key, nphone)
+
+    # Variantes CTC auto-generees pour toutes les categories
+    variant_entries: dict[str, IpaToken] = {}
+    for ipa_key, token in list(base_table.items()):
+        for variant in _generate_variants(ipa_key):
+            if variant not in base_table and variant not in variant_entries:
+                variant_entries[variant] = token
+    base_table.update(variant_entries)
 
     # Re-normaliser les entrees existantes (strip schwas, ɑ→a)
     extended: dict[str, IpaToken] = {}
@@ -979,11 +1045,12 @@ def detect_number_spans(
             - ``"num"``   : agressif (min_span respecte tel quel, tous les
               nombres isoles sont convertis) — comportement original.
             - ``"texte"`` : pas de conversion numerique (retourne []).
-            - ``"auto"``  : detection intelligente — les spans de 1 seul mot
-              dont le phone est dans la liste d'homophones ambigus
-              (sept/cette, cent/sang, vingt/vain, un/article) sont rejetes.
-              Les spans >= 2 mots sont preserves meme s'ils contiennent
-              des homophones ambigus (ex: "sept cent" → 700).
+            - ``"auto"``  : detection intelligente — la tokenisation IPA
+              doit produire au moins 2 tokens nombre pour declencher la
+              conversion. Un mot isole (trois, cent, vingt) n'est jamais
+              converti, meme s'il est non ambigu. Un mot unique qui
+              contient 2+ tokens (ex: "kaʁɑ̃tdø" → quarante + deux)
+              est accepte.
 
     Returns:
         Liste de (start, end, LectureFormuleResult) triee par position.
@@ -1006,11 +1073,6 @@ def detect_number_spans(
     results: list[tuple[int, int, LectureFormuleResult]] = []
     used: set[int] = set()
 
-    # En mode "auto", preparer le filtre d'homophones ambigus
-    ambiguous: frozenset[str] = frozenset()
-    if mode == "auto":
-        ambiguous = _get_ambiguous_number_phones()
-
     # Essayer les spans du plus long au plus court (greedy)
     for span_len in range(min(max_span, n), min_span - 1, -1):
         for i in range(n - span_len + 1):
@@ -1028,10 +1090,16 @@ def detect_number_spans(
             merged_ipa = " ".join(ipa_words[i:end])
             result = reconnaitre_ipa_stt(merged_ipa, type_hint="nombre")
             if result is not None:
-                # Mode auto : rejeter les spans de 1 mot ambigus
-                if mode == "auto" and span_len == 1 and ambiguous:
-                    norm = _normalize_ipa_for_stt(ipa_words[i])
-                    if norm in ambiguous:
+                # Mode auto : exiger au moins 2 tokens nombre
+                # (jamais de conversion pour un mot isole : trois, cent, vingt)
+                if mode == "auto":
+                    tokens = _tokenize_ipa_stt(merged_ipa)
+                    if tokens is None:
+                        continue
+                    nombre_count = sum(
+                        1 for t in tokens if t.category == "nombre"
+                    )
+                    if nombre_count < 2:
                         continue
 
                 results.append((i, end, result))
@@ -1833,6 +1901,14 @@ def _build_math_stt_lookup_table() -> list[tuple[str, IpaToken]]:
         nphone = _nfc(phone)
         if nphone not in base:
             base[nphone] = IpaToken("nombre", val, key, nphone)
+
+    # Variantes CTC auto-generees pour toutes les categories
+    variant_entries: dict[str, IpaToken] = {}
+    for ipa_key, token in list(base.items()):
+        for variant in _generate_variants(ipa_key):
+            if variant not in base and variant not in variant_entries:
+                variant_entries[variant] = token
+    base.update(variant_entries)
 
     # Re-normaliser les entrees existantes (strip schwas, ɑ→a, ɔ→o, ɛ→e)
     extended: dict[str, IpaToken] = {}

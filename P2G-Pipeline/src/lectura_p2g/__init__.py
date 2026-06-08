@@ -24,12 +24,98 @@ import json
 import unicodedata
 from importlib import resources
 
-__version__ = "4.3.0"
+__version__ = "4.5.0"
 
 # ── Re-exports depuis le graphemiseur (couche 1) ─────────────────────
 
 from lectura_graphemiseur import creer_engine, tokeniser_ipa, ipa_phrase_vers_chars
 from lectura_graphemiseur import corriger_p2g, corriger_phrase_v2, corriger_phrase_v3
+
+
+# ── Corrections P2G (lookup IPA → ortho pour phones sans ambiguite) ──
+
+_P2G_CORRECTIONS: dict[str, str] | None = None
+
+
+def _charger_corrections(etendu: bool = False) -> dict[str, str]:
+    """Charge le fichier de corrections P2G (singleton).
+
+    Parameters
+    ----------
+    etendu : bool
+        Si True, charge le fichier etendu (toutes les phones sans ambiguite).
+        Si False, charge le fichier base (freq > 0 uniquement).
+    """
+    global _P2G_CORRECTIONS
+    if _P2G_CORRECTIONS is not None:
+        return _P2G_CORRECTIONS
+
+    name = "p2g_corrections_etendu.json" if etendu else "p2g_corrections.json"
+    pkg = resources.files("lectura_p2g") / "data" / name
+    try:
+        _P2G_CORRECTIONS = json.loads(pkg.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        # Fallback : essayer le fichier base si l'etendu est absent
+        if etendu:
+            try:
+                pkg_base = resources.files("lectura_p2g") / "data" / "p2g_corrections.json"
+                _P2G_CORRECTIONS = json.loads(pkg_base.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                _P2G_CORRECTIONS = {}
+        else:
+            _P2G_CORRECTIONS = {}
+    return _P2G_CORRECTIONS
+
+
+def _appliquer_corrections(
+    result: list[str],
+    ipa_words: list[str],
+    corrections: dict[str, str],
+    skip_positions: set[int],
+) -> None:
+    """Applique les corrections P2G (lookup IPA → ortho sans ambiguite).
+
+    Remplace le mot predit par l'ortho du lexique quand le phone
+    n'a qu'une seule orthographe possible.
+
+    Modifie result in-place.
+    """
+    matched: set[int] = set()
+    for i in range(len(result)):
+        if i in skip_positions:
+            continue
+        if i >= len(ipa_words):
+            continue
+        phone = ipa_words[i]
+        if not phone:
+            continue
+        # Ne pas corriger les elisions (deja traitees)
+        if "'" in phone:
+            continue
+        phone_nfc = unicodedata.normalize("NFC", phone)
+        ortho = corrections.get(phone_nfc)
+        if ortho is not None and ortho.lower() != result[i].lower():
+            result[i] = ortho
+            matched.add(i)
+    skip_positions.update(matched)
+
+
+# ── Filtrage ponctuation ─────────────────────────────────────────────
+
+_PUNCT_CHARS = frozenset(".,;:!?…«»\"'()[]{}–—-/")
+
+
+def _est_ponctuation(token: str) -> bool:
+    """Un token est ponctuation si tous ses caracteres sont Unicode P/S ou dans _PUNCT_CHARS."""
+    if not token:
+        return False
+    for ch in token:
+        if ch in _PUNCT_CHARS:
+            continue
+        cat = unicodedata.category(ch)
+        if not (cat.startswith("P") or cat.startswith("S")):
+            return False
+    return True
 
 
 # ── Pluriels sans -s (importe depuis le graphemiseur) ────────────────
@@ -115,17 +201,44 @@ def _appliquer_formules(
             formule_positions.add(start + k)
 
     # ── Nombres (min_span=1 pour les nombres simples aussi) ──
+    # Phones ambigus nombre/mot courant — rejeter les spans courts (1-2 mots)
+    # contenant ces phones sans contexte numerique clair
+    _AMBIG_NUM_PHONES = frozenset({
+        "sɑ̃",     # cent / sans, sang, sent, sens
+        "sɛt",     # sept / cette, cet
+        "vɛ̃",      # vingt / vain, vin
+        "ɛ̃",       # un / article indéfini
+        "dø",      # deux / de (prep)
+        "mil",     # mille / mil (céréale)
+        "kat",     # quatre (match partiel katʁ)
+        "twa",     # trois (match partiel tʁwa) / toi
+    })
     number_spans = detect_number_spans(ipa_words, min_span=1, max_span=15, mode=number_mode)
     for start, end, formula_result in number_spans:
         # Pas de chevauchement avec les formules math
         if any(i in formule_positions for i in range(start, end)):
             continue
+        span_len = end - start
+        # Filtre IPA : rejeter les matches partiels (phone detecté ≠ phone reel)
+        if span_len == 1 and hasattr(formula_result, "phone"):
+            detected_phone = unicodedata.normalize("NFC", formula_result.phone)
+            actual_phone = unicodedata.normalize("NFC", ipa_words[start])
+            if detected_phone != actual_phone and detected_phone != actual_phone + "ə":
+                continue
+        # Filtre ambiguïté : pour les spans courts (1-2 mots), rejeter si
+        # un phone est ambigu nombre/mot courant
+        if span_len <= 2:
+            has_ambig = any(
+                unicodedata.normalize("NFC", ipa_words[j]) in _AMBIG_NUM_PHONES
+                for j in range(start, end) if j < len(ipa_words)
+            )
+            if has_ambig:
+                continue
         if use_num and formula_result.display_num:
             display = formula_result.display_num
         else:
             display = formula_result.display_fr
         display_words = display.split()
-        span_len = end - start
         for k in range(span_len):
             if k < len(display_words):
                 result[start + k] = display_words[k]
@@ -133,8 +246,9 @@ def _appliquer_formules(
                 result[start + k] = ""
             formule_positions.add(start + k)
 
-    # ── Sigles (min_span=2, lettres epelees) ──
-    sigle_spans = detect_sigle_spans(ipa_words, min_span=2, max_span=15)
+    # ── Sigles (min_span=3 pour eviter les faux positifs 2-lettres
+    #    comme ɛl|a → "LA", i|a → "IA" qui sont des mots courants) ──
+    sigle_spans = detect_sigle_spans(ipa_words, min_span=3, max_span=15)
     for start, end, formula_result in sigle_spans:
         # Pas de chevauchement avec les nombres
         if any(i in formule_positions for i in range(start, end)):
@@ -599,6 +713,204 @@ def _fusionner_composes(
     skip_positions.update(matched)
 
 
+# ── Elisions (clitiques isolés devant voyelle) ──────────────────────
+
+# Mapping IPA clitique → prefixe ortho (meme table que le graphemiseur)
+_ELISION_IPA_TO_ORTHO = {
+    "ʒ": "j",      # je → j'ai
+    "l": "l",      # le/la → l'homme
+    "d": "d",      # de → d'accord
+    "n": "n",      # ne → n'est
+    "s": "s",      # se → s'en
+    "m": "m",      # me → m'appelle
+    "t": "t",      # te → t'en
+    "k": "qu",     # que → qu'il
+}
+
+# Voyelles IPA (debut de mot suivant)
+_VOYELLES_IPA = frozenset("aeɛiouøœəɑɔyɑ̃ɛ̃ɔ̃œ̃")
+
+
+def _est_debut_voyelle(phone: str) -> bool:
+    """Le phone commence par une voyelle IPA."""
+    if not phone:
+        return False
+    # Les nasales composees (ɑ̃, ɛ̃, etc.) : le 1er char est une voyelle
+    return phone[0] in _VOYELLES_IPA
+
+
+def _fusionner_elisions(
+    result: list[str],
+    ipa_words: list[str],
+    skip_positions: set[int],
+) -> None:
+    """Fusionne un clitique isolé avec le mot suivant par apostrophe.
+
+    Detecte les cas ou un clitique (l, d, s, n, j, etc.) est un token
+    IPA isolé suivi d'un mot commençant par une voyelle, et fusionne :
+      result[i] = "l", result[i+1] = "homme" → result[i] = "l'homme", result[i+1] = ""
+
+    Modifie result in-place.
+    """
+    n = len(result)
+    if n < 2:
+        return
+
+    matched: set[int] = set()
+    i = 0
+    while i < n - 1:
+        if i in skip_positions or i in matched:
+            i += 1
+            continue
+        if i + 1 in skip_positions or i + 1 in matched:
+            i += 1
+            continue
+        if i >= len(ipa_words) or i + 1 >= len(ipa_words):
+            i += 1
+            continue
+
+        phone = ipa_words[i]
+        next_phone = ipa_words[i + 1]
+
+        ortho_prefix = _ELISION_IPA_TO_ORTHO.get(phone)
+        if ortho_prefix is not None and _est_debut_voyelle(next_phone):
+            # Fusionner : prefix' + mot suivant
+            result[i] = ortho_prefix + "'" + result[i + 1]
+            result[i + 1] = ""
+            matched.add(i)
+            matched.add(i + 1)
+            i += 2
+            continue
+        i += 1
+
+    skip_positions.update(matched)
+
+
+# ── Composes IPA (mots compacts sans separateur) ─────────────────────
+
+_COMPOSES_IPA: dict[str, str] = {
+    # aujourd'hui
+    "oʒuʁdɥi": "aujourd'hui",
+    # lorsque / lorsqu'…
+    "loʁsk": "lorsque",
+    "loʁskə": "lorsque",
+    "loʁskil": "lorsqu'il",
+    "loʁskɛl": "lorsqu'elle",
+    "loʁskɔ̃": "lorsqu'on",
+    # puisque / puisqu'…
+    "pɥisk": "puisque",
+    "pɥiskə": "puisque",
+    "pɥiskil": "puisqu'il",
+    "pɥiskɛl": "puisqu'elle",
+    "pɥiskɔ̃": "puisqu'on",
+    # quelqu'un(e)
+    "kɛlkœ̃": "quelqu'un",
+    "kɛlkyn": "quelqu'une",
+    # jusque / jusqu'…
+    "ʒyska": "jusque",
+    "ʒyskə": "jusque",
+    "ʒyskisi": "jusqu'ici",
+    "ʒysko": "jusqu'au",
+    "ʒyskoz": "jusqu'aux",
+    "ʒyskalɔʁ": "jusqu'alors",
+    # peut-etre
+    "pøtɛtʁ": "peut-être",
+    "pøtɛtʁə": "peut-être",
+    # c'est-a-dire
+    "sɛtadiʁ": "c'est-à-dire",
+    "sɛtadiʁə": "c'est-à-dire",
+    # est-ce que / qu'est-ce que
+    "ɛskə": "est-ce que",
+    "ɛstkə": "est-ce que",
+    "kɛskə": "qu'est-ce que",
+    "kɛstkə": "qu'est-ce que",
+    # parce que
+    "paʁskə": "parce que",
+    "paʁsk": "parce que",
+    # presqu'ile / presque
+    "pʁɛskil": "presqu'île",
+    # quelquefois
+    "kɛlkəfwa": "quelquefois",
+}
+
+# Normaliser les cles en NFC
+_COMPOSES_IPA = {
+    unicodedata.normalize("NFC", k): v for k, v in _COMPOSES_IPA.items()
+}
+
+
+def _corriger_composes_mono(
+    result: list[str],
+    ipa_words: list[str],
+    phone_lexicon: object | None,
+    skip_positions: set[int],
+) -> None:
+    """Corrige les mots composes entres sans separateur (IPA compact).
+
+    Couche 1 : lookup exact dans _COMPOSES_IPA (O(1)).
+    Couche 2 : lookup dans phone_lexicon pour les entrees dont l'ortho
+               contient une apostrophe ou un tiret interne.
+
+    Skip les phones qui contiennent deja une apostrophe (deja traites
+    par _split_elision).
+
+    Modifie result in-place.
+    """
+    n = len(result)
+    matched: set[int] = set()
+    for i in range(n):
+        if i in skip_positions:
+            continue
+        if i >= len(ipa_words):
+            continue
+        phone = ipa_words[i]
+        if not phone or "'" in phone:
+            continue
+
+        phone_nfc = unicodedata.normalize("NFC", phone)
+
+        # Couche 1 : dictionnaire curate
+        ortho = _COMPOSES_IPA.get(phone_nfc)
+        if ortho is not None:
+            result[i] = ortho
+            matched.add(i)
+            continue
+
+        # Couche 2 : phone_lexicon — chercher les entrees compose
+        if phone_lexicon is None or not hasattr(phone_lexicon, "all_entries"):
+            continue
+
+        found = False
+        for phone_try in (phone_nfc, phone_nfc + "ə"):
+            entries = phone_lexicon.all_entries(phone_try)
+            if not entries:
+                continue
+            for e in entries:
+                o = e.get("ortho", "")
+                if len(o) < 5:
+                    continue
+                # Verifier que c'est un vrai compose (pas une elision simple)
+                # Les deux parties autour du separateur doivent etre >= 2 chars
+                sep_pos = -1
+                for sep in ("'", "-"):
+                    idx = o.find(sep, 1)
+                    if idx > 0 and idx < len(o) - 1:
+                        sep_pos = idx
+                        break
+                if sep_pos < 0:
+                    continue
+                prefix, suffix = o[:sep_pos], o[sep_pos + 1:]
+                if len(prefix) >= 2 and len(suffix) >= 2:
+                    result[i] = o
+                    matched.add(i)
+                    found = True
+                    break
+            if found:
+                break
+
+    skip_positions.update(matched)
+
+
 # ── Pipeline complet ─────────────────────────────────────────────────
 
 def corriger_phrase_pipeline(
@@ -610,13 +922,17 @@ def corriger_phrase_pipeline(
     formule_mode: str = "num",
     formule_tolerance: str = "exact",
     number_mode: str = "auto",
+    corrections_p2g: bool | str = True,
     **kwargs,
 ) -> list[str]:
     """Pipeline post-traitement complet P2G (couche 2).
 
     Orchestre les etapes de correction :
       - Etape 0    : formules (nombres, sigles via lectura_formules)
+      - Etape 0a   : elisions (clitiques isolés devant voyelle)
       - Etape 0b   : fusion de mots composes (aujourd'hui, peut-etre, etc.)
+      - Etape 0b2  : composes mono-mots (IPA compact sans separateur)
+      - Etape 0b3  : corrections P2G (lookup IPA → ortho sans ambiguite)
       - Etape 0c   : correction neuronale (correcteur P2G, optionnel)
       - Etapes 1-1c: coherence morpho + accents (delegue au graphemiseur)
       - Etape 1d   : rescoring homophones par n-gramme POS (si pos_ngram fourni)
@@ -648,6 +964,11 @@ def corriger_phrase_pipeline(
         - ``"num"``   : agressif (tous les nombres isoles convertis)
         - ``"texte"`` : pas de conversion numerique
         - ``"auto"``  : rejette les homophones ambigus isoles
+    corrections_p2g : bool | str
+        Active les corrections P2G (lookup IPA → ortho) :
+        - ``True``      : fichier base (freq > 0) — defaut
+        - ``"etendu"``  : fichier etendu (toutes les phones sans ambiguite)
+        - ``False``     : desactive
     **kwargs
         Arguments supplementaires passes a corriger_phrase_v3
         (lexique, lexique_index, freq_map, lex_candidates).
@@ -673,9 +994,24 @@ def corriger_phrase_pipeline(
             number_mode=number_mode,
         )
 
+    # Etape 0a : elisions (clitiques isolés devant voyelle)
+    if ipa_words is not None and len(ipa_words) == n:
+        _fusionner_elisions(result, ipa_words, formule_positions)
+
     # Etape 0b : fusion de mots composes
     if ipa_words is not None and len(ipa_words) == n and phone_lexicon is not None:
         _fusionner_composes(result, ipa_words, phone_lexicon, formule_positions)
+
+    # Etape 0b2 : composes mono-mots (IPA compact sans separateur)
+    if ipa_words is not None and len(ipa_words) == n:
+        _corriger_composes_mono(result, ipa_words, phone_lexicon, formule_positions)
+
+    # Etape 0b3 : corrections P2G (lookup IPA → ortho sans ambiguite)
+    if corrections_p2g and ipa_words is not None and len(ipa_words) == n:
+        etendu = (corrections_p2g == "etendu")
+        corrections = _charger_corrections(etendu=etendu)
+        if corrections:
+            _appliquer_corrections(result, ipa_words, corrections, formule_positions)
 
     # Etape 0c : correction neuronale (optionnel)
     correcteur = kwargs.pop("correcteur", None)
@@ -713,6 +1049,7 @@ def analyser(
     formule_mode: str = "num",
     formule_tolerance: str = "exact",
     number_mode: str = "auto",
+    corrections_p2g: bool | str = True,
 ) -> dict:
     """Analyse P2G complete d'une liste de mots IPA.
 
@@ -737,6 +1074,11 @@ def analyser(
         - ``"num"``   : agressif (tous les nombres isoles convertis)
         - ``"texte"`` : pas de conversion numerique
         - ``"auto"``  : rejette les homophones ambigus isoles
+    corrections_p2g : bool | str
+        Active les corrections P2G (lookup IPA → ortho) :
+        - ``True``      : fichier base (freq > 0) — defaut
+        - ``"etendu"``  : fichier etendu (toutes les phones)
+        - ``False``     : desactive
 
     Returns
     -------
@@ -746,14 +1088,40 @@ def analyser(
     if engine is None:
         engine = creer_engine()
 
-    result = engine.analyser(ipa_words)
-    result["ortho"] = corriger_phrase_pipeline(
-        result["ortho"], result["pos"], result["morpho"],
-        ipa_words=ipa_words,
-        phone_lexicon=getattr(engine, "phone_lexicon", None),
-        formule_mode=formule_mode,
-        formule_tolerance=formule_tolerance,
-        number_mode=number_mode,
-        correcteur=getattr(engine, "correcteur", None),
-    )
+    # ── Filtrage ponctuation : extraire avant inference ──
+    punct_map: dict[int, str] = {}
+    clean_words: list[str] = []
+    for idx, tok in enumerate(ipa_words):
+        if _est_ponctuation(tok):
+            punct_map[idx] = tok
+        else:
+            clean_words.append(tok)
+
+    if clean_words:
+        result = engine.analyser(clean_words)
+        result["ortho"] = corriger_phrase_pipeline(
+            result["ortho"], result["pos"], result["morpho"],
+            ipa_words=clean_words,
+            phone_lexicon=getattr(engine, "phone_lexicon", None),
+            formule_mode=formule_mode,
+            formule_tolerance=formule_tolerance,
+            number_mode=number_mode,
+            corrections_p2g=corrections_p2g,
+            correcteur=getattr(engine, "correcteur", None),
+        )
+    else:
+        result = {"ipa_words": [], "ortho": [], "pos": [], "morpho": {}}
+
+    # ── Reinjecter la ponctuation aux bonnes positions ──
+    if punct_map:
+        morpho_keys = list(result.get("morpho", {}).keys())
+        n_clean = len(result.get("ortho", []))
+        for pos in sorted(punct_map.keys()):
+            tok = punct_map[pos]
+            result.setdefault("ipa_words", []).insert(pos, tok)
+            result["ortho"].insert(pos, tok)
+            result["pos"].insert(pos, "PUNCT")
+            for k in morpho_keys:
+                result["morpho"][k].insert(pos, "_")
+
     return result

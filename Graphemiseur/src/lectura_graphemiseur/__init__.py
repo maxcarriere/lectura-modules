@@ -273,11 +273,11 @@ def creer_engine(
                     lexicon_path=str(resolved_lexicon) if resolved_lexicon else None,
                     phone_lexicon=phone_lex,
                 )
-            # V7 : desactiver lex_select (char-level P2G + self-attention
-            # est plus precis sans, cf p2g_word_acc > p2g_lex_word_acc)
+            # V7 : lex_select actif avec seuil conservateur (0.95)
+            # Le benchmark montre +444 mots nets sur le dev set
             if "v7" in str(model_onnx):
-                engine.apply_lex_select = False
-                logger.info("V7: lex_select disabled (char-level P2G preferred)")
+                engine.apply_lex_select = True
+                logger.info("V7: lex_select enabled (threshold=%.2f)", engine.LEX_SELECT_THRESHOLD)
         except (ImportError, FileNotFoundError, Exception):
             if mode == "onnx":
                 raise

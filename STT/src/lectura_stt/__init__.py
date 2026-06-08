@@ -34,8 +34,12 @@ from lectura_stt._postprocess import (
     try_elision_merges,
     _shift_compound_joins,
 )
+from lectura_stt._correction import (
+    map_tokens_to_words,
+    correct_doubtful_words,
+)
 
-__version__ = "3.0.0"
+__version__ = "3.0.2"
 
 
 @dataclass
@@ -87,12 +91,16 @@ class STTEngine:
         p2g_analyser: object | None = None,
         formule_tolerance: str = "stt",
         phone_lexicon: object | None = None,
+        phone_correct: bool = False,
+        phone_conf_threshold: float = 0.98,
     ) -> None:
         self.ctc = ctc_engine
         self.p2g = p2g_engine
         self._p2g_analyser = p2g_analyser  # lectura_p2g.analyser (avec formules)
         self.formule_tolerance = formule_tolerance
         self.phone_lexicon = phone_lexicon
+        self.phone_correct = phone_correct
+        self.phone_conf_threshold = phone_conf_threshold
 
     def transcrire(self, audio: np.ndarray, sr: int = 16000) -> ResultatSTT:
         """Transcrit un signal audio en texte.
@@ -109,12 +117,20 @@ class STTEngine:
         ResultatSTT
             Resultat contenant IPA et texte (si P2G disponible).
         """
-        # Etape 1 : CTC → IPA
-        ipa_str = self.ctc.transcrire(audio, sr=sr)
+        # Etape 1 : CTC → IPA (avec alternatives si phone_correct actif)
+        ctc_tokens = None
+        if (self.phone_correct
+                and self.phone_lexicon is not None
+                and hasattr(self.ctc, "transcrire_avec_alternatives")):
+            ipa_str, ctc_tokens = self.ctc.transcrire_avec_alternatives(
+                audio, sr=sr, top_k=5,
+            )
+        else:
+            ipa_str = self.ctc.transcrire(audio, sr=sr)
 
         # Choix du pipeline : optimal si PhoneLexicon disponible, sinon simplifie
         if self.phone_lexicon is not None and self.p2g is not None:
-            return self._transcrire_optimal(ipa_str)
+            return self._transcrire_optimal(ipa_str, ctc_tokens=ctc_tokens)
         return self._transcrire_simple(ipa_str)
 
     def _transcrire_simple(self, ipa_str: str) -> ResultatSTT:
@@ -138,7 +154,9 @@ class STTEngine:
             ponctuation=ponctuation,
         )
 
-    def _transcrire_optimal(self, ipa_str: str) -> ResultatSTT:
+    def _transcrire_optimal(
+        self, ipa_str: str, ctc_tokens: list[dict] | None = None,
+    ) -> ResultatSTT:
         """Pipeline optimal avec postprocessing CTC.
 
         Sequence :
@@ -146,6 +164,7 @@ class STTEngine:
             → strip_liaisons(ipa_words, lexicon)
             → split_elisions(ipa_words, lexicon)
             → split_merged_words(ipa_words, lexicon)
+            → correct_doubtful_words(ipa_words, word_stats) [si phone_correct]
             → P2G analyser_v2(ipa_words) avec lex_select
             → merge_and_rescore(ipa, ortho, pos_conf, lexicon, p2g)
             → try_elision_merges(ipa, ortho, lexicon)
@@ -183,6 +202,21 @@ class STTEngine:
         ipa_before = list(ipa_words)
         ipa_words = split_merged_words(ipa_words, lexicon)
         compound_joins = _shift_compound_joins(ipa_before, ipa_words, compound_joins)
+
+        # 4b. Correction phonetique CTC (optionnelle)
+        if self.phone_correct and ctc_tokens is not None:
+            vocab_inv = getattr(self.ctc, "vocab_inv", None)
+            if vocab_inv is not None:
+                word_stats = map_tokens_to_words(ctc_tokens, vocab_inv)
+                ipa_before = list(ipa_words)
+                ipa_words, _corrections = correct_doubtful_words(
+                    ipa_words, word_stats, lexicon,
+                    conf_threshold=self.phone_conf_threshold,
+                )
+                if _corrections:
+                    compound_joins = _shift_compound_joins(
+                        ipa_before, ipa_words, compound_joins,
+                    )
 
         # 5. P2G conversion via analyser_v2
         ortho_words, pos_conf = self._p2g_convertir_v2(ipa_words)
@@ -290,10 +324,12 @@ class STTEngine:
 
         # 1. Pipeline P2G complet (formules + noms propres + entites)
         if self._p2g_analyser is not None:
-            result = self._p2g_analyser(
-                mots_clean, engine=self.p2g,
-                formule_tolerance=self.formule_tolerance,
-            )
+            import inspect
+            sig = inspect.signature(self._p2g_analyser)
+            kwargs: dict = {"engine": self.p2g}
+            if "formule_tolerance" in sig.parameters:
+                kwargs["formule_tolerance"] = self.formule_tolerance
+            result = self._p2g_analyser(mots_clean, **kwargs)
             return result.get("ortho", mots_clean)
 
         # 2. Graphemiseur seul (sans formules)
@@ -310,7 +346,8 @@ class STTEngine:
         p2g_status = type(self.p2g).__name__ if self.p2g else "None"
         pipeline = "+formules" if self._p2g_analyser else ""
         lex = "+lexicon" if self.phone_lexicon else ""
-        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline}{lex})"
+        phcor = "+phcor" if self.phone_correct else ""
+        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline}{lex}{phcor})"
 
 
 def creer_engine(
@@ -318,6 +355,8 @@ def creer_engine(
     ctc_kwargs: dict | None = None,
     p2g_kwargs: dict | None = None,
     formule_tolerance: str = "stt",
+    phone_correct: bool = False,
+    phone_conf_threshold: float = 0.98,
 ) -> STTEngine:
     """Factory pour creer un engine STT.
 
@@ -335,6 +374,10 @@ def creer_engine(
         Tolerance de reconnaissance des formules :
         - ``"stt"``   : tolerant STT (defaut — normalisation vocalique, Levenshtein)
         - ``"exact"`` : IPA exact uniquement
+    phone_correct : bool
+        Activer la correction phonetique CTC (confiance + lexique).
+    phone_conf_threshold : float
+        Seuil de confiance pour la correction phonetique (defaut 0.98).
 
     Returns
     -------
@@ -366,6 +409,8 @@ def creer_engine(
         ctc_engine, p2g_engine, p2g_analyser,
         formule_tolerance=formule_tolerance,
         phone_lexicon=phone_lexicon,
+        phone_correct=phone_correct,
+        phone_conf_threshold=phone_conf_threshold,
     )
 
 
