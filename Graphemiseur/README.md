@@ -5,13 +5,13 @@
 > Anciennement `lectura-p2g` (pip) / `lectura_p2g` (import).
 > Renomme `lectura-graphemiseur` / `lectura_graphemiseur` a partir de la v4.0.0.
 
-Un seul modele BiLSTM char-level multi-tete V6 avec word feedback et phone_lex_features (ONNX INT8) qui predit simultanement :
+Un seul modele BiLSTM char-level multi-tete V7 avec attention cross word-char, lex_select et phone_lex_features (ONNX INT8) qui predit simultanement :
 
-- **P2G** : transcription IPA vers orthographe (90.95% word accuracy, pipeline complet avec formules)
+- **P2G** : transcription IPA vers orthographe (~95% word accuracy core, ~96% pipeline complet)
 - **POS** : etiquetage morpho-syntaxique — 19 tags (98.3% accuracy)
 - **Morphologie** : genre, nombre, temps, mode, personne, forme verbale (94.7-99.7%)
 
-Le score P2G inclut la reconnaissance de formules (nombres, sigles, dates) via `lectura_formules`.
+Le modele V7 ajoute un mecanisme d'attention cross word-char et le lex_select (selection lexicale parmi candidats phonetiques).
 
 Quatre backends d'inference : ONNX Runtime, NumPy, pur Python (zero dependance), ou API serveur.
 
@@ -63,7 +63,7 @@ Installez les modeles dans `~/.lectura/models/p2g/` :
 
 ```bash
 mkdir -p ~/.lectura/models/p2g
-cp unifie_p2g_v6_int8.onnx unifie_p2g_v6_vocab.json phone_lexicon.db ~/.lectura/models/p2g/
+cp unifie_p2g_v7_int8.onnx unifie_p2g_v7_vocab.json phone_lexicon.db ~/.lectura/models/p2g/
 ```
 
 Ou via variable d'environnement :
@@ -72,7 +72,7 @@ Ou via variable d'environnement :
 export LECTURA_MODELS_DIR=/path/to/models
 ```
 
-`creer_engine()` detecte automatiquement les modeles locaux. Le fichier `phone_lexicon.db` (lexique phonetique) est utilise par le modele V6 pour les phone_lex_features et le lex_select. Sans ce fichier, le modele fonctionne en mode degrade (features = zeros).
+`creer_engine()` detecte automatiquement les modeles locaux. Le fichier `phone_lexicon.db` (lexique phonetique) est utilise par le modele V7 pour les phone_lex_features et le lex_select. Sans ce fichier, le modele fonctionne en mode degrade (features = zeros).
 
 ## Poids NumPy / Pure Python (optionnel)
 
@@ -99,7 +99,7 @@ result = engine.analyser(["bɔ̃ʒuʁ", "lə", "mɔ̃d"])
 
 Les backends locaux (ONNX, NumPy, Pure) produisent des resultats identiques.
 
-## Pipeline V6 (raw → lex_select → post-traitement)
+## Pipeline V7 (raw → lex_select → post-traitement)
 
 Le pipeline complet applique trois etapes successives :
 
@@ -111,9 +111,9 @@ Le pipeline complet applique trois etapes successives :
    - **Accents** : correction a/a, ou/ou par POS
    - → **90.95%** word accuracy (pipeline complet)
 
-## Phone_lex_features (V6)
+## Phone_lex_features (V7)
 
-Le modele V6 utilise un vecteur de 28 dimensions par mot (`phone_lex_features`), construit a partir du `phone_lexicon.db` :
+Le modele V7 utilise un vecteur de 28 dimensions par mot (`phone_lex_features`), construit a partir du `phone_lexicon.db` :
 
 - 19d : POS one-hot (candidats POS du lexique phonetique)
 - 3d : features morphologiques (genre, nombre)
@@ -121,11 +121,11 @@ Le modele V6 utilise un vecteur de 28 dimensions par mot (`phone_lex_features`),
 
 Le `phone_lexicon.db` est detecte automatiquement dans le dossier modeles. Sans lexique, le modele fonctionne normalement (features = zeros).
 
-## Benchmarks (dev set, modele V6 pipeline complet)
+## Benchmarks (dev set, modele V7 pipeline complet)
 
 | Tache | Metrique | Score |
 |-------|----------|-------|
-| **P2G** | Word Accuracy (pipeline complet) | **90.95%** |
+| **P2G** | Word Accuracy (core + lex_select) | **~95%** |
 | **POS** | Accuracy | **98.3%** |
 | **Morpho** — Number | Accuracy | **94.7%** |
 | **Morpho** — Gender | Accuracy | **97.6%** |
@@ -134,7 +134,7 @@ Le `phone_lexicon.db` est detecte automatiquement dans le dossier modeles. Sans 
 | **Morpho** — Tense | Accuracy | **99.7%** |
 | **Morpho** — Person | Accuracy | **99.6%** |
 
-Voir [EVALUATION.md](EVALUATION.md) pour les resultats detailles et la comparaison v1/v2/v3/v6.
+Voir [EVALUATION.md](EVALUATION.md) pour les resultats detailles et la comparaison v1/v2/v3/v6/v7.
 
 ## API
 
@@ -166,25 +166,21 @@ Le parametre `ipa_words` active la reconnaissance de formules (nombres, sigles).
 
 Post-traitement contextuel inter-mots : accord determinant-nom, sujet-verbe.
 
-## Architecture du modele (V6)
+## Architecture du modele (V7)
 
 ```
-Phrase IPA → Char Embedding (64d) → Shared BiLSTM (2×160h → 320d)
-                                          │
-                  ┌───────────────────────┼────────────────────┐
-                  ↓                                             ↓
-        Word representations                Word repr (320d) + Phone Lex Features (28d)
-        (fwd[last] || bwd[first])                          │
+Phrase IPA → Char Embedding (64d) → Shared BiLSTM (2x192h → 384d)
+                                          |
+                  +-----------------------+--------------------+
+                  v                                             v
+        Word representations              Word repr (384d) + Phone Lex Features (28d)
+        (fwd[last] || bwd[first])                          |
                                                  Word BiLSTM (192h → 384d)
-                                                       │
-                                         ┌─────────────┼──────────────┐
-                                         ↓             ↓              ↓
-                                        POS       Morpho (×6)    Word Feedback
-                                                                 (broadcast → char)
-                                                                      │
-                                                                      ↓
-                                                           P2G Head (704d → 1198)
-                                                           char_out + word_out
+                                                       |
+                                            +--------------+--------------+
+                                           POS        Morpho (x6)    Attention Cross
+                                                                    → P2G Head
+                                                                    → Lex_Select Head
 ```
 
 - **Entree** : sequence de caracteres IPA avec `<BOS>`, `<SEP>`, `<EOS>`

@@ -1,6 +1,8 @@
 # lectura-ctc — Decodeur phonetique CTC du francais
 
-Transcription audio vers phonemes IPA via un modele CNN-BiGRU-CTC (3.5M params, PER ~6%).
+Transcription audio vers phonemes IPA via un modele CNN-BiGRU-CTC medium (10.6M params, PER ~4.34%).
+
+Le modele medium supporte les sigles, formules (nombres, dates, calculs) et la parole courante grace a un vocabulaire etendu de 59 tokens et un fine-tuning specialise.
 
 ## Installation
 
@@ -26,11 +28,21 @@ result = engine.transcrire(audio)
 print(result)  # chaine IPA : "b ɔ̃ ʒ u ʁ | l ə | m ɔ̃ d"
 ```
 
+## Modele
+
+| Caracteristique | Valeur |
+|-----------------|--------|
+| **Architecture** | CNN [48, 96] + BiGRU 384x4 + CTC head |
+| **Parametres** | 10.6M |
+| **Performance** | PER ~4.34% (formules v2) |
+| **Vocabulaire** | 59 tokens (46 phones IPA + liaisons + ponctuation + speciaux) |
+| **Entrainement** | Pre-train corpus complet + fine-tune formules/sigles multispeaker |
+
 ## Backends
 
 | Backend | Dependance | Latence | Modele |
 |---------|-----------|---------|--------|
-| ONNX Runtime | `onnxruntime` | ~10 ms/s audio | `phone_ctc_int8.onnx` (13 Mo) |
+| ONNX Runtime | `onnxruntime` | ~10 ms/s audio | `phone_ctc_int8.onnx` (38 Mo) |
 | API | aucune | ~100 ms/s audio | serveur Lectura |
 
 ## Parametres audio
