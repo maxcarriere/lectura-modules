@@ -36,7 +36,7 @@ import logging
 import os
 from pathlib import Path
 
-__version__ = "4.3.1"
+__version__ = "4.3.2"
 
 logger = logging.getLogger(__name__)
 
