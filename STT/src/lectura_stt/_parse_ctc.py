@@ -188,10 +188,19 @@ def parse_ctc_v2(ipa_str: str) -> list[dict]:
 
         elif tok == ELISION_MARKER:
             if current_phones:
-                seg: dict = {"type": "word", "ipa": "".join(current_phones),
-                             "is_clitic": True}
-                segments.append(seg)
-                current_phones.clear()
+                if len(current_phones) > 1:
+                    # CTC a fusionne le mot precedent avec le clitique
+                    # (ex: "ɛ m [']" → separe en mot "ɛ" + clitique "m")
+                    clitic_phone = current_phones.pop()
+                    _flush()
+                    seg_clitic: dict = {"type": "word", "ipa": clitic_phone,
+                                        "is_clitic": True}
+                    segments.append(seg_clitic)
+                else:
+                    seg_clitic2: dict = {"type": "word", "ipa": current_phones[0],
+                                         "is_clitic": True}
+                    segments.append(seg_clitic2)
+                    current_phones.clear()
             pending_elision = True
             pending_liaison = None
 
