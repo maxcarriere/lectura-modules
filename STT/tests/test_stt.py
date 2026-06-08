@@ -413,6 +413,30 @@ class TestParseCTCv2(unittest.TestCase):
         self.assertEqual(len(punct_segs), 1)
         self.assertEqual(punct_segs[0]["value"], ".")
 
+    def test_elision_multi_phones_split(self):
+        """CTC fusionne mot + clitique : 'ɛ m [']' → mot 'ɛ' + clitique 'm'."""
+        segs = parse_ctc_v2("ɛ m ['] a p ɛ l")
+        word_segs = [s for s in segs if s["type"] == "word"]
+        self.assertEqual(len(word_segs), 3)
+        # "ɛ" est un mot normal (pas clitique)
+        self.assertEqual(word_segs[0]["ipa"], "ɛ")
+        self.assertFalse(word_segs[0].get("is_clitic", False))
+        # "m" est le clitique
+        self.assertEqual(word_segs[1]["ipa"], "m")
+        self.assertTrue(word_segs[1].get("is_clitic"))
+        # "apɛl" recoit elision_before
+        self.assertEqual(word_segs[2]["ipa"], "apɛl")
+        self.assertTrue(word_segs[2].get("elision_before"))
+
+    def test_elision_single_phone_v2(self):
+        """Un seul phone avant ['] reste clitique sans split."""
+        segs = parse_ctc_v2("l ['] a m i")
+        word_segs = [s for s in segs if s["type"] == "word"]
+        self.assertEqual(len(word_segs), 2)
+        self.assertEqual(word_segs[0]["ipa"], "l")
+        self.assertTrue(word_segs[0].get("is_clitic"))
+        self.assertEqual(word_segs[1]["ipa"], "ami")
+
     def test_vide(self):
         self.assertEqual(parse_ctc_v2(""), [])
         self.assertEqual(parse_ctc_v2("   "), [])
