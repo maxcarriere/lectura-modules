@@ -879,6 +879,18 @@ class TestPermissiveMode:
         display_nums = [s[2].display_num for s in spans]
         assert any("2+3=5" == d for d in display_nums) or any("2" in d for d in display_nums)
 
+    def test_permissive_letters_accepted(self):
+        """Le pre-filtre permissif accepte les lettres math (a, be, se)."""
+        assert _is_formule_token_permissive("a")
+        assert _is_formule_token_permissive("be")
+        assert _is_formule_token_permissive("se")
+
+    def test_permissive_pythagore_span(self):
+        """Mode permissif : a²+b²=c² detecte comme formule math."""
+        words = ["a", "o", "kaʁe", "ply", "be", "o", "kaʁe", "eɡal", "se", "o", "kaʁe"]
+        spans = detect_formule_spans_stt(words, permissive=True)
+        assert len(spans) >= 1
+
     def test_non_permissive_rejects_math_symbols(self):
         """Le mode non-permissif rejette les symboles math isoles."""
         spans = detect_formule_spans_stt(
@@ -887,3 +899,24 @@ class TestPermissiveMode:
         # "ply" ne passe pas le pre-filtre standard → pas de span complet
         full_span = [s for s in spans if s[0] == 0 and s[1] == 3]
         assert len(full_span) == 0
+
+
+class TestDateLongueFusion:
+    """Tests de la fusion date + nombre adjacent pour annees longues."""
+
+    def test_date_longue_1991(self):
+        """Date longue : treize decembre 1991 detecte en un seul span."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃", "katʁ", "vɛ̃", "ɔ̃z"]
+        )
+        display_nums = [s[2].display_num for s in spans]
+        assert any("13/12/1991" == d for d in display_nums)
+
+    def test_date_longue_permissive_vɛ̃t(self):
+        """Date longue avec vɛ̃t (CTC liaison) en mode permissif."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃", "katʁ", "vɛ̃t", "ɔ̃z"],
+            permissive=True,
+        )
+        display_nums = [s[2].display_num for s in spans]
+        assert any("13/12/1991" == d for d in display_nums)

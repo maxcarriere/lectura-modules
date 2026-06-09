@@ -1053,6 +1053,7 @@ _FORMULE_CATEGORIES = frozenset({
 
 _FORMULE_CATEGORIES_PERMISSIVE = _FORMULE_CATEGORIES | frozenset({
     "symbole", "connecteur", "unite",
+    "lettre", "grec", "fonction", "fragment",
 })
 
 
@@ -1078,15 +1079,14 @@ def _is_formule_token_permissive(ipa_word: str) -> bool:
     """Pre-filtre permissif : utilise la table math (symboles, connecteurs).
 
     Permet a "ply" (symbole +), "eɡal" (symbole =), "syʁ" (connecteur /)
-    de passer le pre-filtre en mode num.
+    de passer le pre-filtre en mode num. Accepte aussi les lettres math
+    (a, b, c, x, y, z), lettres grecques, fonctions et fragments.
     """
     tokens = _tokenize_ipa_math_stt(ipa_word)
     if not tokens:
         return False
     for tok in tokens:
         if tok.category in _FORMULE_CATEGORIES_PERMISSIVE:
-            continue
-        if tok.category == "lettre" and tok.value == "E":
             continue
         return False
     return True
@@ -1322,6 +1322,47 @@ def detect_formule_spans_stt(
                 results.append((i, end, result))
                 used.update(range(i, end))
                 break
+
+    # Post-processing : fusion date + nombre adjacent pour annees longues
+    # Ex: "13/12/1900" + "91" → "13/12/1991"
+    merged_results = []
+    skip: set[int] = set()
+    for idx, (start, end, result) in enumerate(results):
+        if idx in skip:
+            continue
+        dn = result.display_num or ""
+        if dn.count("/") == 2:
+            # Ressemble a une date JJ/MM/AAAA — chercher un nombre adjacent
+            for idx2, (start2, end2, result2) in enumerate(results):
+                if idx2 <= idx or idx2 in skip:
+                    continue
+                if start2 != end:
+                    break
+                dn2 = (result2.display_num or "").replace("'", "")
+                if not dn2.isdigit():
+                    break
+                # Verifier : annee multiple de 100, nombre < 100
+                parts = dn.split("/")
+                if len(parts) == 3:
+                    try:
+                        annee = int(parts[2])
+                        complement = int(dn2)
+                    except ValueError:
+                        break
+                    if annee % 100 == 0 and 0 < complement < 100:
+                        new_annee = annee + complement
+                        new_date = f"{parts[0]}/{parts[1]}/{new_annee}"
+                        try:
+                            new_result = lire_date(new_date)
+                            merged_results.append((start, end2, new_result))
+                            skip.add(idx)
+                            skip.add(idx2)
+                        except Exception:
+                            pass
+                break
+        if idx not in skip:
+            merged_results.append((start, end, result))
+    results = merged_results
 
     results.sort(key=lambda x: x[0])
     return results
