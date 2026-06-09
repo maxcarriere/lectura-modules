@@ -93,6 +93,7 @@ class STTEngine:
         phone_lexicon: object | None = None,
         phone_correct: bool = False,
         phone_conf_threshold: float = 0.98,
+        denoiser: object | None = None,
     ) -> None:
         self.ctc = ctc_engine
         self.p2g = p2g_engine
@@ -101,6 +102,7 @@ class STTEngine:
         self.phone_lexicon = phone_lexicon
         self.phone_correct = phone_correct
         self.phone_conf_threshold = phone_conf_threshold
+        self.denoiser = denoiser  # CTCDenoiser optionnel (corrige phones avant P2G)
 
     def transcrire(self, audio: np.ndarray, sr: int = 16000) -> ResultatSTT:
         """Transcrit un signal audio en texte.
@@ -189,6 +191,37 @@ class STTEngine:
             i for i, s in enumerate(word_segs) if s.get("compound_after")
         }
         ponctuation_finale = punct_segs[-1]["value"] if punct_segs else ""
+
+        # 1b. CTCDenoiser (optionnel, AVANT segmentation/strip)
+        if self.denoiser is not None and hasattr(self.denoiser, "corriger"):
+            # Separer les mots normaux des clitiques/speciaux
+            normal_indices = [
+                i for i, s in enumerate(word_segs)
+                if not s.get("is_clitic")
+            ]
+            normal_words = [ipa_words[i] for i in normal_indices]
+
+            if normal_words:
+                corrected = self.denoiser.corriger(
+                    normal_words,
+                    self.denoiser._char2idx,
+                    self.denoiser._idx2char,
+                )
+                # Re-injecter les mots corriges + recalculer compound_joins
+                if corrected:
+                    ipa_before = list(ipa_words)
+                    if len(corrected) == len(normal_indices):
+                        # Meme nombre de mots : remplacer 1:1
+                        new_ipa = list(ipa_words)
+                        for idx, ni in enumerate(normal_indices):
+                            new_ipa[ni] = corrected[idx]
+                    else:
+                        # Re-segmentation : utiliser les mots corriges directement
+                        new_ipa = corrected
+                    ipa_words = new_ipa
+                    compound_joins = _shift_compound_joins(
+                        ipa_before, ipa_words, compound_joins,
+                    )
 
         # 2. Strip liaisons
         ipa_words = strip_liaisons(ipa_words, lexicon)
@@ -347,7 +380,8 @@ class STTEngine:
         pipeline = "+formules" if self._p2g_analyser else ""
         lex = "+lexicon" if self.phone_lexicon else ""
         phcor = "+phcor" if self.phone_correct else ""
-        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline}{lex}{phcor})"
+        den = "+denoiser" if self.denoiser else ""
+        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline}{lex}{phcor}{den})"
 
 
 def creer_engine(
@@ -357,6 +391,7 @@ def creer_engine(
     formule_tolerance: str = "stt",
     phone_correct: bool = False,
     phone_conf_threshold: float = 0.98,
+    denoiser_path: str | None = None,
 ) -> STTEngine:
     """Factory pour creer un engine STT.
 
@@ -378,6 +413,9 @@ def creer_engine(
         Activer la correction phonetique CTC (confiance + lexique).
     phone_conf_threshold : float
         Seuil de confiance pour la correction phonetique (defaut 0.98).
+    denoiser_path : str | None
+        Chemin vers le modele CTCDenoiser (.pt). Si None, tente la
+        detection automatique dans ~/.lectura/models/denoiser/.
 
     Returns
     -------
@@ -405,13 +443,120 @@ def creer_engine(
     if p2g_engine is not None and hasattr(p2g_engine, "apply_lex_select"):
         p2g_engine.apply_lex_select = True
 
+    # Charger le CTCDenoiser (optionnel)
+    denoiser = _creer_denoiser(denoiser_path, p2g_engine)
+
     return STTEngine(
         ctc_engine, p2g_engine, p2g_analyser,
         formule_tolerance=formule_tolerance,
         phone_lexicon=phone_lexicon,
         phone_correct=phone_correct,
         phone_conf_threshold=phone_conf_threshold,
+        denoiser=denoiser,
     )
+
+
+def _creer_denoiser(
+    denoiser_path: str | None,
+    p2g_engine: object | None,
+) -> object | None:
+    """Charge un CTCDenoiser si disponible.
+
+    Cascade :
+    1. Chemin explicite (denoiser_path)
+    2. ~/.lectura/models/denoiser/denoiser_best.pt
+    3. None (degradation gracieuse)
+
+    Le denoiser a besoin du char2idx du P2G pour fonctionner.
+    """
+    from pathlib import Path
+    import json
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Trouver le fichier denoiser
+    pt_path = None
+    if denoiser_path and Path(denoiser_path).exists():
+        pt_path = Path(denoiser_path)
+    else:
+        # Detection auto
+        candidates = [
+            Path.home() / ".lectura" / "models" / "denoiser" / "denoiser_best.pt",
+            Path.home() / ".lectura" / "models" / "stt" / "denoiser_best.pt",
+        ]
+        for c in candidates:
+            if c.exists():
+                pt_path = c
+                break
+
+    if pt_path is None:
+        return None
+
+    # Charger le vocabulaire P2G (necessaire pour corriger)
+    vocab_path = _find_p2g_vocab(p2g_engine)
+    if vocab_path is None:
+        logger.info("CTCDenoiser trouve mais pas de vocab P2G — ignore")
+        return None
+
+    try:
+        import torch
+        from lectura_graphemiseur.denoiser import CTCDenoiser
+
+        with open(vocab_path) as f:
+            vocab_data = json.load(f)
+        char2idx = vocab_data["vocabs"]["char2idx"]
+        idx2char = {v: k for k, v in char2idx.items()}
+
+        model = CTCDenoiser.load(str(pt_path))
+        # Attacher le vocabulaire pour corriger()
+        model._char2idx = char2idx
+        model._idx2char = idx2char
+        logger.info("CTCDenoiser charge depuis %s", pt_path)
+        return model
+    except (ImportError, FileNotFoundError, Exception) as e:
+        logger.info("CTCDenoiser non charge: %s", e)
+        return None
+
+
+def _find_p2g_vocab(p2g_engine: object | None) -> str | None:
+    """Trouve le fichier vocab P2G pour le denoiser."""
+    from pathlib import Path
+
+    # Chercher dans les attributs du P2G engine
+    if p2g_engine is not None:
+        for attr in ("_models_dir", "models_dir", "_vocab_path"):
+            val = getattr(p2g_engine, attr, None)
+            if val:
+                p = Path(val)
+                if p.is_file() and p.name.endswith("_vocab.json"):
+                    return str(p)
+                if p.is_dir() or p.is_file():
+                    d = p if p.is_dir() else p.parent
+                    for name in ("unifie_p2g_v7_vocab.json",
+                                 "unifie_p2g_v6_vocab.json"):
+                        candidate = d / name
+                        if candidate.exists():
+                            return str(candidate)
+
+    # Chercher dans les emplacements standards
+    candidates = [
+        Path.home() / ".lectura" / "models" / "p2g",
+    ]
+    try:
+        import lectura_graphemiseur
+        pkg_dir = Path(lectura_graphemiseur.__file__).parent / "modeles"
+        candidates.append(pkg_dir)
+    except (ImportError, Exception):
+        pass
+
+    for d in candidates:
+        for name in ("unifie_p2g_v7_vocab.json", "unifie_p2g_v6_vocab.json"):
+            candidate = d / name
+            if candidate.exists():
+                return str(candidate)
+
+    return None
 
 
 def _creer_p2g(**kwargs: object) -> tuple[object | None, object | None]:

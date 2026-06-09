@@ -140,7 +140,7 @@ class CorrecteurV6Config:
 
     # Etape 1 — Orthographe conservatrice
     ortho_distance_max: int = 1
-    ortho_frequence_min: int = 10
+    ortho_frequence_min: float = 0.5
 
     # Etape 3a — Homophones via divergence P2G
     homophone_confiance_min: float = 0.75

@@ -18,6 +18,7 @@ from lectura_formules.reconnaissance import (
     detect_formula_spans,
     detect_formula_spans_stt,
     detect_number_spans,
+    detect_formule_spans_stt,
     _tokenize_ipa_math,
     _is_valid_math_sequence,
     _reconstruct_maths,
@@ -30,6 +31,7 @@ from lectura_formules.lecture_formules import (
     lire_monnaie,
     lire_pourcentage,
     lire_ordinal,
+    lire_fraction,
     lire_sigle,
     lire_maths,
 )
@@ -776,3 +778,63 @@ class TestSTTVariantTolerance:
         # "sɑ̃" seul ne doit pas devenir "100"
         spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
         assert len(spans) == 0
+
+
+class TestFormuleSpansSTT:
+    """Tests pour detect_formule_spans_stt (detecteur unifie tout type)."""
+
+    def test_heure_detection(self):
+        """Heure : quinze heures cinquante-sept → 15h57."""
+        spans = detect_formule_spans_stt(["kɛ̃z", "œʁ", "sɛ̃kɑ̃t", "sɛt"])
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "15h57"
+
+    def test_date_detection(self):
+        """Date : treize decembre 1900 (5 mots)."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃"]
+        )
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "13/12/1900"
+
+    def test_date_detection_long(self):
+        """Date longue : treize decembre 1991 — 2 spans (date + nombre)."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃", "katʁ", "vɛ̃", "ɔ̃z"]
+        )
+        # Le detecteur trouve au minimum la date partielle
+        assert len(spans) >= 1
+        assert "13/12" in spans[0][2].display_num
+
+    def test_fraction_trois_cinquiemes(self):
+        """Fraction : trois cinquieme → 3/5."""
+        r = reconnaitre_ipa_stt("tʁwa sɛ̃kjɛm", multi_word=True)
+        assert r is not None
+        assert r.display_num == "3/5"
+
+    def test_fraction_via_spans(self):
+        """Fraction detectee via spans : deux mots → fraction."""
+        spans = detect_formule_spans_stt(["tʁwa", "sɛ̃kjɛm"])
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "3/5"
+
+    def test_math_deux_plus_trois(self):
+        """Math complete : deux plus trois egal cinq → 2+3=5."""
+        # "ply" au lieu de "plys" (CTC drop final s)
+        spans = detect_formula_spans_stt(["dø", "ply", "tʁwa", "eɡal", "sɛ̃k"])
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "2+3=5"
+
+    def test_ordinal_single_word_preserved(self):
+        """Ordinal simple (1 mot) reste ordinal, pas fraction."""
+        # "trentieme" = 1 seul mot IPA → ordinal 30e (multi_word=False)
+        r = reconnaitre_ipa_stt("tʁɑ̃tjɛm")
+        assert r is not None
+        assert r.display_num == "30e"
+
+    def test_ordinal_not_fraction_when_single(self):
+        """Ordinal seul ne doit pas devenir fraction."""
+        # Sans multi_word, un ordinal reste ordinal
+        r = reconnaitre_ipa_stt("sɛ̃kjɛm")
+        assert r is not None
+        assert r.display_num == "5e"
