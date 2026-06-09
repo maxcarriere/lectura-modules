@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-p2g"
-version = "4.5.1"
+version = "4.5.2"
 description = "Pipeline P2G complet du francais — Graphemiseur + Formules + Noms propres (IPA -> orthographe)"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "lectura-graphemiseur>=4.3",
-    "lectura-formules>=3.4",
+    "lectura-formules>=3.6",
 ]
 
 [project.urls]
