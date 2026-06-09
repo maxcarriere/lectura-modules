@@ -852,6 +852,13 @@ class TestFormuleSpansSTT:
         nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
         assert len(nombre_spans) == 0
 
+    def test_formule_spans_rejects_any_single_number(self):
+        """Tout nombre isole (1 mot) est rejete, meme non ambigu."""
+        for word in ["tʁwa", "tʁɑ̃t", "zeʁo", "sis", "sɛ̃k"]:
+            spans = detect_formule_spans_stt([word])
+            nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
+            assert len(nombre_spans) == 0, f"{word} isole ne doit pas etre converti"
+
     def test_formule_spans_keeps_multiword_cent_deux(self):
         """sɑ̃ + dø (cent deux) multi-mot est accepte."""
         spans = detect_formule_spans_stt(["sɑ̃", "dø"])

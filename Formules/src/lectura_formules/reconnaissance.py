@@ -1320,20 +1320,6 @@ def detect_formule_spans_stt(
                 result = reconnaitre_maths_ipa_stt(merged_ipa)
 
             if result is not None:
-                # Garde : rejeter les nombres isoles ambigus (span=1 mot)
-                # Ex: "sɑ̃" (cent/sans), "vɛ̃" (vingt/vin)
-                # Laisser detect_number_spans gerer avec son filtre mode="auto".
-                if span_len == 1:
-                    dn = (result.display_num or "")
-                    is_plain_num = (
-                        dn != ""
-                        and dn.replace("'", "").replace(" ", "").lstrip("-").isdigit()
-                    )
-                    if is_plain_num:
-                        norm = _normalize_ipa_for_stt(ipa_words[i])
-                        if norm in _get_ambiguous_number_phones():
-                            continue
-
                 results.append((i, end, result))
                 used.update(range(i, end))
 
@@ -1445,6 +1431,19 @@ def detect_formule_spans_stt(
         else:
             merged2.append((start, end, result))
     results = merged2
+
+    # Post-processing : rejeter les nombres isoles (span = 1 mot IPA).
+    # En mode standard, un mot seul ("vɛ̃", "tʁwa", "sɑ̃"...) ne doit PAS
+    # etre converti en nombre — il faut au minimum 2 mots consecutifs.
+    # Les spans d'1 mot non-numeriques (heures "midi" → 12h00, ordinaux
+    # "tʁɑ̃tjɛm" → 30e) sont preserves car display_num n'est pas isdigit.
+    # Les nombres d'1 mot qui ont ete fusionnes (date, telephone) ont deja
+    # ete remplaces par le span fusionne et ne sont plus presents ici.
+    results = [
+        (start, end, result) for start, end, result in results
+        if end - start >= 2
+        or not (result.display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()
+    ]
 
     results.sort(key=lambda x: x[0])
     return results
