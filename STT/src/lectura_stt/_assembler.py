@@ -137,6 +137,13 @@ _IPA_CLITIC_FULL: dict[str, str] = {
     "ʒ": "je", "k": "que", "m": "me", "t": "te",
 }
 
+# Mapping forme apostrophe → forme pleine (pour le cas non-elide)
+_APOSTROPHE_TO_FULL: dict[str, str] = {
+    "l'": "le", "d'": "de", "n'": "ne", "s'": "se",
+    "j'": "je", "qu'": "que", "m'": "me", "t'": "te",
+    "c'": "ce",  # ce/ca — phone s → c' resolu par le P2G
+}
+
 # Voyelles IPA (pour detecter si le mot suivant commence par voyelle)
 _IPA_VOWELS = frozenset("aeiouyøœəɛɔɑɥ")
 
@@ -187,9 +194,12 @@ def rejoin_elisions(
         if ipa in _IPA_CLITIC_MAP and i + 1 < len(ortho_words):
             next_ipa = ipa_words[i + 1] if i + 1 < len(ipa_words) else ""
             if _starts_with_ipa_vowel(next_ipa):
-                # Elision : l'abattoir, d'abord, j'ai
+                # Elision : l'abattoir, d'abord, j'ai, c'est
                 if ortho.endswith("'"):
                     parts.append(ortho + ortho_words[i + 1])
+                elif ortho + "'" in _APOSTROPHE_TO_FULL:
+                    # P2G a resolu la base du clitique (ex: "c" pour c'est)
+                    parts.append(ortho + "'" + ortho_words[i + 1])
                 else:
                     parts.append(_IPA_CLITIC_MAP[ipa] + ortho_words[i + 1])
                 i += 2
