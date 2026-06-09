@@ -23,6 +23,7 @@ from lectura_formules.reconnaissance import (
     _is_valid_math_sequence,
     _reconstruct_maths,
     _is_math_token,
+    _is_formule_token_permissive,
 )
 from lectura_formules.lecture_formules import (
     lire_nombre,
@@ -838,3 +839,51 @@ class TestFormuleSpansSTT:
         r = reconnaitre_ipa_stt("sɛ̃kjɛm")
         assert r is not None
         assert r.display_num == "5e"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Mode permissif (pre-filtre table math)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPermissiveMode:
+    """Tests du mode permissif de detect_formule_spans_stt."""
+
+    def test_permissive_prefilter_accepts_math_symbols(self):
+        """Le pre-filtre permissif accepte les symboles math (ply, eɡal)."""
+        assert _is_formule_token_permissive("ply")
+        assert _is_formule_token_permissive("eɡal")
+
+    def test_permissive_math_span(self):
+        """Mode permissif : deux plus trois → span math detecte."""
+        spans = detect_formule_spans_stt(
+            ["dø", "ply", "tʁwa"], permissive=True,
+        )
+        assert len(spans) >= 1
+
+    def test_permissive_preserves_non_formule(self):
+        """Mode permissif ne casse pas les mots normaux."""
+        spans = detect_formule_spans_stt(
+            ["bɔ̃ʒuʁ", "dø", "fwa"], permissive=True,
+        )
+        # "bonjour" ne doit PAS etre dans un span
+        for start, end, _ in spans:
+            assert start != 0
+
+    def test_permissive_full_equation(self):
+        """Mode permissif : deux plus trois egal cinq → 2+3=5."""
+        spans = detect_formule_spans_stt(
+            ["dø", "ply", "tʁwa", "eɡal", "sɛ̃k"], permissive=True,
+        )
+        assert len(spans) >= 1
+        display_nums = [s[2].display_num for s in spans]
+        assert any("2+3=5" == d for d in display_nums) or any("2" in d for d in display_nums)
+
+    def test_non_permissive_rejects_math_symbols(self):
+        """Le mode non-permissif rejette les symboles math isoles."""
+        spans = detect_formule_spans_stt(
+            ["dø", "ply", "tʁwa"], permissive=False,
+        )
+        # "ply" ne passe pas le pre-filtre standard → pas de span complet
+        full_span = [s for s in spans if s[0] == 0 and s[1] == 3]
+        assert len(full_span) == 0

@@ -94,6 +94,7 @@ class STTEngine:
         phone_correct: bool = False,
         phone_conf_threshold: float = 0.98,
         denoiser: object | None = None,
+        number_mode: str = "auto",
     ) -> None:
         self.ctc = ctc_engine
         self.p2g = p2g_engine
@@ -103,6 +104,7 @@ class STTEngine:
         self.phone_correct = phone_correct
         self.phone_conf_threshold = phone_conf_threshold
         self.denoiser = denoiser  # CTCDenoiser optionnel (corrige phones avant P2G)
+        self.number_mode = number_mode
 
     def transcrire(self, audio: np.ndarray, sr: int = 16000) -> ResultatSTT:
         """Transcrit un signal audio en texte.
@@ -362,6 +364,8 @@ class STTEngine:
             kwargs: dict = {"engine": self.p2g}
             if "formule_tolerance" in sig.parameters:
                 kwargs["formule_tolerance"] = self.formule_tolerance
+            if "number_mode" in sig.parameters:
+                kwargs["number_mode"] = self.number_mode
             result = self._p2g_analyser(mots_clean, **kwargs)
             return result.get("ortho", mots_clean)
 
@@ -392,6 +396,7 @@ def creer_engine(
     phone_correct: bool = False,
     phone_conf_threshold: float = 0.98,
     denoiser_path: str | None = None,
+    number_mode: str = "auto",
 ) -> STTEngine:
     """Factory pour creer un engine STT.
 
@@ -416,6 +421,11 @@ def creer_engine(
     denoiser_path : str | None
         Chemin vers le modele CTCDenoiser (.pt). Si None, tente la
         detection automatique dans ~/.lectura/models/denoiser/.
+    number_mode : str
+        Mode de detection des nombres :
+        - ``"auto"``  : rejette les homophones ambigus isoles (defaut)
+        - ``"num"``   : agressif (tous les nombres isoles convertis)
+        - ``"texte"`` : pas de conversion numerique
 
     Returns
     -------
@@ -453,6 +463,7 @@ def creer_engine(
         phone_correct=phone_correct,
         phone_conf_threshold=phone_conf_threshold,
         denoiser=denoiser,
+        number_mode=number_mode,
     )
 
 

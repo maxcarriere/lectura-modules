@@ -1051,6 +1051,10 @@ _FORMULE_CATEGORIES = frozenset({
     "devise", "pourcent", "ordinal",
 })
 
+_FORMULE_CATEGORIES_PERMISSIVE = _FORMULE_CATEGORIES | frozenset({
+    "symbole", "connecteur", "unite",
+})
+
 
 def _is_formule_token(ipa_word: str) -> bool:
     """Verifie si un mot IPA peut etre un token de formule (tout type).
@@ -1066,6 +1070,24 @@ def _is_formule_token(ipa_word: str) -> bool:
             continue
         if tok.category == "lettre" and tok.value == "E":
             continue  # schwa residuel
+        return False
+    return True
+
+
+def _is_formule_token_permissive(ipa_word: str) -> bool:
+    """Pre-filtre permissif : utilise la table math (symboles, connecteurs).
+
+    Permet a "ply" (symbole +), "eɡal" (symbole =), "syʁ" (connecteur /)
+    de passer le pre-filtre en mode num.
+    """
+    tokens = _tokenize_ipa_math_stt(ipa_word)
+    if not tokens:
+        return False
+    for tok in tokens:
+        if tok.category in _FORMULE_CATEGORIES_PERMISSIVE:
+            continue
+        if tok.category == "lettre" and tok.value == "E":
+            continue
         return False
     return True
 
@@ -1247,12 +1269,20 @@ def detect_formule_spans_stt(
     *,
     min_span: int = 1,
     max_span: int = 15,
+    permissive: bool = False,
 ) -> list[tuple[int, int, LectureFormuleResult]]:
     """Detecte les spans de mots IPA formant des formules de tout type.
 
     Utilise _is_formule_token comme pre-filtre (accepte nombre, mois,
     heure_word, devise, pourcent, ordinal, special) puis
     reconnaitre_ipa_stt sans type_hint pour auto-detection du type.
+
+    Args:
+        ipa_words: Liste de mots IPA.
+        min_span: Taille minimum de span (defaut: 1).
+        max_span: Taille maximum de span (defaut: 15).
+        permissive: Si True, utilise le pre-filtre permissif (table math)
+            et active la chaine de fallback (type → ordinal → math).
 
     Returns:
         Liste de (start, end, LectureFormuleResult) triee par position.
@@ -1261,7 +1291,8 @@ def detect_formule_spans_stt(
     if n < min_span:
         return []
 
-    is_form = [_is_formule_token(w) for w in ipa_words]
+    token_check = _is_formule_token_permissive if permissive else _is_formule_token
+    is_form = [token_check(w) for w in ipa_words]
 
     results: list[tuple[int, int, LectureFormuleResult]] = []
     used: set[int] = set()
@@ -1275,7 +1306,18 @@ def detect_formule_spans_stt(
                 continue
 
             merged_ipa = " ".join(ipa_words[i:end])
+
+            # 1. Essai type (heures, dates, nombres, fractions...)
             result = reconnaitre_ipa_stt(merged_ipa, multi_word=(span_len >= 2))
+
+            # 2. Fallback : si fraction echoue, retenter en ordinal
+            if result is None and span_len >= 2:
+                result = reconnaitre_ipa_stt(merged_ipa, multi_word=False)
+
+            # 3. Fallback : essai math (pour "deux plus trois", etc.)
+            if result is None and span_len >= 2:
+                result = reconnaitre_maths_ipa_stt(merged_ipa)
+
             if result is not None:
                 results.append((i, end, result))
                 used.update(range(i, end))
