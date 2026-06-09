@@ -840,6 +840,23 @@ class TestFormuleSpansSTT:
         assert r is not None
         assert r.display_num == "5e"
 
+    def test_formule_spans_rejects_ambiguous_sans(self):
+        """sɑ̃ isole (cent/sans) ne doit PAS etre converti en nombre."""
+        spans = detect_formule_spans_stt(["sɑ̃"])
+        nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
+        assert len(nombre_spans) == 0
+
+    def test_formule_spans_rejects_ambiguous_vin(self):
+        """vɛ̃ isole (vingt/vin) ne doit PAS etre converti."""
+        spans = detect_formule_spans_stt(["vɛ̃"])
+        nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
+        assert len(nombre_spans) == 0
+
+    def test_formule_spans_keeps_multiword_cent_deux(self):
+        """sɑ̃ + dø (cent deux) multi-mot est accepte."""
+        spans = detect_formule_spans_stt(["sɑ̃", "dø"])
+        assert any(s[2].display_num == "102" for s in spans)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Mode permissif (pre-filtre table math)
@@ -920,3 +937,15 @@ class TestDateLongueFusion:
         )
         display_nums = [s[2].display_num for s in spans]
         assert any("13/12/1991" == d for d in display_nums)
+
+
+class TestTelephoneFusion:
+    """Tests de la fusion telephone (nombres adjacents → numero de telephone)."""
+
+    def test_telephone_fusion_06(self):
+        """Nombres adjacents fusionnes en telephone 06.65.53.03.30."""
+        words = ["zeʁo", "sis", "swasɑ̃t", "sɛ̃k", "sɛ̃kɑ̃t", "tʁwa",
+                 "zeʁo", "tʁwa", "tʁɑ̃t"]
+        spans = detect_formule_spans_stt(words)
+        display_nums = [s[2].display_num for s in spans]
+        assert any("06.65.53.03.30" in d for d in display_nums)
