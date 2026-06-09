@@ -808,6 +808,8 @@ def _tokenize_ipa_stt(ipa: str) -> list[IpaToken] | None:
     Comme _tokenize_ipa mais :
     - Pre-normalise l'IPA (schwas, ɑ→a)
     - Utilise la table etendue avec variantes CTC
+    - Backtracking : si le match le plus long mene a une impasse,
+      essaie des matches plus courts (memoisation sur position).
     """
     table = _build_stt_lookup_table()
     normalized = _normalize_ipa_for_stt(ipa)
@@ -815,23 +817,26 @@ def _tokenize_ipa_stt(ipa: str) -> list[IpaToken] | None:
     if not normalized:
         return None
 
-    tokens: list[IpaToken] = []
-    pos = 0
     length = len(normalized)
+    tokens: list[IpaToken] = []
+    failed: set[int] = set()
 
-    while pos < length:
-        matched = False
+    def _backtrack(pos: int) -> bool:
+        if pos == length:
+            return True
+        if pos in failed:
+            return False
         for entry_key, entry_token in table:
             entry_len = len(entry_key)
             if pos + entry_len <= length and normalized[pos:pos + entry_len] == entry_key:
                 tokens.append(entry_token)
-                pos += entry_len
-                matched = True
-                break
-        if not matched:
-            return None
+                if _backtrack(pos + entry_len):
+                    return True
+                tokens.pop()
+        failed.add(pos)
+        return False
 
-    return tokens
+    return tokens if _backtrack(0) else None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1388,7 +1393,11 @@ def detect_formule_spans_stt(
             if idx2 in skip2:
                 continue
             start2, end2, result2 = results[idx2]
-            if start2 != run_end:
+            # Adjacent ou gap de 1 mot
+            gap = start2 - run_end
+            if gap > 1:
+                break
+            if gap < 0:
                 break
             dn2 = (result2.display_num or "").replace("'", "").replace(" ", "")
             if not dn2.lstrip("-").isdigit():

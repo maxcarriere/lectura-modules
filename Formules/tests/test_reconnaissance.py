@@ -13,6 +13,7 @@ from lectura_formules.reconnaissance import (
     reconnaitre_ipa,
     reconnaitre_ipa_stt,
     _tokenize_ipa,
+    _tokenize_ipa_stt,
     reconnaitre_maths_ipa,
     reconnaitre_maths_ipa_stt,
     detect_formula_spans,
@@ -956,3 +957,37 @@ class TestTelephoneFusion:
         spans = detect_formule_spans_stt(words)
         display_nums = [s[2].display_num for s in spans]
         assert any("06.65.53.03.30" in d for d in display_nums)
+
+    def test_telephone_fusion_with_90(self):
+        """Telephone avec quatre-vingt-dix fusionne correctement."""
+        words = ["zeʁo", "sɛ̃k", "kaʁɑ̃tsis", "katʁvɛ̃dis", "vɛ̃", "tʁɛz"]
+        spans = detect_formule_spans_stt(words)
+        display_nums = [s[2].display_num for s in spans]
+        assert any("05.46.90.20.13" in d for d in display_nums)
+
+
+class TestBacktrackingTokenizer:
+    """Tests du backtracking dans _tokenize_ipa_stt (Piste A)."""
+
+    def test_tokenize_stt_backtrack_90(self):
+        """_tokenize_ipa_stt doit tokeniser katʁvɛ̃dis via backtracking."""
+        tokens = _tokenize_ipa_stt("katʁvɛ̃dis")
+        assert tokens is not None
+        vals = [t.value for t in tokens if isinstance(t.value, int)]
+        assert vals == [4, 20, 10]
+
+    def test_formule_spans_detects_90_multi(self):
+        """katʁvɛ̃dis dans un contexte multi-mot doit etre tokenisable."""
+        # 90 seul (1 mot) est filtre par le garde mots isoles,
+        # mais la reconnaissance STT individuelle fonctionne.
+        r = reconnaitre_ipa_stt("katʁvɛ̃dis")
+        assert r is not None
+        assert r.display_num == "90"
+
+    def test_tokenize_stt_backtrack_91(self):
+        """_tokenize_ipa_stt doit tokeniser katʁvɛ̃dizœ̃ (91)."""
+        tokens = _tokenize_ipa_stt("katʁvɛ̃dizœ̃")
+        assert tokens is not None
+        vals = [t.value for t in tokens if isinstance(t.value, int)]
+        # 4, 20, 10, 1 → _reconstruct_number → 91
+        assert vals == [4, 20, 10, 1]
