@@ -38,6 +38,7 @@ from lectura_formules.lecture_formules import (
     lire_fraction,
     lire_sigle,
     lire_maths,
+    lire_telephone,
 )
 
 
@@ -1319,9 +1320,22 @@ def detect_formule_spans_stt(
                 result = reconnaitre_maths_ipa_stt(merged_ipa)
 
             if result is not None:
+                # Garde : rejeter les nombres isoles ambigus (span=1 mot)
+                # Ex: "sɑ̃" (cent/sans), "vɛ̃" (vingt/vin)
+                # Laisser detect_number_spans gerer avec son filtre mode="auto".
+                if span_len == 1:
+                    dn = (result.display_num or "")
+                    is_plain_num = (
+                        dn != ""
+                        and dn.replace("'", "").replace(" ", "").lstrip("-").isdigit()
+                    )
+                    if is_plain_num:
+                        norm = _normalize_ipa_for_stt(ipa_words[i])
+                        if norm in _get_ambiguous_number_phones():
+                            continue
+
                 results.append((i, end, result))
                 used.update(range(i, end))
-                break
 
     # Post-processing : fusion date + nombre adjacent pour annees longues
     # Ex: "13/12/1900" + "91" → "13/12/1991"
@@ -1363,6 +1377,74 @@ def detect_formule_spans_stt(
         if idx not in skip:
             merged_results.append((start, end, result))
     results = merged_results
+
+    # Trier par position avant la fusion telephone
+    results.sort(key=lambda x: x[0])
+
+    # Post-processing : fusion telephone (nombres adjacents → 10 chiffres = tel)
+    # Le greedy peut absorber des zeros dans des spans plus grands
+    # (ex: "cinquante trois zero" → "53" au lieu de "53" + "0").
+    # On re-scanne les mots couverts avec max_span=2 pour obtenir les vrais
+    # groupes de chiffres (dizaines + unites), puis on verifie le pattern.
+    merged2 = []
+    skip2: set[int] = set()
+    for idx, (start, end, result) in enumerate(results):
+        if idx in skip2:
+            continue
+        dn = (result.display_num or "").replace("'", "").replace(" ", "")
+        if not dn.lstrip("-").isdigit():
+            merged2.append((start, end, result))
+            continue
+        # Accumuler les spans numeriques adjacents
+        run_indices = [idx]
+        run_end = end
+        for idx2 in range(idx + 1, len(results)):
+            if idx2 in skip2:
+                continue
+            start2, end2, result2 = results[idx2]
+            if start2 != run_end:
+                break
+            dn2 = (result2.display_num or "").replace("'", "").replace(" ", "")
+            if not dn2.lstrip("-").isdigit():
+                break
+            run_indices.append(idx2)
+            run_end = end2
+        if len(run_indices) < 3:
+            merged2.append((start, end, result))
+            continue
+        # Re-scanner les mots couverts avec max_span=2 pour decomposer
+        # correctement les groupes (evite absorption de zeros).
+        sub_words = ipa_words[start:run_end]
+        sub_n = len(sub_words)
+        sub_used: set[int] = set()
+        sub_spans: list[tuple[int, int, str]] = []
+        for sl in (2, 1):
+            for si in range(sub_n - sl + 1):
+                se = si + sl
+                if any(sj in sub_used for sj in range(si, se)):
+                    continue
+                merged_ipa = " ".join(sub_words[si:se])
+                sr = reconnaitre_ipa_stt(merged_ipa, multi_word=(sl >= 2))
+                if sr is not None:
+                    sd = (sr.display_num or "").replace("'", "").replace(" ", "")
+                    if sd.lstrip("-").isdigit():
+                        sub_spans.append((si, se, sd))
+                        sub_used.update(range(si, se))
+        sub_spans.sort(key=lambda x: x[0])
+        full_digits = "".join(s[2] for s in sub_spans)
+        # Pattern telephone francais : 10 chiffres, commence par 0
+        if len(full_digits) == 10 and full_digits[0] == "0":
+            phone_str = ".".join(full_digits[k:k+2] for k in range(0, 10, 2))
+            try:
+                new_result = lire_telephone(phone_str)
+                merged2.append((start, run_end, new_result))
+                skip2.update(run_indices)
+            except Exception:
+                if idx not in skip2:
+                    merged2.append((start, end, result))
+        else:
+            merged2.append((start, end, result))
+    results = merged2
 
     results.sort(key=lambda x: x[0])
     return results
