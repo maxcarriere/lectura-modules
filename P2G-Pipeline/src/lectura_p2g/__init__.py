@@ -24,7 +24,7 @@ import json
 import unicodedata
 from importlib import resources
 
-__version__ = "4.5.2"
+__version__ = "4.5.3"
 
 # ── Re-exports depuis le graphemiseur (couche 1) ─────────────────────
 
@@ -205,7 +205,10 @@ def _appliquer_formules(
     # car il couvre tous les types y compris les nombres.
     if stt and formule_mode != "texte":
         try:
-            typed_spans = detect_formule_spans_stt(ipa_words, min_span=1, max_span=15)
+            typed_spans = detect_formule_spans_stt(
+                ipa_words, min_span=1, max_span=15,
+                permissive=(number_mode == "num"),
+            )
         except Exception:
             typed_spans = []
         for start, end, formula_result in typed_spans:
@@ -250,8 +253,9 @@ def _appliquer_formules(
             if detected_phone != actual_phone and detected_phone != actual_phone + "ə":
                 continue
         # Filtre ambiguïté : pour les spans courts (1-2 mots), rejeter si
-        # un phone est ambigu nombre/mot courant
-        if span_len <= 2:
+        # un phone est ambigu nombre/mot courant.
+        # En mode "num", le filtre est desactive (conversion agressive).
+        if number_mode != "num" and span_len <= 2:
             has_ambig = any(
                 unicodedata.normalize("NFC", ipa_words[j]) in _AMBIG_NUM_PHONES
                 for j in range(start, end) if j < len(ipa_words)
