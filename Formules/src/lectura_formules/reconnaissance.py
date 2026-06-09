@@ -35,6 +35,7 @@ from lectura_formules.lecture_formules import (
     lire_monnaie,
     lire_pourcentage,
     lire_ordinal,
+    lire_fraction,
     lire_sigle,
     lire_maths,
 )
@@ -46,7 +47,7 @@ from lectura_formules.lecture_formules import (
 
 FormulaType = Literal[
     "nombre", "date", "heure", "monnaie",
-    "pourcentage", "ordinal", "sigle",
+    "pourcentage", "ordinal", "sigle", "fraction",
 ]
 
 
@@ -183,7 +184,12 @@ def _tokenize_ipa(ipa: str) -> list[IpaToken] | None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _detect_type(tokens: list[IpaToken], type_hint: str | None) -> FormulaType:
+def _detect_type(
+    tokens: list[IpaToken],
+    type_hint: str | None,
+    *,
+    multi_word: bool = False,
+) -> FormulaType:
     """Detecte le type de formule a partir des tokens."""
     if type_hint is not None:
         return type_hint  # type: ignore[return-value]
@@ -207,8 +213,11 @@ def _detect_type(tokens: list[IpaToken], type_hint: str | None) -> FormulaType:
     if "pourcent" in categories:
         return "pourcentage"
 
-    # 5. Ordinal present → ordinal
+    # 5. Ordinal present → verifier si c'est une fraction
     if "ordinal" in categories:
+        # En multi-mots : nombre + ordinal = fraction
+        if multi_word and "nombre" in categories and tokens[-1].category == "ordinal":
+            return "fraction"
         return "ordinal"
 
     # 5b. "premier"/"premiere" seul → ordinal
@@ -536,6 +545,38 @@ def _reconstruct_ordinal(tokens: list[IpaToken]) -> str | None:
     return f"{total}e"
 
 
+def _reconstruct_fraction(tokens: list[IpaToken]) -> str | None:
+    """Reconstruit une fraction depuis les tokens.
+
+    Pattern : nombre(s) + ordinal → numerateur/denominateur.
+    Ex: [trois(3), cinquieme(5)] → "3/5"
+    """
+    if not tokens or tokens[-1].category != "ordinal":
+        return None
+
+    ordinal_tok = tokens[-1]
+    nombre_tokens = [t for t in tokens[:-1] if t.category == "nombre"]
+
+    if not nombre_tokens:
+        return None
+
+    numerateur = _reconstruct_number(nombre_tokens)
+
+    # Valeur du denominateur depuis le token ordinal
+    from lectura_formules._chargeur import inv_fr_nombre
+    cardinal_name = ordinal_tok.value
+    fr_table = inv_fr_nombre()
+
+    denominateur = 0
+    if cardinal_name in fr_table:
+        denominateur = fr_table[cardinal_name][0]
+
+    if denominateur <= 0 or numerateur <= 0:
+        return None
+
+    return f"{numerateur}/{denominateur}"
+
+
 def _reconstruct_sigle(tokens: list[IpaToken]) -> str | None:
     """Reconstruit un sigle depuis les tokens."""
     parts: list[str] = []
@@ -660,6 +701,7 @@ _CTC_CONFUSION_RULES: list[tuple[str, str]] = [
     ("l", "lj"),     # reverse
     # Consonnes finales
     ("tʁ", "t"),     # katʁ → kat
+    ("ys", "y"),     # plys → ply (consonne finale /s/ optionnelle)
 ]
 
 
@@ -836,6 +878,8 @@ def reconnaitre_ipa(
         formula_str = _reconstruct_pourcentage(tokens)
     elif formula_type == "ordinal":
         formula_str = _reconstruct_ordinal(tokens)
+    elif formula_type == "fraction":
+        formula_str = _reconstruct_fraction(tokens)
     elif formula_type == "sigle":
         formula_str = _reconstruct_sigle(tokens)
 
@@ -850,6 +894,7 @@ def reconnaitre_ipa(
         "monnaie": lire_monnaie,
         "pourcentage": lire_pourcentage,
         "ordinal": lire_ordinal,
+        "fraction": lire_fraction,
         "sigle": lire_sigle,
     }.get(formula_type)
 
@@ -875,6 +920,8 @@ def reconnaitre_ipa(
 def reconnaitre_ipa_stt(
     ipa: str,
     type_hint: str | None = None,
+    *,
+    multi_word: bool = False,
 ) -> LectureFormuleResult | None:
     """Reconnait une formule a partir d'IPA produit par un pipeline STT.
 
@@ -887,6 +934,8 @@ def reconnaitre_ipa_stt(
     Args:
         ipa: Chaine IPA (espaces toleres).
         type_hint: Force le type de formule.
+        multi_word: Indique que l'IPA provient de plusieurs mots. Permet de
+            distinguer fraction (nombre + ordinal sur 2+ mots) d'ordinal.
 
     Returns:
         LectureFormuleResult si reconnu, None sinon.
@@ -907,7 +956,7 @@ def reconnaitre_ipa_stt(
             tokens = filtered
 
     # Detection du type
-    formula_type = _detect_type(tokens, type_hint)
+    formula_type = _detect_type(tokens, type_hint, multi_word=multi_word)
 
     # Reconstruction
     formula_str: str | None = None
@@ -924,6 +973,8 @@ def reconnaitre_ipa_stt(
         formula_str = _reconstruct_pourcentage(tokens)
     elif formula_type == "ordinal":
         formula_str = _reconstruct_ordinal(tokens)
+    elif formula_type == "fraction":
+        formula_str = _reconstruct_fraction(tokens)
     elif formula_type == "sigle":
         formula_str = _reconstruct_sigle(tokens)
 
@@ -938,6 +989,7 @@ def reconnaitre_ipa_stt(
         "monnaie": lire_monnaie,
         "pourcentage": lire_pourcentage,
         "ordinal": lire_ordinal,
+        "fraction": lire_fraction,
         "sigle": lire_sigle,
     }.get(formula_type)
 
@@ -993,6 +1045,29 @@ def _is_letter_token(ipa_word: str) -> bool:
         return False
     return len(tokens) == 1 and tokens[0].category == "lettre"
 
+
+_FORMULE_CATEGORIES = frozenset({
+    "nombre", "special", "mois", "heure_word",
+    "devise", "pourcent", "ordinal",
+})
+
+
+def _is_formule_token(ipa_word: str) -> bool:
+    """Verifie si un mot IPA peut etre un token de formule (tout type).
+
+    Plus large que _is_number_token : accepte aussi mois, heure_word,
+    devise, pourcent, ordinal en plus de nombre et special.
+    """
+    tokens = _tokenize_ipa_stt(ipa_word)
+    if not tokens:
+        return False
+    for tok in tokens:
+        if tok.category in _FORMULE_CATEGORIES:
+            continue
+        if tok.category == "lettre" and tok.value == "E":
+            continue  # schwa residuel
+        return False
+    return True
 
 
 # Phones IPA ambigus : homophones nombre/mot courant.
@@ -1163,6 +1238,49 @@ def detect_sigle_spans(
                 break  # passer au span suivant (greedy)
 
     # Trier par position
+    results.sort(key=lambda x: x[0])
+    return results
+
+
+def detect_formule_spans_stt(
+    ipa_words: list[str],
+    *,
+    min_span: int = 1,
+    max_span: int = 15,
+) -> list[tuple[int, int, LectureFormuleResult]]:
+    """Detecte les spans de mots IPA formant des formules de tout type.
+
+    Utilise _is_formule_token comme pre-filtre (accepte nombre, mois,
+    heure_word, devise, pourcent, ordinal, special) puis
+    reconnaitre_ipa_stt sans type_hint pour auto-detection du type.
+
+    Returns:
+        Liste de (start, end, LectureFormuleResult) triee par position.
+    """
+    n = len(ipa_words)
+    if n < min_span:
+        return []
+
+    is_form = [_is_formule_token(w) for w in ipa_words]
+
+    results: list[tuple[int, int, LectureFormuleResult]] = []
+    used: set[int] = set()
+
+    for span_len in range(min(max_span, n), min_span - 1, -1):
+        for i in range(n - span_len + 1):
+            end = i + span_len
+            if any(j in used for j in range(i, end)):
+                continue
+            if not all(is_form[j] for j in range(i, end)):
+                continue
+
+            merged_ipa = " ".join(ipa_words[i:end])
+            result = reconnaitre_ipa_stt(merged_ipa, multi_word=(span_len >= 2))
+            if result is not None:
+                results.append((i, end, result))
+                used.update(range(i, end))
+                break
+
     results.sort(key=lambda x: x[0])
     return results
 
@@ -1901,6 +2019,16 @@ def _build_math_stt_lookup_table() -> list[tuple[str, IpaToken]]:
         nphone = _nfc(phone)
         if nphone not in base:
             base[nphone] = IpaToken("nombre", val, key, nphone)
+
+    # Variantes CTC explicites pour symboles math
+    _MATH_CTC_VARIANTS = {
+        "ply": IpaToken("symbole", "+", "+", "ply"),    # plus sans /s/ final
+        "fwa": IpaToken("symbole", "×", "×", "fwa"),    # fois (variante)
+    }
+    for phone, token in _MATH_CTC_VARIANTS.items():
+        nphone = _nfc(phone)
+        if nphone not in base:
+            base[nphone] = token
 
     # Variantes CTC auto-generees pour toutes les categories
     variant_entries: dict[str, IpaToken] = {}

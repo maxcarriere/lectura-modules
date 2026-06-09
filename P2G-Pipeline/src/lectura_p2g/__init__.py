@@ -24,7 +24,7 @@ import json
 import unicodedata
 from importlib import resources
 
-__version__ = "4.5.0"
+__version__ = "4.5.1"
 
 # ── Re-exports depuis le graphemiseur (couche 1) ─────────────────────
 
@@ -171,7 +171,7 @@ def _appliquer_formules(
 
     if stt:
         try:
-            from lectura_formules import detect_formula_spans_stt
+            from lectura_formules import detect_formula_spans_stt, detect_formule_spans_stt
         except ImportError:
             stt = False
 
@@ -199,6 +199,30 @@ def _appliquer_formules(
             else:
                 result[start + k] = ""
             formule_positions.add(start + k)
+
+    # ── Formules typees STT (heures, dates, monnaie, %, fractions, nombres) ──
+    # En mode STT, detect_formule_spans_stt remplace detect_number_spans
+    # car il couvre tous les types y compris les nombres.
+    if stt and formule_mode != "texte":
+        try:
+            typed_spans = detect_formule_spans_stt(ipa_words, min_span=1, max_span=15)
+        except Exception:
+            typed_spans = []
+        for start, end, formula_result in typed_spans:
+            if any(i in formule_positions for i in range(start, end)):
+                continue
+            if use_num and formula_result.display_num:
+                display = formula_result.display_num
+            else:
+                display = formula_result.display_fr
+            display_words = display.split()
+            span_len = end - start
+            for k in range(span_len):
+                if k < len(display_words):
+                    result[start + k] = display_words[k]
+                else:
+                    result[start + k] = ""
+                formule_positions.add(start + k)
 
     # ── Nombres (min_span=1 pour les nombres simples aussi) ──
     # Phones ambigus nombre/mot courant — rejeter les spans courts (1-2 mots)
@@ -690,18 +714,21 @@ def _fusionner_composes(
             # n'a pas d'ortho valide pour son phone (OOV).
             # Evite les faux positifs quand les mots individuels sont corrects
             # (ex: "état major" vs "état-major").
-            all_valid = True
-            for i in range(start, start + k):
-                ph = ipa_words[i]
-                if "'" in ph:
-                    ph = ph[ph.index("'") + 1:]
-                entries_i = phone_lexicon.all_entries(ph)
-                pred_lower = result[i].lower()
-                if not any((e.get("ortho") or "").lower() == pred_lower for e in entries_i):
-                    all_valid = False
-                    break
-            if all_valid:
-                continue
+            # Exception : pour k >= 3 (composés 3+ mots comme arc-en-ciel),
+            # les faux positifs sont rares, donc on fusionne toujours.
+            if k < 3:
+                all_valid = True
+                for i in range(start, start + k):
+                    ph = ipa_words[i]
+                    if "'" in ph:
+                        ph = ph[ph.index("'") + 1:]
+                    entries_i = phone_lexicon.all_entries(ph)
+                    pred_lower = result[i].lower()
+                    if not any((e.get("ortho") or "").lower() == pred_lower for e in entries_i):
+                        all_valid = False
+                        break
+                if all_valid:
+                    continue
 
             # Appliquer le compose
             result[start] = best_ortho
@@ -789,24 +816,34 @@ def _fusionner_elisions(
 # ── Composes IPA (mots compacts sans separateur) ─────────────────────
 
 _COMPOSES_IPA: dict[str, str] = {
-    # aujourd'hui
+    # aujourd'hui (+ variantes STT sans /d/, avec /u/ ou /y/)
     "oʒuʁdɥi": "aujourd'hui",
-    # lorsque / lorsqu'…
+    "oʒuʁɥi": "aujourd'hui",
+    "oʒuʁdyi": "aujourd'hui",
+    "oʒuʁyi": "aujourd'hui",
+    # lorsque / lorsqu'… (+ variantes STT /ɔ/ au lieu de /o/)
     "loʁsk": "lorsque",
     "loʁskə": "lorsque",
+    "lɔʁsk": "lorsque",
+    "lɔʁskə": "lorsque",
     "loʁskil": "lorsqu'il",
+    "lɔʁskil": "lorsqu'il",
     "loʁskɛl": "lorsqu'elle",
+    "lɔʁskɛl": "lorsqu'elle",
     "loʁskɔ̃": "lorsqu'on",
-    # puisque / puisqu'…
+    "lɔʁskɔ̃": "lorsqu'on",
+    # puisque / puisqu'… (+ variantes STT /ɥi/ → /yi/)
     "pɥisk": "puisque",
     "pɥiskə": "puisque",
+    "pyisk": "puisque",
     "pɥiskil": "puisqu'il",
+    "pyiskil": "puisqu'il",
     "pɥiskɛl": "puisqu'elle",
     "pɥiskɔ̃": "puisqu'on",
     # quelqu'un(e)
     "kɛlkœ̃": "quelqu'un",
     "kɛlkyn": "quelqu'une",
-    # jusque / jusqu'…
+    # jusque / jusqu'… (+ variantes STT)
     "ʒyska": "jusque",
     "ʒyskə": "jusque",
     "ʒyskisi": "jusqu'ici",
