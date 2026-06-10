@@ -137,6 +137,15 @@ _IPA_CLITIC_FULL: dict[str, str] = {
     "ʒ": "je", "k": "que", "m": "me", "t": "te",
 }
 
+# Mots ortho qui prennent une apostrophe devant voyelle (prefixes multi-phones)
+_ORTHO_ELISION_PREFIXES: dict[str, str] = {
+    "jusqu": "jusqu'",
+    "lorsqu": "lorsqu'",
+    "puisqu": "puisqu'",
+    "quelqu": "quelqu'",
+    "quoiqu": "quoiqu'",
+}
+
 # Mapping forme apostrophe → forme pleine (pour le cas non-elide)
 _APOSTROPHE_TO_FULL: dict[str, str] = {
     "l'": "le", "d'": "de", "n'": "ne", "s'": "se",
@@ -216,6 +225,18 @@ def rejoin_elisions(
                     parts[-1] = parts[-1] + "-"
                 i += 1
                 continue
+
+        # Prefixes elidables multi-phones (jusqu', lorsqu', puisqu'...)
+        ortho_lower = ortho.lower()
+        if (ortho_lower in _ORTHO_ELISION_PREFIXES
+                and i + 1 < len(ortho_words)
+                and _commence_par_voyelle(ortho_words[i + 1])):
+            prefix = _ORTHO_ELISION_PREFIXES[ortho_lower]
+            if ortho[0].isupper():
+                prefix = prefix[0].upper() + prefix[1:]
+            parts.append(prefix + ortho_words[i + 1])
+            i += 2
+            continue
 
         parts.append(ortho)
         if i in compound_joins:

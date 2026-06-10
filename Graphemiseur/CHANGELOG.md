@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.3.3 — 2026-06
+
+**Fix lex_select : apostrophes dans la distance d'edition.**
+
+- lex_select : les apostrophes sont ignorees dans le calcul de distance d'edition,
+  permettant la selection correcte de candidats comme "aujourd'hui" (edit_distance
+  "aujourduis" ↔ "aujourd'hui" passait de 3 à 1)
+
+---
+
 ## v4.3.0 — 2026-06
 
 **Modele V7 + nettoyage.**

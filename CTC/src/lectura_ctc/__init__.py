@@ -91,6 +91,10 @@ def creer_engine(
     models_dir: str | Path | None = None,
     api_url: str | None = None,
     api_key: str | None = None,
+    lm_path: str | None = None,
+    beam_alpha: float = 0.3,
+    beam_beta: float = 0.5,
+    beam_width: int = 10,
 ) -> CTCEngine:
     """Factory pour creer un engine d'inference CTC.
 
@@ -107,6 +111,15 @@ def creer_engine(
         URL du serveur Lectura (pour mode API).
     api_key : str | None
         Cle API optionnelle.
+    lm_path : str | None
+        Chemin vers un modele KenLM (.bin) pour beam search.
+        Si None, utilise le decodage greedy standard.
+    beam_alpha : float
+        Poids du LM pour le beam search (defaut: 0.3).
+    beam_beta : float
+        Bonus de longueur pour le beam search (defaut: 0.5).
+    beam_width : int
+        Largeur du beam (defaut: 10).
 
     Returns
     -------
@@ -134,7 +147,13 @@ def creer_engine(
             base = resolved_dir or _MODELES_DIR
             onnx_path = base / "phone_ctc_int8.onnx"
             vocab_path = _resoudre_vocab()
-            return OnnxCTCEngine(onnx_path, vocab_path)
+            return OnnxCTCEngine(
+                onnx_path, vocab_path,
+                lm_path=lm_path,
+                beam_alpha=beam_alpha,
+                beam_beta=beam_beta,
+                beam_width=beam_width,
+            )
         except (ImportError, FileNotFoundError, Exception) as exc:
             if mode == "onnx":
                 raise RuntimeError(

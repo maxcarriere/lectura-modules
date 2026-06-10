@@ -1,5 +1,21 @@
 # Changelog — lectura-stt
 
+## v3.2.0 (2026-06-10)
+
+- Elisions multi-phones : support des prefixes "jusqu'", "lorsqu'", "puisqu'",
+  "quelqu'", "quoiqu'" dans try_elision_merges et rejoin_elisions
+- Fallback ortho-level dans rejoin_elisions pour les prefixes elidables
+  non captures au niveau IPA
+- WER benchmark : 13.34% (avec Graphemiseur 4.3.3)
+
+## v3.1.0 (2026-06-09)
+
+- split_merged_words : remplacement du DP max 4 parties par split 2 parties
+  (freq >= 20), rapport regression 10:1 → 1:1
+- Beam search CTC : integration PhoneLMBeamDecoder (KenLM 5-gram phone-level,
+  alpha=0.3, beta=0.5, beam_width=10)
+- WER benchmark : 13.58% (-3.67% vs ancien pipeline)
+
 ## v3.0.0 (2026-06-08)
 
 - Pipeline optimal avec postprocessing CTC :

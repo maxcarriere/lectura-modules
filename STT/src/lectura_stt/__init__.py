@@ -38,8 +38,9 @@ from lectura_stt._correction import (
     map_tokens_to_words,
     correct_doubtful_words,
 )
+from lectura_stt._grammar import GrammarLookup, corriger_grammatical
 
-__version__ = "3.0.2"
+__version__ = "3.2.0"
 
 
 @dataclass
@@ -95,6 +96,7 @@ class STTEngine:
         phone_conf_threshold: float = 0.98,
         denoiser: object | None = None,
         number_mode: str = "auto",
+        grammar_lookup: GrammarLookup | None = None,
     ) -> None:
         self.ctc = ctc_engine
         self.p2g = p2g_engine
@@ -105,8 +107,9 @@ class STTEngine:
         self.phone_conf_threshold = phone_conf_threshold
         self.denoiser = denoiser  # CTCDenoiser optionnel (corrige phones avant P2G)
         self.number_mode = number_mode
+        self.grammar_lookup = grammar_lookup
 
-    def transcrire(self, audio: np.ndarray, sr: int = 16000) -> ResultatSTT:
+    def transcrire(self, audio: np.ndarray, sr: int = 16000, stt_mode: str | None = None) -> ResultatSTT:
         """Transcrit un signal audio en texte.
 
         Parameters
@@ -134,10 +137,10 @@ class STTEngine:
 
         # Choix du pipeline : optimal si PhoneLexicon disponible, sinon simplifie
         if self.phone_lexicon is not None and self.p2g is not None:
-            return self._transcrire_optimal(ipa_str, ctc_tokens=ctc_tokens)
-        return self._transcrire_simple(ipa_str)
+            return self._transcrire_optimal(ipa_str, ctc_tokens=ctc_tokens, stt_mode=stt_mode)
+        return self._transcrire_simple(ipa_str, stt_mode=stt_mode)
 
-    def _transcrire_simple(self, ipa_str: str) -> ResultatSTT:
+    def _transcrire_simple(self, ipa_str: str, stt_mode: str | None = None) -> ResultatSTT:
         """Pipeline simplifie (sans PhoneLexicon)."""
         parsed = parse_ctc_output(ipa_str)
 
@@ -145,7 +148,7 @@ class STTEngine:
         mots_ortho: list[str] | None = None
 
         if self.p2g is not None and parsed.mots_ipa:
-            mots_ortho = self._p2g_convertir(parsed.mots_ipa)
+            mots_ortho = self._p2g_convertir(parsed.mots_ipa, stt_mode=stt_mode)
             texte = assembler_texte(mots_ortho, parsed.ponctuation_finale)
 
         ponctuation = [parsed.ponctuation_finale] if parsed.ponctuation_finale else []
@@ -160,6 +163,7 @@ class STTEngine:
 
     def _transcrire_optimal(
         self, ipa_str: str, ctc_tokens: list[dict] | None = None,
+        stt_mode: str | None = None,
     ) -> ResultatSTT:
         """Pipeline optimal avec postprocessing CTC.
 
@@ -254,7 +258,7 @@ class STTEngine:
                     )
 
         # 5. P2G conversion via analyser_v2
-        ortho_words, pos_conf = self._p2g_convertir_v2(ipa_words)
+        ortho_words, pos_conf = self._p2g_convertir_v2(ipa_words, stt_mode=stt_mode)
 
         # 6. Merge and rescore (fusion mots sur-segmentes)
         ipa_before = list(ipa_words)
@@ -269,6 +273,12 @@ class STTEngine:
             ipa_words, ortho_words, lexicon,
         )
         compound_joins = _shift_compound_joins(ipa_before, ipa_words, compound_joins)
+
+        # 7b. Post-traitement grammatical (regles structurelles + lexique)
+        if self.grammar_lookup is not None:
+            ortho_words, _gram_actions = corriger_grammatical(
+                ortho_words, self.grammar_lookup,
+            )
 
         # 8. Reconstruction du texte
         texte = rejoin_elisions(ortho_words, ipa_words, compound_joins)
@@ -286,7 +296,7 @@ class STTEngine:
         )
 
     def _p2g_convertir_v2(
-        self, mots_ipa: list[str],
+        self, mots_ipa: list[str], stt_mode: str | None = None,
     ) -> tuple[list[str], list[float]]:
         """Convertit des mots IPA via analyser_v2 (pipeline optimal).
 
@@ -317,7 +327,7 @@ class STTEngine:
                 pass
 
         # Fallback vers le pipeline classique
-        ortho = self._p2g_convertir(mots_ipa)
+        ortho = self._p2g_convertir(mots_ipa, stt_mode=stt_mode)
         return ortho, [0.5] * len(ortho)
 
     def transcrire_batch(
@@ -339,7 +349,7 @@ class STTEngine:
         """
         return [self.transcrire(audio, sr=sr) for audio in audios]
 
-    def _p2g_convertir(self, mots_ipa: list[str]) -> list[str]:
+    def _p2g_convertir(self, mots_ipa: list[str], stt_mode: str | None = None) -> list[str]:
         """Convertit des mots IPA en orthographe via le P2G.
 
         Utilise le pipeline complet (lectura_p2g.analyser) si disponible,
@@ -366,6 +376,8 @@ class STTEngine:
                 kwargs["formule_tolerance"] = self.formule_tolerance
             if "number_mode" in sig.parameters:
                 kwargs["number_mode"] = self.number_mode
+            if "stt_mode" in sig.parameters and stt_mode is not None:
+                kwargs["stt_mode"] = stt_mode
             result = self._p2g_analyser(mots_clean, **kwargs)
             return result.get("ortho", mots_clean)
 
@@ -385,7 +397,8 @@ class STTEngine:
         lex = "+lexicon" if self.phone_lexicon else ""
         phcor = "+phcor" if self.phone_correct else ""
         den = "+denoiser" if self.denoiser else ""
-        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline}{lex}{phcor}{den})"
+        gram = "+grammar" if self.grammar_lookup else ""
+        return f"STTEngine(ctc={type(self.ctc).__name__}, p2g={p2g_status}{pipeline}{lex}{phcor}{den}{gram})"
 
 
 def creer_engine(
@@ -397,6 +410,10 @@ def creer_engine(
     phone_conf_threshold: float = 0.98,
     denoiser_path: str | None = None,
     number_mode: str = "auto",
+    lm_path: str | None = None,
+    beam_alpha: float = 0.3,
+    beam_beta: float = 0.5,
+    beam_width: int = 10,
 ) -> STTEngine:
     """Factory pour creer un engine STT.
 
@@ -426,6 +443,15 @@ def creer_engine(
         - ``"auto"``  : rejette les homophones ambigus isoles (defaut)
         - ``"num"``   : agressif (tous les nombres isoles convertis)
         - ``"texte"`` : pas de conversion numerique
+    lm_path : str | None
+        Chemin vers un modele de langue KenLM (.bin) pour beam search
+        CTC. Si None, utilise le decodage greedy standard.
+    beam_alpha : float
+        Poids du LM pour le beam search (defaut: 0.3).
+    beam_beta : float
+        Bonus de longueur pour le beam search (defaut: 0.5).
+    beam_width : int
+        Largeur du beam (defaut: 10).
 
     Returns
     -------
@@ -441,6 +467,11 @@ def creer_engine(
 
     ctc_kw = dict(ctc_kwargs) if ctc_kwargs else {}
     ctc_kw.setdefault("mode", mode)
+    if lm_path is not None:
+        ctc_kw.setdefault("lm_path", lm_path)
+        ctc_kw.setdefault("beam_alpha", beam_alpha)
+        ctc_kw.setdefault("beam_beta", beam_beta)
+        ctc_kw.setdefault("beam_width", beam_width)
     ctc_engine = creer_ctc(**ctc_kw)
 
     p2g_kw = dict(p2g_kwargs) if p2g_kwargs else {}
@@ -456,6 +487,9 @@ def creer_engine(
     # Charger le CTCDenoiser (optionnel)
     denoiser = _creer_denoiser(denoiser_path, p2g_engine)
 
+    # Charger le GrammarLookup pour le post-traitement grammatical (optionnel)
+    grammar_lookup = _creer_grammar_lookup(phone_lexicon)
+
     return STTEngine(
         ctc_engine, p2g_engine, p2g_analyser,
         formule_tolerance=formule_tolerance,
@@ -464,7 +498,31 @@ def creer_engine(
         phone_conf_threshold=phone_conf_threshold,
         denoiser=denoiser,
         number_mode=number_mode,
+        grammar_lookup=grammar_lookup,
     )
+
+
+def _creer_grammar_lookup(phone_lexicon: object | None) -> GrammarLookup | None:
+    """Cree un GrammarLookup depuis la DB du PhoneLexicon.
+
+    Degradation gracieuse : retourne None si echec.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if phone_lexicon is None:
+        return None
+
+    db_path = getattr(phone_lexicon, "_db_path", None)
+    if not db_path:
+        return None
+
+    try:
+        return GrammarLookup(db_path)
+    except Exception as e:
+        logger.info("GrammarLookup non charge: %s", e)
+        return None
 
 
 def _creer_denoiser(

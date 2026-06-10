@@ -150,7 +150,7 @@ class CorrecteurV6Config:
     accord_fenetre: int = 2
 
     # Etape 3c — Participe passe
-    participe_confiance_min: float = 0.90
+    participe_confiance_min: float = 0.80
 
     # Preprocessing
     bypass_markdown: bool = True  # Bypass correction sur phrases markdown/LaTeX
@@ -162,6 +162,8 @@ class CorrecteurV6Config:
     activer_accord_det_nom: bool = True    # Accord DET-NOM (les chien -> chiens)
     activer_accord_attribut: bool = True   # ADJ accord via verbe d'etat
     activer_pp_etre: bool = True           # PP accord avec sujet (auxiliaire etre)
+    activer_pp_avoir_genre: bool = True    # PP+avoir invariable (genre du PP)
+    activer_accord_nom_adj: bool = True    # Accord NOM+ADJ en nombre
     activer_verbe_p2g: bool = True         # Correction verbe via P2G
     activer_accent_p2g: bool = True        # Accent via P2G
     activer_accent_lexique: bool = True    # Accent fallback lexique
