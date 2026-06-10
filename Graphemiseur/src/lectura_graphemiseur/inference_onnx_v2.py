@@ -815,7 +815,12 @@ class OnnxInferenceEngineV2:
                         if not ortho or ortho.startswith("-"):
                             continue
                         # Verifier edit distance par rapport au brut
-                        ed = _edit_distance(brut_lower, ortho.lower())
+                        # Ignorer les apostrophes pour ne pas penaliser
+                        # les mots composes (aujourd'hui, quelqu'un...)
+                        ed = _edit_distance(
+                            brut_lower.replace("'", ""),
+                            ortho.lower().replace("'", ""),
+                        )
                         if ed > self.LEX_SELECT_MAX_EDIT:
                             continue
                         # Blacklist
@@ -857,8 +862,11 @@ class OnnxInferenceEngineV2:
                         pair = (brut_lower, ortho.lower())
                         if pair in self._LEX_SELECT_BLACKLIST:
                             continue
-                        # Edit distance
-                        ed = _edit_distance(brut_lower, ortho.lower())
+                        # Edit distance (apostrophes ignorees)
+                        ed = _edit_distance(
+                            brut_lower.replace("'", ""),
+                            ortho.lower().replace("'", ""),
+                        )
                         if ed > self.LEX_SELECT_MAX_EDIT:
                             continue
                         # Score: lex_select prob + morpho bonus leger

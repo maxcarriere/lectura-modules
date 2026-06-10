@@ -136,6 +136,7 @@ def _appliquer_formules(
     formule_mode: str = "num",
     formule_tolerance: str = "exact",
     number_mode: str = "auto",
+    stt_mode: str = "auto",
 ) -> set[int]:
     """Detecte et remplace les formules (nombres, sigles) dans la sortie P2G.
 
@@ -176,15 +177,37 @@ def _appliquer_formules(
             stt = False
 
     use_num = (formule_mode != "texte")
+
+    # Controle fin des detecteurs selon stt_mode
+    if stt_mode == "formule":
+        # Plus permissif : tout detecter, pas de garde ambiguite
+        _detect_math = True
+        _detect_typed = True
+        _detect_numbers = True
+        number_mode = "num"   # override : pas de garde 2 mots
+    elif stt_mode == "texte":
+        # Texte brut : sigles uniquement
+        _detect_math = False
+        _detect_typed = False
+        _detect_numbers = False
+    else:  # "auto" (defaut)
+        # Pas de formules math (evite lettres grecques/symboles)
+        _detect_math = False
+        _detect_typed = True
+        _detect_numbers = True
+
     formule_positions: set[int] = set()
 
     # ── Formules math (avant nombres, pour eviter la fragmentation) ──
-    try:
-        if stt:
-            math_spans = detect_formula_spans_stt(ipa_words, min_span=3, max_span=20)
-        else:
-            math_spans = detect_formula_spans(ipa_words, min_span=3, max_span=20)
-    except Exception:
+    if _detect_math:
+        try:
+            if stt:
+                math_spans = detect_formula_spans_stt(ipa_words, min_span=3, max_span=20)
+            else:
+                math_spans = detect_formula_spans(ipa_words, min_span=3, max_span=20)
+        except Exception:
+            math_spans = []
+    else:
         math_spans = []
     for start, end, formula_result in math_spans:
         if use_num and formula_result.display_num:
@@ -203,7 +226,7 @@ def _appliquer_formules(
     # ── Formules typees STT (heures, dates, monnaie, %, fractions, nombres) ──
     # En mode STT, detect_formule_spans_stt remplace detect_number_spans
     # car il couvre tous les types y compris les nombres.
-    if stt and formule_mode != "texte":
+    if stt and _detect_typed:
         try:
             typed_spans = detect_formule_spans_stt(
                 ipa_words, min_span=1, max_span=15,
@@ -228,19 +251,21 @@ def _appliquer_formules(
                 formule_positions.add(start + k)
 
     # ── Nombres (min_span=1 pour les nombres simples aussi) ──
-    # Phones ambigus nombre/mot courant — rejeter les spans courts (1-2 mots)
-    # contenant ces phones sans contexte numerique clair
-    _AMBIG_NUM_PHONES = frozenset({
-        "sɑ̃",     # cent / sans, sang, sent, sens
-        "sɛt",     # sept / cette, cet
-        "vɛ̃",      # vingt / vain, vin
-        "ɛ̃",       # un / article indéfini
-        "dø",      # deux / de (prep)
-        "mil",     # mille / mil (céréale)
-        "kat",     # quatre (match partiel katʁ)
-        "twa",     # trois (match partiel tʁwa) / toi
-    })
-    number_spans = detect_number_spans(ipa_words, min_span=1, max_span=15, mode=number_mode)
+    number_spans = []
+    if _detect_numbers:
+        # Phones ambigus nombre/mot courant — rejeter les spans courts (1-2 mots)
+        # contenant ces phones sans contexte numerique clair
+        _AMBIG_NUM_PHONES = frozenset({
+            "sɑ̃",     # cent / sans, sang, sent, sens
+            "sɛt",     # sept / cette, cet
+            "vɛ̃",      # vingt / vain, vin
+            "ɛ̃",       # un / article indéfini
+            "dø",      # deux / de (prep)
+            "mil",     # mille / mil (céréale)
+            "kat",     # quatre (match partiel katʁ)
+            "twa",     # trois (match partiel tʁwa) / toi
+        })
+        number_spans = detect_number_spans(ipa_words, min_span=1, max_span=15, mode=number_mode)
     for start, end, formula_result in number_spans:
         # Pas de chevauchement avec les formules math
         if any(i in formule_positions for i in range(start, end)):
@@ -289,34 +314,35 @@ def _appliquer_formules(
             formule_positions.add(start + k)
 
     # ── Regles contextuelles post-formules ──
-    for start, end, formula_result in number_spans:
-        valeur = formula_result.valeur
-        if not isinstance(valeur, (int, float)):
-            continue
+    if _detect_numbers:
+        for start, end, formula_result in number_spans:
+            valeur = formula_result.valeur
+            if not isinstance(valeur, (int, float)):
+                continue
 
-        next_idx = end
-        if next_idx >= n or next_idx in formule_positions:
-            continue
+            next_idx = end
+            if next_idx >= n or next_idx in formule_positions:
+                continue
 
-        next_pos = pos_tags[next_idx] if next_idx < len(pos_tags) else ""
+            next_pos = pos_tags[next_idx] if next_idx < len(pos_tags) else ""
 
-        # Regle: nombre + "en" (POS=NOM) -> "ans"
-        # Corrige l'homophone /an/ quand le contexte est "X ans".
-        # AVANT la regle pluriel, car sinon "en" -> "ens" empeche le match.
-        if next_pos == "NOM" and result[next_idx].lower() == "en":
-            result[next_idx] = "ans"
+            # Regle: nombre + "en" (POS=NOM) -> "ans"
+            # Corrige l'homophone /an/ quand le contexte est "X ans".
+            # AVANT la regle pluriel, car sinon "en" -> "ens" empeche le match.
+            if next_pos == "NOM" and result[next_idx].lower() == "en":
+                result[next_idx] = "ans"
 
-        # Regle: nombre > 1 -> NOM/ADJ suivant doit etre pluriel
-        if valeur > 1 and next_pos in ("NOM", "ADJ"):
-            curr = result[next_idx]
-            if (
-                not curr.endswith(("s", "x", "z"))
-                and len(curr) > 1
-                and curr.lower() not in _NO_PLURAL_S
-            ):
-                candidate = curr + "s"
-                if _in_lex(candidate):
-                    result[next_idx] = candidate
+            # Regle: nombre > 1 -> NOM/ADJ suivant doit etre pluriel
+            if valeur > 1 and next_pos in ("NOM", "ADJ"):
+                curr = result[next_idx]
+                if (
+                    not curr.endswith(("s", "x", "z"))
+                    and len(curr) > 1
+                    and curr.lower() not in _NO_PLURAL_S
+                ):
+                    candidate = curr + "s"
+                    if _in_lex(candidate):
+                        result[next_idx] = candidate
 
     return formule_positions
 
@@ -964,6 +990,7 @@ def corriger_phrase_pipeline(
     formule_tolerance: str = "exact",
     number_mode: str = "auto",
     corrections_p2g: bool | str = True,
+    stt_mode: str = "auto",
     **kwargs,
 ) -> list[str]:
     """Pipeline post-traitement complet P2G (couche 2).
@@ -1033,6 +1060,7 @@ def corriger_phrase_pipeline(
             formule_mode=formule_mode,
             formule_tolerance=formule_tolerance,
             number_mode=number_mode,
+            stt_mode=stt_mode,
         )
 
     # Etape 0a : elisions (clitiques isolés devant voyelle)
@@ -1091,6 +1119,7 @@ def analyser(
     formule_tolerance: str = "exact",
     number_mode: str = "auto",
     corrections_p2g: bool | str = True,
+    stt_mode: str = "auto",
 ) -> dict:
     """Analyse P2G complete d'une liste de mots IPA.
 
@@ -1148,6 +1177,7 @@ def analyser(
             formule_tolerance=formule_tolerance,
             number_mode=number_mode,
             corrections_p2g=corrections_p2g,
+            stt_mode=stt_mode,
             correcteur=getattr(engine, "correcteur", None),
         )
     else:

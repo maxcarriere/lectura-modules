@@ -364,6 +364,15 @@ def merge_and_rescore(
 # Phones clitiques mono-phone pour la fusion d'elisions
 _ELISION_CLITICS = {"l", "d", "s", "n", "ʒ", "k", "m", "t"}
 
+# Prefixes elidables multi-phones (jusqu'a, lorsqu'il, puisqu'on...)
+_MULTI_ELISION_PREFIXES = {
+    "ʒysk",     # jusqu'
+    "lɔʁsk",    # lorsqu'
+    "pɥisk",    # puisqu'
+    "kɛlk",     # quelqu'
+    "kwak",     # quoiqu'  (rare)
+}
+
 # Voyelles IPA de base (premier codepoint) — pour detecter debut vocalique
 _VOWEL_STARTS = set("aeiouyøœəɛɔɑ")
 
@@ -401,18 +410,26 @@ def try_elision_merges(
                 len(segments_i) == 1
                 and segments_i[0] in _ELISION_CLITICS
             )
+            is_multi_elision = _normalize_ipa(word_i) in _MULTI_ELISION_PREFIXES
             next_starts_vowel = (
                 len(word_next) > 0
                 and word_next[0] in _VOWEL_STARTS
             )
 
-            if is_clitic and next_starts_vowel:
+            if (is_clitic or is_multi_elision) and next_starts_vowel:
                 merged = word_i + word_next
                 merged_n = _normalize_ipa(merged)
                 freq_merged = lexicon.best_freq(merged_n)
                 freq_next = lexicon.best_freq(_normalize_ipa(word_next))
 
-                if freq_merged > 0 and (freq_next <= 0 or freq_merged > 2.0 * freq_next):
+                # Multi-phone : merge si le mot fusionne existe (jusqu+a → jusqu'a)
+                # Mono-phone : merge si freq ratio > 2x (l+ami → l'ami)
+                should_merge = (
+                    (is_multi_elision and freq_merged > 0)
+                    or (freq_merged > 0 and (freq_next <= 0
+                                             or freq_merged > 2.0 * freq_next))
+                )
+                if should_merge:
                     ortho_merged = lexicon.best_ortho(merged_n)
                     if ortho_merged:
                         new_ipa.append(merged_n)

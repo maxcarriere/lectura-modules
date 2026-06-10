@@ -80,6 +80,10 @@ class LexiqueNormalise:
         raw = self._lexique.info(mot)
         return [normaliser_info(e) for e in raw]
 
+    def formes_de(self, *args, **kwargs):
+        raw = self._lexique.formes_de(*args, **kwargs)
+        return [normaliser_info(e) for e in raw]
+
 
 def reconstruire_phrase(tokens: list[str]) -> str:
     """Reconstruit une phrase a partir des tokens en gerant les espaces."""

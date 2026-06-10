@@ -4,7 +4,11 @@ Contient les fonctions de pre-traitement qui operent entre le parsing CTC
 et la conversion P2G :
   - strip_liaisons: retire les consonnes de liaison absorbees par le CTC
   - split_elisions: separe les clitiques elides (l'ami → l + ami)
-  - split_merged_words: decoupe les mots colles par le CTC
+  - split_merged_words: decoupe les mots colles en exactement 2 mots connus
+
+Note : split_merged_words utilise un split strict en 2 parties (v3.1+).
+Les decompositions en 3+ parties degradaient le WER de +2.7% et ont ete
+desactivees. La fonction _decompose_dp reste disponible pour _correction.py.
 
 Copyright (C) 2025-2026 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
@@ -247,40 +251,61 @@ def _decompose_dp(
     return results[:5]
 
 
+_SPLIT_2P_MIN_FREQ = 20.0       # Frequence min par partie (split 2-parts)
+
+
 def split_merged_words(
     ipa_words: list[str],
     lexicon: "PhoneLexicon",
 ) -> list[str]:
-    """Pre-traitement : decoupe les mots inconnus en mots connus.
+    """Pre-traitement : decoupe les mots inconnus en exactement 2 mots connus.
 
-    Utilise une decomposition DP qui explore systematiquement les splits,
-    les insertions de liaison, et les perturbations CTC sur chaque partie.
+    Seuls les splits en 2 parties exactes (les deux frequentes) sont tentes.
+    Les decompositions en 3+ parties degradent fortement le WER et sont
+    desactivees. Le P2G gere mieux les mots OOV entiers que des fragments
+    incorrects.
 
     Doit etre appele AVANT la conversion P2G.
     """
+    import math
+
     result = []
     for word in ipa_words:
         word = _normalize_ipa(word)
-        # Mot connu dans le lexique → ne pas splitter
         if word in lexicon.phone_set:
             result.append(word)
             continue
 
-        # Verifier si une perturbation CTC simple resout le mot
         if _tier4_ctc_confusions(word, lexicon):
             result.append(word)
             continue
 
         segments = _ipa_grapheme_clusters(word)
-
-        if len(segments) < 4:
+        n = len(segments)
+        if n < 4:
             result.append(word)
             continue
 
-        decompositions = _decompose_dp(segments, lexicon)
-        if decompositions:
-            best_words, _best_score = decompositions[0]
-            result.extend(best_words)
+        best_split: tuple[str, str] | None = None
+        best_score = 0.0
+
+        for j in range(2, n - 1):
+            left = _normalize_ipa("".join(segments[:j]))
+            right = _normalize_ipa("".join(segments[j:]))
+
+            if left not in lexicon.phone_set or right not in lexicon.phone_set:
+                continue
+
+            freq_l = lexicon.best_freq(left)
+            freq_r = lexicon.best_freq(right)
+            if freq_l >= _SPLIT_2P_MIN_FREQ and freq_r >= _SPLIT_2P_MIN_FREQ:
+                score = math.log10(freq_l + 1) + math.log10(freq_r + 1)
+                if score > best_score:
+                    best_score = score
+                    best_split = (left, right)
+
+        if best_split:
+            result.extend(best_split)
         else:
             result.append(word)
 
