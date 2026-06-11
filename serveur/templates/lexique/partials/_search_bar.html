@@ -1,0 +1,53 @@
+<form class="search-form" action="/rechercher" method="get" role="search" id="search-form">
+  <div class="search-modes">
+    <button type="button" class="search-mode-btn active" data-mode="rechercher">Rechercher</button>
+    <button type="button" class="search-mode-btn" data-mode="rimes">Rimes</button>
+    <button type="button" class="search-mode-btn" data-mode="anagrammes">Anagrammes</button>
+  </div>
+  <div class="search-input-row">
+    <input type="search" name="q" value="{{ q|default('', true) }}" placeholder="Rechercher un mot, une entité..." aria-label="Rechercher" maxlength="200" required id="search-input">
+    <input type="hidden" name="mode" value="{{ mode|default('rechercher', true) }}" id="search-mode">
+    <button type="submit">Rechercher</button>
+  </div>
+  <div class="search-params" id="search-params">
+    <div class="search-params-rimes" style="display:none">
+      <label>Phonèmes : <input type="number" name="nb_phonemes" value="{{ nb_phonemes|default(2, true) }}" min="1" max="10" style="width:3.5rem"></label>
+    </div>
+    <div class="search-params-anagrammes" style="display:none">
+      <label><input type="checkbox" name="sous_ensemble" {{ 'checked' if sous_ensemble|default(false) }}> Sous-ensembles</label>
+      <label>Long. min : <input type="number" name="longueur_min" value="{{ longueur_min|default(2, true) }}" min="1" max="20" style="width:3.5rem"></label>
+    </div>
+  </div>
+</form>
+<script>
+(function() {
+  var form = document.getElementById('search-form');
+  var input = document.getElementById('search-input');
+  var modeInput = document.getElementById('search-mode');
+  var btns = form.querySelectorAll('.search-mode-btn');
+  var paramsRimes = form.querySelector('.search-params-rimes');
+  var paramsAnag = form.querySelector('.search-params-anagrammes');
+
+  function setMode(mode) {
+    modeInput.value = mode;
+    btns.forEach(function(b) { b.classList.toggle('active', b.dataset.mode === mode); });
+    paramsRimes.style.display = mode === 'rimes' ? '' : 'none';
+    paramsAnag.style.display = mode === 'anagrammes' ? '' : 'none';
+    var placeholders = {
+      'rechercher': 'Rechercher un mot, une entité...',
+      'rimes': 'Mot pour trouver des rimes...',
+      'anagrammes': 'Mot pour trouver des anagrammes...'
+    };
+    input.placeholder = placeholders[mode] || placeholders['rechercher'];
+    form.action = '/rechercher';
+  }
+
+  btns.forEach(function(btn) {
+    btn.addEventListener('click', function() { setMode(btn.dataset.mode); });
+  });
+
+  // Init from current mode
+  var currentMode = modeInput.value || 'rechercher';
+  setMode(currentMode);
+})();
+</script>

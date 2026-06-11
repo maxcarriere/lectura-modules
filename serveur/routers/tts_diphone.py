@@ -50,8 +50,11 @@ class SynthesizeRequest(BaseModel):
     ap_cleanup: float = Field(1.5, ge=1.0, le=3.0, description="Compression AP (1.0=off, 1.5=defaut). Reduit la raucite")
     formant_sharpening: float = Field(1.3, ge=1.0, le=2.0, description="Affutage formants (1.0=off, 1.3=defaut). Nettete spectrale")
     vtln_alpha: float = Field(1.0, ge=0.8, le=1.2, description="Warping VTLN (0.8=grave, 1.0=neutre, 1.2=aigu)")
-    prosody_style: str = Field("auto", description="Style prosodique: auto, declaratif, question, exclamation, suspensif, neutre")
+    prosody_style: str = Field("regles", description="Style prosodique: regles (prosodie par regles LHiLH*) ou corpus (prosodie extraite du corpus SIWIS)")
     seed: int | None = Field(None, description="Graine aleatoire pour micro-prosodie reproductible")
+    sentence_pause_ms: float = Field(400.0, ge=0.0, le=2000.0, description="Pause inter-phrase en ms (defaut 400)")
+    voix: str | list[str] | dict[str, float] | None = Field(None, description="Voix cible retimbre: preset ('siwis'), chemin, liste, ou dict pondere")
+    voix_variante: float = Field(0.0, ge=-1.0, le=1.0, description="Curseur voix (-1=grave, 0=neutre, +1=aigu)")
 
 
 class SynthesizeResponse(BaseModel):
@@ -84,6 +87,9 @@ async def synthesize(req: SynthesizeRequest):
         vtln_alpha=req.vtln_alpha,
         prosody_style=req.prosody_style,
         seed=req.seed,
+        sentence_pause_ms=req.sentence_pause_ms,
+        voix=req.voix,
+        voix_variante=req.voix_variante,
     )
 
     if req.groups is not None:

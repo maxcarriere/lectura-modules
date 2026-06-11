@@ -18,7 +18,8 @@
   "word_hidden_dim": 192,
   "word_num_layers": 1,
   "dropout": 0.3,
-  "lex_feature_dim": 24
+  "lex_feature_dim": 24,
+  "liaison_hidden_dim": 64
  },
  "vocabs": {
   "char2idx": {

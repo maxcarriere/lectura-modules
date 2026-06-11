@@ -40,6 +40,8 @@ class SynthesizeRequest(BaseModel):
     pitch_range: float = Field(1.3, gt=0.0, le=5.0)
     energy_scale: float = Field(1.0, gt=0.0, le=3.0)
     pause_scale: float = Field(1.0, gt=0.0, le=5.0)
+    voix: str | None = Field(None, description="Preset de voix pour retimbre OpenVoice (siwis, ezwa, nadine, bernard, gilles, zeckou)")
+    voix_variante: float = Field(0.0, ge=-1.0, le=1.0, description="Variante formants (-1=grave, 0=neutre, +1=aigu)")
 
 
 class PhonemeTimingResponse(BaseModel):
@@ -67,25 +69,33 @@ async def synthesize(req: SynthesizeRequest):
 
     engine = _get_engine()
 
+    # Parametres prosodiques communs
+    prosody = dict(
+        duration_scale=req.duration_scale,
+        pitch_shift=req.pitch_shift,
+        pitch_range=req.pitch_range,
+        energy_scale=req.energy_scale,
+        pause_scale=req.pause_scale,
+    )
+
     if req.ipa is not None:
         result = engine.synthesize_phonemes(
             req.ipa,
             phrase_type=req.phrase_type or 0,
-            duration_scale=req.duration_scale,
-            pitch_shift=req.pitch_shift,
-            pitch_range=req.pitch_range,
-            energy_scale=req.energy_scale,
-            pause_scale=req.pause_scale,
+            **prosody,
         )
+        # Retimbre en post si demande (synthesize_phonemes ne le fait pas)
+        if req.voix:
+            result = engine._apply_retimbre(
+                result, req.voix, req.voix_variante, 0.3, None,
+            )
     else:
         result = engine.synthesize(
             req.text,
             phrase_type=req.phrase_type,
-            duration_scale=req.duration_scale,
-            pitch_shift=req.pitch_shift,
-            pitch_range=req.pitch_range,
-            energy_scale=req.energy_scale,
-            pause_scale=req.pause_scale,
+            voix=req.voix,
+            voix_variante=req.voix_variante,
+            **prosody,
         )
 
     # Encoder audio en base64

@@ -64,7 +64,35 @@ _CAS_CONJUGAISON = [
 _CAS_HOMOPHONES = [
     ("il a chaque fois", "il a chaque fois"),
     ("a chaque fois", "à chaque fois"),
-    ("je et content", "je suis content"),  # pas trivial, skip si trop complexe
+    # Homophones grammaticaux (regles)
+    ("il et venu", "il est venu"),
+    ("ils on dit", "ils ont dit"),
+    # Homophones LM trigramme
+    ("grâce a la vie", "grâce à la vie"),
+    ("il a été tres content", "il a été très content"),
+    ("un peut plus tard", "un peu plus tard"),
+    ("de son coté", "de son côté"),
+    ("face a la mer", "face à la mer"),
+    ("trois sans mètres", "trois cent mètres"),
+    # ("du sang froid", "du sang-froid"),  # compose avec tiret, pas un homophone
+    ("elle a vu sa fille", "elle a vu sa fille"),  # guard: ne pas changer
+    ("on a vu sont film", "on a vu son film"),
+    ("il est aller la bas", "il est allé là-bas"),
+    # Guards : ne pas toucher quand correct
+    ("il a raison", "il a raison"),
+    ("de son côté", "de son côté"),
+    ("un peu plus", "un peu plus"),
+    ("sans doute", "sans doute"),
+    ("elle est là", "elle est là"),
+    # Guard a/à + PP : ne pas changer "a" devant un PP
+    ("le téléphone a sonné", "le téléphone a sonné"),
+    # Filtre lemme : ne pas changer des variantes flexionnelles
+    ("ils sont partis avec son vélo", "ils sont partis avec son vélo"),
+    # Scoring conjoint : corriger homophone + accent simultanément
+    ("ils on prepare le repas", "ils ont préparé le repas"),
+    # Regle participe elargie : AUX + present → PP
+    ("il a prépare le repas", "il a préparé le repas"),
+    ("il a sonne a la porte", "il a sonné à la porte"),
 ]
 
 _CAS_ACCORDS = [

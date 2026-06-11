@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tokeniseur"
-version = "2.2.1"
+version = "2.3.0"
 description = "Normalisateur et tokeniseur complet pour le français — détection de formules (nombres, sigles, dates, téléphones, etc.)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,4 +34,4 @@ Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_tokeniseur = []
+lectura_tokeniseur = ["data/*.json"]

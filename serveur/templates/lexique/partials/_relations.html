@@ -1,0 +1,18 @@
+{% macro relation_section(title, items) %}
+{% if items %}
+<div class="section">
+  <h2 class="section-title">{{ title }}</h2>
+  <div class="chip-list">
+    {% for r in items %}
+    <a href="/mot/{{ r._lemme or r.get('lemme', '') }}" class="chip">{{ r._lemme or r.get('lemme', '') }}{% if r.get('_cgram') %} <span class="cgram-tag">{{ r._cgram }}</span>{% endif %}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{{ relation_section("Synonymes", synonymes) }}
+{{ relation_section("Antonymes", antonymes) }}
+{{ relation_section("Dérivés", derives) }}
+{{ relation_section("Hyperonymes", hyperonymes) }}
+{{ relation_section("Mots apparentés", apparentes) }}

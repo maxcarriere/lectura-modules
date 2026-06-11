@@ -26,7 +26,8 @@ class DiphoneTTSEngine:
         duration_scale: float = 1.0,
         pause_scale: float = 1.0,
         f0_hz: float = 190.0,
-        prosody_style: str = "auto",
+        prosody_style: str = "regles",
+        sentence_pause_ms: float = 400.0,
         macro_expressivity: float = 1.0,
         micro_expressivity: float = 1.0,
         seed: str = "",
@@ -42,6 +43,7 @@ class DiphoneTTSEngine:
         self._pause_scale = pause_scale
         self._f0_hz = f0_hz
         self._prosody_style = prosody_style
+        self._sentence_pause_ms = sentence_pause_ms
         self._macro_expressivity = macro_expressivity
         self._micro_expressivity = micro_expressivity
         self._seed: int | None = int(seed) if seed.strip() else None
@@ -92,7 +94,8 @@ class DiphoneTTSEngine:
             mode=self._synth_mode,
             duration_scale=self._duration_scale,
             pause_scale=self._pause_scale,
-            prosody={"f0_hz": self._f0_hz},
+            base_f0=self._f0_hz,
+            sentence_pause_ms=self._sentence_pause_ms,
             macro_expressivity=self._macro_expressivity,
             micro_expressivity=self._micro_expressivity,
             seed=self._resolve_seed(),
@@ -160,7 +163,8 @@ class DiphoneTTSEngine:
             mode=self._synth_mode,
             duration_scale=self._duration_scale,
             pause_scale=self._pause_scale,
-            prosody={"f0_hz": self._f0_hz},
+            base_f0=self._f0_hz,
+            sentence_pause_ms=self._sentence_pause_ms,
             macro_expressivity=self._macro_expressivity,
             micro_expressivity=self._micro_expressivity,
             seed=self._resolve_seed(),
@@ -200,10 +204,8 @@ register(EngineInfo(
     factory=lambda p: DiphoneTTSEngine(**p),
     params=[
         # Primaires (role non-vide → visibles dans la barre principale)
-        EngineParam("prosody_style", "Mode prosodique", "choice", "auto",
-                    choices=["auto", "declaratif", "question",
-                             "exclamation", "suspensif", "neutre"],
-                    role="voice"),
+        EngineParam("prosody_style", "Mode prosodique", "choice", "regles",
+                    choices=["regles", "corpus"], role="voice"),
         EngineParam("macro_expressivity", "Expressivite macro", "float", 1.0,
                     min_val=0.0, max_val=4.0, role="expressivity"),
         EngineParam("micro_expressivity", "Expressivite micro", "float", 1.0,
@@ -220,6 +222,8 @@ register(EngineInfo(
                     choices=["FLUIDE", "MOT_A_MOT", "SYLLABES"], role=""),
         EngineParam("pause_scale", "Pauses", "float", 1.0,
                     min_val=0.5, max_val=3.0, role=""),
+        EngineParam("sentence_pause_ms", "Pause phrase (ms)", "float", 400.0,
+                    min_val=100.0, max_val=1500.0, role=""),
         EngineParam("spectral_contrast", "Contraste spectral", "float", 1.3,
                     min_val=1.0, max_val=3.0, role=""),
         EngineParam("ap_cleanup", "Clarte voix", "float", 1.5,

@@ -1,0 +1,188 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}Conjugaison de {{ verbe }} — tous les temps{% endblock %}
+{% block meta_description %}Conjugaison complète du verbe « {{ verbe }} » à tous les modes et temps.{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Mot", "url": "/mot/" + verbe}, {"label": verbe, "url": "/mot/" + verbe}, {"label": "Conjugaison", "url": ""}] %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+<h1 class="page-title">Conjugaison de « {{ verbe }} »</h1>
+
+{% if conjugaison %}
+
+{% set personnes_ord = ['1s', '2s', '3s', '1p', '2p', '3p'] %}
+{% set temps_labels = {
+  'present': 'Présent', 'imparfait': 'Imparfait',
+  'passe_simple': 'Passé simple', 'futur': 'Futur simple',
+  'passe_compose': 'Passé composé', 'plus_que_parfait': 'Plus-que-parfait',
+  'futur_anterieur': 'Futur antérieur', 'passe_anterieur': 'Passé antérieur',
+} %}
+
+{# ── Infinitif / Participes ── #}
+<div class="conj-formes-nominales">
+  {% if conjugaison.get('infinitif') %}
+    {% for temps, formes in conjugaison['infinitif'].items() %}
+      {% for pers, forme in formes.items() if forme %}
+      <div class="conj-forme-item"><span class="conj-forme-label">Infinitif</span> <strong>{{ forme }}</strong></div>
+      {% endfor %}
+    {% endfor %}
+  {% endif %}
+  {% if conjugaison.get('participe') %}
+    {% set pp = conjugaison['participe'] %}
+    {% if pp.get('passe_simple') %}
+      {% for pers, forme in pp['passe_simple'].items() if forme and pers not in ('s', 'p') %}
+      <div class="conj-forme-item"><span class="conj-forme-label">Participe passé</span> <strong>{{ forme }}</strong></div>
+      {% endfor %}
+    {% endif %}
+    {% if pp.get('present') %}
+      {% for pers, forme in pp['present'].items() if forme and pers not in ('s', 'p') %}
+      <div class="conj-forme-item"><span class="conj-forme-label">Participe présent</span> <strong>{{ forme }}</strong></div>
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+</div>
+
+{# ── Indicatif (deux colonnes) ── #}
+{% if conjugaison.get('indicatif') %}
+{% set ind = conjugaison['indicatif'] %}
+<div class="conj-mode-section">
+  <h2 class="conj-mode-title">Indicatif</h2>
+  <div class="conj-two-col">
+    {% set indicatif_pairs = [('present', 'imparfait'), ('passe_simple', 'futur')] %}
+    {% for t_left, t_right in indicatif_pairs %}
+      {% if ind.get(t_left) or ind.get(t_right) %}
+      {% if ind.get(t_left) %}
+      <div class="conj-block">
+        <h4>{{ temps_labels.get(t_left, t_left|capitalize) }}</h4>
+        <table><tbody>
+          {% for pers in personnes_ord if pers in ind[t_left] %}
+          <tr><td>{{ pers }}</td><td>{{ ind[t_left][pers] }}</td></tr>
+          {% endfor %}
+        </tbody></table>
+      </div>
+      {% else %}<div class="conj-block"></div>{% endif %}
+      {% if ind.get(t_right) %}
+      <div class="conj-block">
+        <h4>{{ temps_labels.get(t_right, t_right|capitalize) }}</h4>
+        <table><tbody>
+          {% for pers in personnes_ord if pers in ind[t_right] %}
+          <tr><td>{{ pers }}</td><td>{{ ind[t_right][pers] }}</td></tr>
+          {% endfor %}
+        </tbody></table>
+      </div>
+      {% else %}<div class="conj-block"></div>{% endif %}
+      {% endif %}
+    {% endfor %}
+    {# Temps non listés dans les paires #}
+    {% set indicatif_connus = ['present', 'imparfait', 'passe_simple', 'futur'] %}
+    {% for temps, formes in ind.items() if temps not in indicatif_connus %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in personnes_ord if pers in formes %}
+        <tr><td>{{ pers }}</td><td>{{ formes[pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Subjonctif ── #}
+{% if conjugaison.get('subjonctif') %}
+{% set subj = conjugaison['subjonctif'] %}
+{% set subj_ordre = ['present', 'imparfait'] %}
+<div class="conj-mode-section">
+  <h2 class="conj-mode-title">Subjonctif</h2>
+  <div class="conj-two-col">
+    {% for temps in subj_ordre if temps in subj %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in personnes_ord if pers in subj[temps] %}
+        <tr><td>{{ pers }}</td><td>{{ subj[temps][pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+    {% for temps, formes in subj.items() if temps not in subj_ordre %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in personnes_ord if pers in formes %}
+        <tr><td>{{ pers }}</td><td>{{ formes[pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Impératif ── #}
+{% if conjugaison.get('imperatif') %}
+{% set imp = conjugaison['imperatif'] %}
+{% set imp_personnes = ['2s', '1p', '2p'] %}
+<div class="conj-mode-section">
+  <h2 class="conj-mode-title">Impératif</h2>
+  <div class="conj-two-col">
+    {% for temps in ['present'] if temps in imp %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in imp_personnes if pers in imp[temps] %}
+        <tr><td>{{ pers }}</td><td>{{ imp[temps][pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+    {% for temps, formes in imp.items() if temps != 'present' %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in imp_personnes if pers in formes %}
+        <tr><td>{{ pers }}</td><td>{{ formes[pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Conditionnel ── #}
+{% if conjugaison.get('conditionnel') %}
+{% set cond = conjugaison['conditionnel'] %}
+<div class="conj-mode-section">
+  <h2 class="conj-mode-title">Conditionnel</h2>
+  <div class="conj-two-col">
+    {% for temps in ['present'] if temps in cond %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in personnes_ord if pers in cond[temps] %}
+        <tr><td>{{ pers }}</td><td>{{ cond[temps][pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+    {% for temps, formes in cond.items() if temps != 'present' %}
+    <div class="conj-block">
+      <h4>{{ temps_labels.get(temps, temps|capitalize) }}</h4>
+      <table><tbody>
+        {% for pers in personnes_ord if pers in formes %}
+        <tr><td>{{ pers }}</td><td>{{ formes[pers] }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+<p>Aucune conjugaison trouvée pour « {{ verbe }} ».</p>
+{% endif %}
+{% endblock %}

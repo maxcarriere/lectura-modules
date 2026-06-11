@@ -77,20 +77,24 @@ async def convert(
     speaker: str | None = Form(None, description="Speaker RVC cible (ezwa, nadine, bernard, gilles, zeckou, siwis)"),
     mode: str = Form("auto", description="Mode de conversion (rvc, zeroshot, cascade, auto)"),
     reference: UploadFile | None = File(None, description="Audio de reference pour zero-shot"),
+    reference_preset: str | None = Form(None, description="Preset zero-shot par nom (siwis, ezwa, etc.) — alternatif a reference"),
     protect: float | None = Form(None, description="Facteur de protection voix (0.0-0.5)"),
     pitch_modification: float | None = Form(None, description="Shift en demi-tons"),
     tau: float = Form(0.3, description="Parametre OpenVoice (0 = deterministe)"),
+    sr_override: int | None = Form(None, description="Trick SR formants (11025=aigu, 44100=grave)"),
 ):
     """Convertit un audio vers la voix cible.
 
     Accepte multipart/form-data avec le fichier audio source et les parametres.
     Retourne l'audio converti en WAV base64.
     """
-    # Valider qu'on a au moins speaker ou reference
-    if speaker is None and (reference is None or reference.filename is None or reference.filename == ""):
+    # Valider qu'on a au moins speaker, reference ou reference_preset
+    has_ref_file = reference is not None and reference.filename and reference.filename != ""
+    has_ref_preset = reference_preset is not None and reference_preset.strip() != ""
+    if speaker is None and not has_ref_file and not has_ref_preset:
         raise HTTPException(
             status_code=400,
-            detail="Au moins 'speaker' ou 'reference' est requis.",
+            detail="Au moins 'speaker', 'reference' ou 'reference_preset' est requis.",
         )
 
     engine = _get_engine()
@@ -101,10 +105,13 @@ async def convert(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lecture audio: {e}")
 
-    # Lire la reference si fournie
+    # Determiner la reference (preset ou fichier uploade)
     ref_audio = None
     ref_tmp = None  # garder une reference pour eviter suppression prematuree
-    if reference is not None and reference.filename and reference.filename != "":
+    if has_ref_preset:
+        # Preset par nom — passe directement a l'engine (resolve_target_se)
+        ref_audio = reference_preset.strip()
+    elif has_ref_file:
         try:
             # Sauver en fichier temporaire WAV — l'engine attend un path ou
             # un array+sr, et _resolve_reference_se() ne transmet pas le sr.
@@ -123,6 +130,8 @@ async def convert(
     if pitch_modification is not None:
         kwargs["pitch_modification"] = pitch_modification
     kwargs["tau"] = tau
+    if sr_override is not None:
+        kwargs["sr_override"] = sr_override
 
     try:
         result_audio, result_sr = engine.convert(
@@ -162,5 +171,12 @@ async def convert(
 @router.get("/speakers")
 async def speakers():
     """Retourne la liste des speakers RVC disponibles."""
-    from lectura_vc._chargeur import RVC_SPEAKERS
+    from lectura_vc import RVC_SPEAKERS
     return RVC_SPEAKERS
+
+
+@router.get("/presets")
+async def presets():
+    """Retourne la liste des presets zero-shot disponibles."""
+    from lectura_vc import PRESET_SPEAKERS
+    return PRESET_SPEAKERS

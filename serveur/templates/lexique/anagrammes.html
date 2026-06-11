@@ -1,0 +1,35 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}Anagrammes de « {{ mot }} » — Lexique Lectura{% endblock %}
+{% block meta_description %}Anagrammes du mot « {{ mot }} » — Lexique Lectura.{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Anagrammes", "url": "/anagrammes"}, {"label": mot, "url": ""}] %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+<h1 class="page-title">Anagrammes de « {{ mot }} »</h1>
+<p class="page-subtitle">{{ resultats|length }} résultat{{ 's' if resultats|length > 1 else '' }}</p>
+
+<form action="/anagrammes" method="get" style="margin-bottom:1.5rem">
+  <div class="search-bar">
+    <input type="text" name="mot" value="{{ mot }}" placeholder="Entrez un mot…" autofocus>
+    <button type="submit">Chercher</button>
+  </div>
+</form>
+
+{% if resultats %}
+<ul class="results-list">
+  {% for r in resultats %}
+  <li class="result-item">
+    <a href="/mot/{{ r.lemme or r.ortho }}" class="result-word">{{ r.ortho }}</a>
+    {% if r.phone %}<span class="ipa">/{{ r.phone }}/</span>{% endif %}
+    <span class="result-meta">
+      {% if r.cgram %}<span class="cgram-tag">{{ r.cgram }}</span>{% endif %}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% elif mot %}
+<p>Aucune anagramme trouvée pour « {{ mot }} ».</p>
+{% endif %}
+{% endblock %}

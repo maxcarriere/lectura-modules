@@ -1,5 +1,47 @@
 # Changelog
 
+## v4.3.3 — 2026-06
+
+**Fix lex_select : apostrophes dans la distance d'edition.**
+
+- lex_select : les apostrophes sont ignorees dans le calcul de distance d'edition,
+  permettant la selection correcte de candidats comme "aujourd'hui" (edit_distance
+  "aujourduis" ↔ "aujourd'hui" passait de 3 à 1)
+
+---
+
+## v4.3.0 — 2026-06
+
+**Modele V7 + nettoyage.**
+
+### Modele
+
+- Modele V7 : 3.2M params, attention cross word-char, POS 98%, morpho 95-98%
+- Lex_select : selection lexique par tete neuronale (95% word accuracy)
+- Fallback V6 automatique si V7 absent
+
+### Post-traitement
+
+- Benchmark POS/morpho : les regles etendues (ces/ses, morpho lex) sont neutres/regressives — non activees
+- Homophones a/a et ou/ou restent inconditionnels (valides)
+
+### Nettoyage
+
+- Archivage des modeles v3-v5, checkpoints .pt, fichiers d'erreurs vers Modeles/
+- Retrait dist/, scripts/, demo/ du module publie
+
+---
+
+## v4.2.0 — 2026-06
+
+**Integration lex_select + correcteur P2G dans le pipeline.**
+
+- Lex_select V6 : selection de candidats lexique par tete neuronale
+- Correcteur P2G : modele correcteur seq2seq (encoder char + decodeur auto-regressif)
+- Tolerance STT (formule_tolerance) propagee dans le pipeline
+
+---
+
 ## v4.0.0 — 2026
 
 **Renommage et refactorisation architecturale.**

@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "benchmark"))
 
 LEXIQUE_PATH = Path(
-    "/data/work/projets/lectura/workspace/Lexique/lexique_lectura.db"
+    "/data/work/projets/lectura/workspace/Lexique/bases/lexique_lectura.db"
 )
 
 from corpus_benchmark import CATEGORIES, CORPUS, CasBenchmark  # noqa: E402
@@ -328,6 +328,79 @@ class AdaptateurLecturaScoringAzerty(Adaptateur):
             seuil_remplacement=self._seuil,
         )
         self._correcteur = Correcteur(lexique, config=config, g2p=g2p)
+
+    def corriger(self, phrase: str) -> str:
+        assert self._correcteur is not None
+        return self._correcteur.corriger(phrase).phrase_corrigee
+
+
+class AdaptateurLecturaV5(Adaptateur):
+    """Lectura V5 : V1 + P2G V6 comme etiqueteur POS/MORPHO."""
+
+    nom = "Lec-V5"
+
+    def __init__(self) -> None:
+        self._correcteur = None
+
+    def initialiser(self) -> None:
+        from lectura_correcteur import CorrecteurV5, CorrecteurV5Config
+        from lectura_lexique import Lexique
+
+        lexique = Lexique(str(LEXIQUE_PATH))
+
+        config = CorrecteurV5Config()
+        self._correcteur = CorrecteurV5(lexique, config=config)
+        print(f"  P2G disponible: {self._correcteur.p2g_disponible}")
+
+    def corriger(self, phrase: str) -> str:
+        assert self._correcteur is not None
+        return self._correcteur.corriger(phrase).phrase_corrigee
+
+
+class AdaptateurLecturaV5Scoring(Adaptateur):
+    """Lectura V5 + scoring unifie."""
+
+    nom = "V5+Score"
+
+    def __init__(self, seuil: float = 0.15) -> None:
+        self._correcteur = None
+        self._seuil = seuil
+
+    def initialiser(self) -> None:
+        from lectura_correcteur import CorrecteurV5, CorrecteurV5Config
+        from lectura_lexique import Lexique
+
+        lexique = Lexique(str(LEXIQUE_PATH))
+
+        config = CorrecteurV5Config(
+            activer_scoring=True,
+            seuil_remplacement=self._seuil,
+        )
+        self._correcteur = CorrecteurV5(lexique, config=config)
+        print(f"  P2G disponible: {self._correcteur.p2g_disponible}")
+
+    def corriger(self, phrase: str) -> str:
+        assert self._correcteur is not None
+        return self._correcteur.corriger(phrase).phrase_corrigee
+
+
+class AdaptateurLecturaV6(Adaptateur):
+    """Lectura V6 : Pipeline dual G2P/P2G zero-FP."""
+
+    nom = "Lec-V6"
+
+    def __init__(self) -> None:
+        self._correcteur = None
+
+    def initialiser(self) -> None:
+        from lectura_correcteur import CorrecteurV6, CorrecteurV6Config
+        from lectura_lexique import Lexique
+
+        lexique = Lexique(str(LEXIQUE_PATH))
+
+        config = CorrecteurV6Config()
+        self._correcteur = CorrecteurV6(lexique, config=config)
+        print(f"  P2G disponible: {self._correcteur.p2g_disponible}")
 
     def corriger(self, phrase: str) -> str:
         assert self._correcteur is not None
@@ -722,6 +795,9 @@ OUTILS_DISPONIBLES = {
     "lectura": AdaptateurLectura,
     "lectura+scoring": AdaptateurLecturaScoring,
     "lectura+azerty": AdaptateurLecturaScoringAzerty,
+    "v5": AdaptateurLecturaV5,
+    "v5+scoring": AdaptateurLecturaV5Scoring,
+    "v6": AdaptateurLecturaV6,
     "grammalecte": AdaptateurGrammalecte,
     "langtool": AdaptateurLanguageTool,
     "baseline": AdaptateurBaseline,

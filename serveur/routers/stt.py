@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import base64
 import logging
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field
 
 import numpy as np
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Singleton engine STT
+# Singleton engine STT (standard)
 _engine = None
 
 
@@ -35,6 +36,19 @@ def _get_engine():
         p2g_status = type(_engine.p2g).__name__ if _engine.p2g else "None"
         logger.info("STT engine charge (CTC=ONNX, P2G=%s)", p2g_status)
     return _engine
+
+
+# Singleton engine FormulaCTC (STT-Formules, vocabulaire semantique 87 tokens)
+_engine_formules = None
+
+
+def _get_engine_formules():
+    global _engine_formules
+    if _engine_formules is None:
+        from lectura_stt_formules import creer_engine
+        _engine_formules = creer_engine()
+        logger.info("STT-Formules engine charge (FormulaCTC ONNX)")
+    return _engine_formules
 
 
 def _decode_audio_bytes(audio_bytes: bytes) -> tuple[np.ndarray, int]:
@@ -87,11 +101,66 @@ class TranscribeResponse(BaseModel):
     mots: list[str] | None = Field(None, description="Mots orthographiques")
 
 
-@router.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe(req: TranscribeRequest):
+class TranscribeFormuleResponse(BaseModel):
+    """Reponse de transcription STT-Formules (vocabulaire semantique)."""
+    tokens: list[int] = Field(..., description="Token IDs semantiques")
+    names: list[str] = Field(..., description="Noms des tokens")
+    texte: str = Field(..., description="Noms joints (espace)")
+
+
+def _write_wav(samples: np.ndarray, sr: int, path: str) -> None:
+    """Ecrit un array float32 mono en fichier WAV PCM 16-bit."""
+    pcm = (samples * 32767).clip(-32768, 32767).astype(np.int16)
+    n_bytes = pcm.nbytes
+    with open(path, "wb") as f:
+        # RIFF header
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 36 + n_bytes))
+        f.write(b"WAVE")
+        # fmt chunk
+        f.write(b"fmt ")
+        f.write(struct.pack("<IHHIIHH", 16, 1, 1, sr, sr * 2, 2, 16))
+        # data chunk
+        f.write(b"data")
+        f.write(struct.pack("<I", n_bytes))
+        f.write(pcm.tobytes())
+
+
+def _transcribe_formules(audio: np.ndarray, sr: int) -> TranscribeFormuleResponse:
+    """Transcrit un audio via FormulaCTC et retourne la reponse formules."""
+    engine = _get_engine_formules()
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        wav_path = f.name
+    try:
+        _write_wav(audio, sr, wav_path)
+        result = engine.transcrire(wav_path)
+    finally:
+        Path(wav_path).unlink(missing_ok=True)
+
+    # Filtrer les tokens de controle pour le texte lisible
+    names_clean = [n for n in result["names"] if not n.startswith("<")]
+    return TranscribeFormuleResponse(
+        tokens=result["tokens"],
+        names=result["names"],
+        texte=" ".join(names_clean),
+    )
+
+
+@router.post("/transcribe", response_model=TranscribeResponse | TranscribeFormuleResponse)
+async def transcribe(
+    req: TranscribeRequest,
+    mode: str = Query("auto", description="Mode : auto, formule, texte, ipa, formules"),
+):
     """Transcrit un audio en texte via le pipeline STT (CTC + P2G).
 
     Accepte tout format audio encode en base64 (WAV, webm, mp3, ogg...).
+
+    Modes :
+        - auto : pipeline STT complet, formules courantes (defaut)
+        - formule : detection maximale (math, symboles, nombres sans garde)
+        - texte : texte brut (sigles uniquement)
+        - ipa : CTC seul (retourne uniquement les phones IPA)
+        - formules : FormulaCTC legacy (tokens semantiques)
     """
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
@@ -103,8 +172,26 @@ async def transcribe(req: TranscribeRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Modes legacy (inchanges)
+    if mode == "formules":
+        return _transcribe_formules(audio, sr)
+
     engine = _get_engine()
-    result = engine.transcrire(audio, sr=sr)
+
+    if mode == "ipa":
+        ipa = engine.ctc.transcrire(audio, sr=sr)
+        from lectura_stt._parse_ctc import parse_ctc_output
+        parsed = parse_ctc_output(ipa)
+        return TranscribeResponse(
+            ipa=ipa,
+            texte=None,
+            mots_ipa=parsed.mots_ipa,
+            mots=None,
+        )
+
+    # Modes CTC+P2G (auto/formule/texte)
+    stt_mode = mode if mode in ("auto", "formule", "texte") else "auto"
+    result = engine.transcrire(audio, sr=sr, stt_mode=stt_mode)
     return TranscribeResponse(
         ipa=result.ipa,
         texte=result.texte,
@@ -113,11 +200,21 @@ async def transcribe(req: TranscribeRequest):
     )
 
 
-@router.post("/transcribe-file", response_model=TranscribeResponse)
-async def transcribe_file(file: UploadFile = File(...)):
+@router.post("/transcribe-file", response_model=TranscribeResponse | TranscribeFormuleResponse)
+async def transcribe_file(
+    file: UploadFile = File(...),
+    mode: str = Query("auto", description="Mode : auto, formule, texte, ipa, formules"),
+):
     """Transcrit un fichier audio en texte via le pipeline STT.
 
     Accepte tout format audio (WAV, webm, mp3, ogg, flac...).
+
+    Modes :
+        - auto : pipeline STT complet, formules courantes (defaut)
+        - formule : detection maximale (math, symboles, nombres sans garde)
+        - texte : texte brut (sigles uniquement)
+        - ipa : CTC seul (retourne uniquement les phones IPA)
+        - formules : FormulaCTC legacy (tokens semantiques)
     """
     content = await file.read()
 
@@ -126,8 +223,27 @@ async def transcribe_file(file: UploadFile = File(...)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Modes legacy (inchanges)
+    if mode == "formules":
+        return _transcribe_formules(audio, sr)
+
     engine = _get_engine()
-    result = engine.transcrire(audio, sr=sr)
+
+    if mode == "ipa":
+        # CTC seul — pas de P2G
+        ipa = engine.ctc.transcrire(audio, sr=sr)
+        from lectura_stt._parse_ctc import parse_ctc_output
+        parsed = parse_ctc_output(ipa)
+        return TranscribeResponse(
+            ipa=ipa,
+            texte=None,
+            mots_ipa=parsed.mots_ipa,
+            mots=None,
+        )
+
+    # Modes CTC+P2G (auto/formule/texte)
+    stt_mode = mode if mode in ("auto", "formule", "texte") else "auto"
+    result = engine.transcrire(audio, sr=sr, stt_mode=stt_mode)
     return TranscribeResponse(
         ipa=result.ipa,
         texte=result.texte,

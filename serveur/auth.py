@@ -72,12 +72,31 @@ def _check_quota(identifier: str, tier: str) -> bool:
     return True
 
 
+# Chemins web exempts du rate limiting API (gere par nginx)
+_WEB_EXEMPT_PREFIXES = (
+    "/", "/mot/", "/entite/", "/categorie/", "/rimes/",
+    "/rechercher", "/sitemap", "/robots.txt", "/static/",
+)
+
+
+def _is_web_path(path: str) -> bool:
+    """Teste si un chemin est une page web (exempte du rate limiting API)."""
+    # Les routes API commencent par un prefixe de module (/lexique/, /g2p/, etc.)
+    if path in ("/", "/health", "/robots.txt"):
+        return True
+    if path.startswith(("/mot/", "/entite/", "/categorie/", "/rimes/",
+                        "/rechercher", "/sitemap", "/static/")):
+        return True
+    return False
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware de rate limiting base sur la cle API ou l'IP."""
 
     async def dispatch(self, request: Request, call_next):
-        # Pas de rate limit sur /health
-        if request.url.path == "/health":
+        # Pas de rate limit sur /health et les pages web
+        # (le rate limiting web est gere par nginx)
+        if _is_web_path(request.url.path):
             return await call_next(request)
 
         # Extraire la cle API du header Authorization

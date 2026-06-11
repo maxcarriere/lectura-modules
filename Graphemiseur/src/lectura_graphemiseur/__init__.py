@@ -1,6 +1,11 @@
-"""Lectura P2G — Modele unifie P2G+POS+Morpho pour le francais (IPA -> orthographe).
+"""Lectura P2G — Modele unifie P2G+POS+Morpho V7 pour le francais (IPA -> orthographe).
 
-Architecture : BiLSTM char-level + word feedback multi-tete (2.56M params, ONNX INT8 = 2.6 Mo)
+Architecture : BiLSTM char-level + word feedback multi-tete V7
+  avec phone_lex_features (28d) + lex_select (3.2M params, ONNX INT8 = 4.4 Mo)
+
+Modele core : raw → lex_select → post-traitement (coherence morpho + accents)
+  Les formules (nombres, sigles) et noms propres sont dans lectura-p2g
+  (pipeline couche 2).
 
 Copyright (C) 2025 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
@@ -27,10 +32,13 @@ Exemple avec backend local::
     print(result["ortho"])  # ['le', 'chat', 'est', 'bon']
 """
 
+import logging
 import os
 from pathlib import Path
 
-__version__ = "3.1.0"
+__version__ = "4.3.3"
+
+logger = logging.getLogger(__name__)
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
@@ -59,7 +67,10 @@ def _resoudre_modeles_dir(models_dir: str | Path | None = None) -> Path | None:
     candidats.append(_MODELES_DIR)
 
     for d in candidats:
-        if (d / "unifie_p2g_v3_int8.onnx").exists():
+        if (d / "unifie_p2g_v7_int8.onnx").exists() or \
+           (d / "unifie_p2g_v6_int8.onnx").exists() or \
+           (d / "unifie_p2g_v5_int8.onnx").exists() or \
+           (d / "unifie_p2g_v3_int8.onnx").exists():
             return d
     return None
 
@@ -95,6 +106,77 @@ def _resoudre_lexique(
         return result
     except (ImportError, Exception):
         pass
+    return None
+
+
+def _resoudre_phone_lexicon(models_dir: Path | None):
+    """Cascade de resolution du phone_lexicon pour V6.
+
+    1. phone_lexicon.db dans le dossier modeles
+    2. lexique_correcteur.db dans le dossier modeles
+    3. lectura_correcteur data dir (si installe)
+    4. None (degradation gracieuse, features = zeros)
+    """
+    from lectura_graphemiseur._phone_lexicon import PhoneLexicon
+
+    # 1. DB dediee dans le dossier modeles
+    if models_dir is not None:
+        db = models_dir / "phone_lexicon.db"
+        if db.exists():
+            try:
+                return PhoneLexicon(db)
+            except Exception as e:
+                logger.warning("phone_lexicon.db present mais erreur: %s", e)
+
+    # 2. DB correcteur dans le dossier modeles
+    if models_dir is not None:
+        db = models_dir / "lexique_correcteur.db"
+        if db.exists():
+            try:
+                return PhoneLexicon(db)
+            except Exception as e:
+                logger.warning("lexique_correcteur.db present mais erreur: %s", e)
+
+    # 3. DB correcteur installee (lectura_correcteur)
+    try:
+        from lectura_correcteur import _DATA_DIR
+        db = Path(_DATA_DIR) / "lexique_correcteur.db"
+        if db.exists():
+            return PhoneLexicon(db)
+    except (ImportError, Exception):
+        pass
+
+    # 4. Fallback : phone_lexicon.db embarque dans le package
+    db = _MODELES_DIR / "phone_lexicon.db"
+    if db.exists():
+        try:
+            return PhoneLexicon(db)
+        except Exception as e:
+            logger.warning("phone_lexicon.db embarque mais erreur: %s", e)
+
+    logger.info("Aucun phone_lexicon trouve — V6 fonctionnera sans lex_features")
+    return None
+
+
+def _resoudre_correcteur(models_dir: Path | None) -> Path | None:
+    """Cascade de resolution du correcteur P2G neuronal.
+
+    Cherche correcteur_p2g_char_encoder_int8.onnx dans :
+    1. Dossier modeles resolu (models_dir)
+    2. Dossier utilisateur (~/.lectura/models/p2g/)
+    3. Site-packages (modeles/ du package)
+
+    Returns None si le correcteur n'est pas installe (degradation gracieuse).
+    """
+    candidats: list[Path] = []
+    if models_dir is not None:
+        candidats.append(models_dir)
+    candidats.append(Path.home() / ".lectura" / "models" / "p2g")
+    candidats.append(_MODELES_DIR)
+
+    for d in candidats:
+        if (d / "correcteur_p2g_char_encoder_int8.onnx").exists():
+            return d
     return None
 
 
@@ -136,33 +218,77 @@ def creer_engine(
         return ApiInferenceEngine(api_url=api_url, api_key=api_key)
 
     # Mode local — essayer les backends dans l'ordre de preference
-    model_onnx = resolved_dir / "unifie_p2g_v3_int8.onnx" if resolved_dir else _MODELES_DIR / "unifie_p2g_v3_int8.onnx"
-    model_vocab = resolved_dir / "unifie_p2g_v3_vocab.json" if resolved_dir else _MODELES_DIR / "unifie_p2g_v3_vocab.json"
+    # V7 (self-attention) > V6 (phone_lex_features) > V5 > V4 > V3
+    # V7 : lex_select desactive (char-level P2G meilleur sans, cf metrics)
+    base = resolved_dir or _MODELES_DIR
+    force_version = os.environ.get("LECTURA_P2G_VERSION", "").lower()
+    if force_version == "v6":
+        model_onnx = base / "unifie_p2g_v6_int8.onnx"
+        model_vocab = base / "unifie_p2g_v6_vocab.json"
+    elif (base / "unifie_p2g_v7_int8.onnx").exists():
+        model_onnx = base / "unifie_p2g_v7_int8.onnx"
+        model_vocab = base / "unifie_p2g_v7_vocab.json"
+    elif (base / "unifie_p2g_v6_int8.onnx").exists():
+        model_onnx = base / "unifie_p2g_v6_int8.onnx"
+        model_vocab = base / "unifie_p2g_v6_vocab.json"
+    elif (base / "unifie_p2g_v5_int8.onnx").exists():
+        model_onnx = base / "unifie_p2g_v5_int8.onnx"
+        model_vocab = base / "unifie_p2g_v5_vocab.json"
+    elif (base / "unifie_p2g_v4_int8.onnx").exists():
+        model_onnx = base / "unifie_p2g_v4_int8.onnx"
+        model_vocab = base / "unifie_p2g_v4_vocab.json"
+    else:
+        model_onnx = base / "unifie_p2g_v3_int8.onnx"
+        model_vocab = base / "unifie_p2g_v3_vocab.json"
     resolved_lexicon = _resoudre_lexique(lexicon_path, resolved_dir)
+
+    # Charger le correcteur P2G si disponible
+    correcteur = None
+    correcteur_dir = _resoudre_correcteur(resolved_dir)
+    if correcteur_dir:
+        try:
+            from lectura_graphemiseur.inference_correcteur import CorrecteurP2GInference
+            correcteur = CorrecteurP2GInference(correcteur_dir)
+        except (ImportError, FileNotFoundError, Exception) as e:
+            logger.info("Correcteur P2G non charge: %s", e)
+
+    engine = None
 
     if mode in ("auto", "local", "onnx"):
         try:
             from lectura_graphemiseur.inference_onnx_v2 import OnnxInferenceEngineV2
+            # Resoudre phone_lexicon pour V6/V7 (phone_lex_features 28d)
+            phone_lex = None
+            if "v6" in str(model_onnx) or "v7" in str(model_onnx):
+                phone_lex = _resoudre_phone_lexicon(resolved_dir)
             if isinstance(resolved_lexicon, dict):
-                return OnnxInferenceEngineV2(
+                engine = OnnxInferenceEngineV2(
                     str(model_onnx), str(model_vocab),
                     lexicon=resolved_lexicon,
+                    phone_lexicon=phone_lex,
                 )
-            return OnnxInferenceEngineV2(
-                str(model_onnx), str(model_vocab),
-                lexicon_path=str(resolved_lexicon) if resolved_lexicon else None,
-            )
+            else:
+                engine = OnnxInferenceEngineV2(
+                    str(model_onnx), str(model_vocab),
+                    lexicon_path=str(resolved_lexicon) if resolved_lexicon else None,
+                    phone_lexicon=phone_lex,
+                )
+            # V7 : lex_select actif avec seuil conservateur (0.95)
+            # Le benchmark montre +444 mots nets sur le dev set
+            if "v7" in str(model_onnx):
+                engine.apply_lex_select = True
+                logger.info("V7: lex_select enabled (threshold=%.2f)", engine.LEX_SELECT_THRESHOLD)
         except (ImportError, FileNotFoundError, Exception):
             if mode == "onnx":
                 raise
 
-    if mode in ("auto", "local", "numpy"):
+    if engine is None and mode in ("auto", "local", "numpy"):
         try:
             from lectura_graphemiseur.inference_numpy import NumpyInferenceEngine
             weights_dir = Path(__file__).parent / "modeles_numpy"
             if not weights_dir.exists():
                 weights_dir = resolved_dir if resolved_dir else _MODELES_DIR
-            return NumpyInferenceEngine(
+            engine = NumpyInferenceEngine(
                 str(weights_dir), str(model_vocab),
                 lexicon_path=str(resolved_lexicon) if isinstance(resolved_lexicon, Path) else None,
                 lexicon=resolved_lexicon if isinstance(resolved_lexicon, dict) else None,
@@ -171,13 +297,13 @@ def creer_engine(
             if mode == "numpy":
                 raise
 
-    if mode in ("auto", "local", "pure"):
+    if engine is None and mode in ("auto", "local", "pure"):
         try:
             from lectura_graphemiseur.inference_pure import PureInferenceEngine
             weights_dir = Path(__file__).parent / "modeles_numpy"
             if not weights_dir.exists():
                 weights_dir = resolved_dir if resolved_dir else _MODELES_DIR
-            return PureInferenceEngine(
+            engine = PureInferenceEngine(
                 str(weights_dir), str(model_vocab),
                 lexicon_path=str(resolved_lexicon) if isinstance(resolved_lexicon, Path) else None,
                 lexicon=resolved_lexicon if isinstance(resolved_lexicon, dict) else None,
@@ -186,12 +312,17 @@ def creer_engine(
             if mode == "pure":
                 raise
 
-    raise RuntimeError(
-        f"Aucun backend d'inference disponible (mode={mode!r}). "
-        "Verifiez que les modeles sont installes ou utilisez mode='api'."
-    )
+    if engine is None:
+        raise RuntimeError(
+            f"Aucun backend d'inference disponible (mode={mode!r}). "
+            "Verifiez que les modeles sont installes ou utilisez mode='api'."
+        )
+
+    # Attacher le correcteur P2G a l'engine (optionnel)
+    engine.correcteur = correcteur
+    return engine
 
 
 # API publique
 from lectura_graphemiseur.tokeniseur import tokeniser_ipa, ipa_phrase_vers_chars
-from lectura_graphemiseur.posttraitement import corriger_p2g, corriger_phrase_v2
+from lectura_graphemiseur.posttraitement import corriger_p2g, corriger_phrase_v2, corriger_phrase_v3

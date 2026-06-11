@@ -1,0 +1,29 @@
+{% if definitions %}
+<div class="section">
+  <h2 class="section-title">Définitions</h2>
+  <ol class="definition-list">
+    {% for d in definitions %}
+    <li class="definition-item">
+      <span class="def-num">{{ loop.index }}.</span>
+      {% if d.get('registre') or d.get('theme') or d.get('domaine') %}
+      <span class="def-tags">
+        {% if d.get('registre') %}<span class="def-tag def-tag-registre">{{ d.registre }}</span>{% endif %}
+        {% if d.get('theme') or d.get('domaine') %}<span class="def-tag def-tag-theme">{{ d.theme or d.domaine }}</span>{% endif %}
+      </span>
+      {% endif %}
+      <span class="def-text">{{ d.definition or d.gloss or d.get('label', '') }}</span>
+      {% set exemples = d.get('exemples', []) %}
+      {% if exemples %}
+        {% if exemples is string %}
+        <div class="def-example">{{ exemples }}</div>
+        {% else %}
+          {% for ex in exemples[:3] %}
+          <div class="def-example">{{ ex }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</div>
+{% endif %}

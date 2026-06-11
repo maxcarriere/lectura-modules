@@ -11,15 +11,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from lectura_formules.reconnaissance import (
     reconnaitre_ipa,
+    reconnaitre_ipa_stt,
     _tokenize_ipa,
+    _tokenize_ipa_stt,
     reconnaitre_maths_ipa,
     reconnaitre_maths_ipa_stt,
     detect_formula_spans,
     detect_formula_spans_stt,
+    detect_number_spans,
+    detect_formule_spans_stt,
     _tokenize_ipa_math,
     _is_valid_math_sequence,
     _reconstruct_maths,
     _is_math_token,
+    _is_formule_token_permissive,
 )
 from lectura_formules.lecture_formules import (
     lire_nombre,
@@ -28,6 +33,7 @@ from lectura_formules.lecture_formules import (
     lire_monnaie,
     lire_pourcentage,
     lire_ordinal,
+    lire_fraction,
     lire_sigle,
     lire_maths,
 )
@@ -653,3 +659,335 @@ class TestMathsSpansSTT:
         spans = detect_formula_spans_stt(words, min_span=3, max_span=20)
         assert len(spans) == 1
         assert spans[0][2].display_num == "8+2=10"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# detect_number_spans — parametre mode
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestDetectNumberSpansMode:
+    """Tests du parametre mode de detect_number_spans."""
+
+    # ── mode "num" : comportement original (retro-compatible) ──
+
+    def test_mode_num_sept_isole(self):
+        """mode=num : 'sept' isole est converti en 7."""
+        spans = detect_number_spans(["sɛt"], min_span=1, mode="num")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "7"
+
+    def test_mode_num_sept_cent(self):
+        """mode=num : 'sept cent' est converti en 700."""
+        spans = detect_number_spans(["sɛt", "sɑ̃"], min_span=1, mode="num")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "700"
+
+    # ── mode "texte" : pas de conversion ──
+
+    def test_mode_texte_rien(self):
+        """mode=texte : aucune detection, retourne []."""
+        spans = detect_number_spans(["sɛt", "sɑ̃"], min_span=1, mode="texte")
+        assert spans == []
+
+    # ── mode "auto" : filtre les homophones ambigus isoles ──
+
+    def test_auto_sept_isole_rejete(self):
+        """mode=auto : 'sept' isole reste texte (homophone cette)."""
+        spans = detect_number_spans(["sɛt"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_cent_isole_rejete(self):
+        """mode=auto : 'cent' isole reste texte (homophone sang/sent)."""
+        spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_vingt_isole_rejete(self):
+        """mode=auto : 'vingt' isole reste texte (homophone vain)."""
+        spans = detect_number_spans(["vɛ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_sept_cent_accepte(self):
+        """mode=auto : 'sept cent' (span >= 2) est converti en 700."""
+        spans = detect_number_spans(["sɛt", "sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "700"
+
+    def test_auto_vingt_trois_accepte(self):
+        """mode=auto : 'vingt-trois' (span 2) est converti en 23."""
+        spans = detect_number_spans(["vɛ̃t", "tʁwa"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "23"
+
+    def test_auto_trois_mille_accepte(self):
+        """mode=auto : 'trois mille' (span 2) est converti en 3000."""
+        spans = detect_number_spans(["tʁwa", "mil"], min_span=1, mode="auto")
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "3000"
+
+    def test_auto_non_ambigu_isole_rejete(self):
+        """mode=auto : 'trois' isole (1 seul token) est rejete."""
+        spans = detect_number_spans(["tʁwa"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+    def test_auto_cette_maison_pas_nombre(self):
+        """mode=auto : 'cette maison' ne doit pas etre detecte comme nombre."""
+        # 'sɛt' est un token numerique mais 'mɛzɔ̃' ne l'est pas
+        # → pas de span numerique possible
+        spans = detect_number_spans(["sɛt", "mɛzɔ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tolerance CTC : variantes automatiques
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSTTVariantTolerance:
+    """Tests de tolerance aux variantes CTC (nasales, voisement, glides)."""
+
+    def test_un_million_nasal_confusion(self):
+        """ɛ̃ → ɑ̃ + missing j glide."""
+        r = reconnaitre_ipa_stt("ɑ̃ milɔ̃")
+        assert r is not None
+        assert r.display_num == "1'000'000"
+
+    def test_quarante_deux_exact(self):
+        r = reconnaitre_ipa_stt("kaʁɑ̃t dø")
+        assert r is not None
+        assert r.display_num == "42"
+
+    def test_voicing_k_g(self):
+        """k → ɡ dans kaʁ → ɡaʁ."""
+        r = reconnaitre_ipa_stt("ɡaʁɑ̃t dø")
+        assert r is not None
+        assert r.display_num == "42"
+
+    def test_auto_mode_min_2_words(self):
+        """mode=auto rejette 1 mot ambigu, accepte 2+."""
+        spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+        spans = detect_number_spans(["sɑ̃", "dø"], min_span=1, mode="auto")
+        assert len(spans) == 1
+
+    def test_million_missing_glide(self):
+        r = reconnaitre_ipa_stt("dø milɔ̃")
+        assert r is not None
+        assert r.display_num == "2'000'000"
+
+    def test_no_false_positive_single_word(self):
+        """Un mot isole ne doit pas etre converti abusivement."""
+        # "sɑ̃" seul ne doit pas devenir "100"
+        spans = detect_number_spans(["sɑ̃"], min_span=1, mode="auto")
+        assert len(spans) == 0
+
+
+class TestFormuleSpansSTT:
+    """Tests pour detect_formule_spans_stt (detecteur unifie tout type)."""
+
+    def test_heure_detection(self):
+        """Heure : quinze heures cinquante-sept → 15h57."""
+        spans = detect_formule_spans_stt(["kɛ̃z", "œʁ", "sɛ̃kɑ̃t", "sɛt"])
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "15h57"
+
+    def test_date_detection(self):
+        """Date : treize decembre 1900 (5 mots)."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃"]
+        )
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "13/12/1900"
+
+    def test_date_detection_long(self):
+        """Date longue : treize decembre 1991 — 2 spans (date + nombre)."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃", "katʁ", "vɛ̃", "ɔ̃z"]
+        )
+        # Le detecteur trouve au minimum la date partielle
+        assert len(spans) >= 1
+        assert "13/12" in spans[0][2].display_num
+
+    def test_fraction_trois_cinquiemes(self):
+        """Fraction : trois cinquieme → 3/5."""
+        r = reconnaitre_ipa_stt("tʁwa sɛ̃kjɛm", multi_word=True)
+        assert r is not None
+        assert r.display_num == "3/5"
+
+    def test_fraction_via_spans(self):
+        """Fraction detectee via spans : deux mots → fraction."""
+        spans = detect_formule_spans_stt(["tʁwa", "sɛ̃kjɛm"])
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "3/5"
+
+    def test_math_deux_plus_trois(self):
+        """Math complete : deux plus trois egal cinq → 2+3=5."""
+        # "ply" au lieu de "plys" (CTC drop final s)
+        spans = detect_formula_spans_stt(["dø", "ply", "tʁwa", "eɡal", "sɛ̃k"])
+        assert len(spans) == 1
+        assert spans[0][2].display_num == "2+3=5"
+
+    def test_ordinal_single_word_preserved(self):
+        """Ordinal simple (1 mot) reste ordinal, pas fraction."""
+        # "trentieme" = 1 seul mot IPA → ordinal 30e (multi_word=False)
+        r = reconnaitre_ipa_stt("tʁɑ̃tjɛm")
+        assert r is not None
+        assert r.display_num == "30e"
+
+    def test_ordinal_not_fraction_when_single(self):
+        """Ordinal seul ne doit pas devenir fraction."""
+        # Sans multi_word, un ordinal reste ordinal
+        r = reconnaitre_ipa_stt("sɛ̃kjɛm")
+        assert r is not None
+        assert r.display_num == "5e"
+
+    def test_formule_spans_rejects_ambiguous_sans(self):
+        """sɑ̃ isole (cent/sans) ne doit PAS etre converti en nombre."""
+        spans = detect_formule_spans_stt(["sɑ̃"])
+        nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
+        assert len(nombre_spans) == 0
+
+    def test_formule_spans_rejects_ambiguous_vin(self):
+        """vɛ̃ isole (vingt/vin) ne doit PAS etre converti."""
+        spans = detect_formule_spans_stt(["vɛ̃"])
+        nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
+        assert len(nombre_spans) == 0
+
+    def test_formule_spans_rejects_any_single_number(self):
+        """Tout nombre isole (1 mot) est rejete, meme non ambigu."""
+        for word in ["tʁwa", "tʁɑ̃t", "zeʁo", "sis", "sɛ̃k"]:
+            spans = detect_formule_spans_stt([word])
+            nombre_spans = [s for s in spans if (s[2].display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()]
+            assert len(nombre_spans) == 0, f"{word} isole ne doit pas etre converti"
+
+    def test_formule_spans_keeps_multiword_cent_deux(self):
+        """sɑ̃ + dø (cent deux) multi-mot est accepte."""
+        spans = detect_formule_spans_stt(["sɑ̃", "dø"])
+        assert any(s[2].display_num == "102" for s in spans)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Mode permissif (pre-filtre table math)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPermissiveMode:
+    """Tests du mode permissif de detect_formule_spans_stt."""
+
+    def test_permissive_prefilter_accepts_math_symbols(self):
+        """Le pre-filtre permissif accepte les symboles math (ply, eɡal)."""
+        assert _is_formule_token_permissive("ply")
+        assert _is_formule_token_permissive("eɡal")
+
+    def test_permissive_math_span(self):
+        """Mode permissif : deux plus trois → span math detecte."""
+        spans = detect_formule_spans_stt(
+            ["dø", "ply", "tʁwa"], permissive=True,
+        )
+        assert len(spans) >= 1
+
+    def test_permissive_preserves_non_formule(self):
+        """Mode permissif ne casse pas les mots normaux."""
+        spans = detect_formule_spans_stt(
+            ["bɔ̃ʒuʁ", "dø", "fwa"], permissive=True,
+        )
+        # "bonjour" ne doit PAS etre dans un span
+        for start, end, _ in spans:
+            assert start != 0
+
+    def test_permissive_full_equation(self):
+        """Mode permissif : deux plus trois egal cinq → 2+3=5."""
+        spans = detect_formule_spans_stt(
+            ["dø", "ply", "tʁwa", "eɡal", "sɛ̃k"], permissive=True,
+        )
+        assert len(spans) >= 1
+        display_nums = [s[2].display_num for s in spans]
+        assert any("2+3=5" == d for d in display_nums) or any("2" in d for d in display_nums)
+
+    def test_permissive_letters_accepted(self):
+        """Le pre-filtre permissif accepte les lettres math (a, be, se)."""
+        assert _is_formule_token_permissive("a")
+        assert _is_formule_token_permissive("be")
+        assert _is_formule_token_permissive("se")
+
+    def test_permissive_pythagore_span(self):
+        """Mode permissif : a²+b²=c² detecte comme formule math."""
+        words = ["a", "o", "kaʁe", "ply", "be", "o", "kaʁe", "eɡal", "se", "o", "kaʁe"]
+        spans = detect_formule_spans_stt(words, permissive=True)
+        assert len(spans) >= 1
+
+    def test_non_permissive_rejects_math_symbols(self):
+        """Le mode non-permissif rejette les symboles math isoles."""
+        spans = detect_formule_spans_stt(
+            ["dø", "ply", "tʁwa"], permissive=False,
+        )
+        # "ply" ne passe pas le pre-filtre standard → pas de span complet
+        full_span = [s for s in spans if s[0] == 0 and s[1] == 3]
+        assert len(full_span) == 0
+
+
+class TestDateLongueFusion:
+    """Tests de la fusion date + nombre adjacent pour annees longues."""
+
+    def test_date_longue_1991(self):
+        """Date longue : treize decembre 1991 detecte en un seul span."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃", "katʁ", "vɛ̃", "ɔ̃z"]
+        )
+        display_nums = [s[2].display_num for s in spans]
+        assert any("13/12/1991" == d for d in display_nums)
+
+    def test_date_longue_permissive_vɛ̃t(self):
+        """Date longue avec vɛ̃t (CTC liaison) en mode permissif."""
+        spans = detect_formule_spans_stt(
+            ["tʁɛz", "desɑ̃bʁ", "mil", "nœf", "sɑ̃", "katʁ", "vɛ̃t", "ɔ̃z"],
+            permissive=True,
+        )
+        display_nums = [s[2].display_num for s in spans]
+        assert any("13/12/1991" == d for d in display_nums)
+
+
+class TestTelephoneFusion:
+    """Tests de la fusion telephone (nombres adjacents → numero de telephone)."""
+
+    def test_telephone_fusion_06(self):
+        """Nombres adjacents fusionnes en telephone 06.65.53.03.30."""
+        words = ["zeʁo", "sis", "swasɑ̃t", "sɛ̃k", "sɛ̃kɑ̃t", "tʁwa",
+                 "zeʁo", "tʁwa", "tʁɑ̃t"]
+        spans = detect_formule_spans_stt(words)
+        display_nums = [s[2].display_num for s in spans]
+        assert any("06.65.53.03.30" in d for d in display_nums)
+
+    def test_telephone_fusion_with_90(self):
+        """Telephone avec quatre-vingt-dix fusionne correctement."""
+        words = ["zeʁo", "sɛ̃k", "kaʁɑ̃tsis", "katʁvɛ̃dis", "vɛ̃", "tʁɛz"]
+        spans = detect_formule_spans_stt(words)
+        display_nums = [s[2].display_num for s in spans]
+        assert any("05.46.90.20.13" in d for d in display_nums)
+
+
+class TestBacktrackingTokenizer:
+    """Tests du backtracking dans _tokenize_ipa_stt (Piste A)."""
+
+    def test_tokenize_stt_backtrack_90(self):
+        """_tokenize_ipa_stt doit tokeniser katʁvɛ̃dis via backtracking."""
+        tokens = _tokenize_ipa_stt("katʁvɛ̃dis")
+        assert tokens is not None
+        vals = [t.value for t in tokens if isinstance(t.value, int)]
+        assert vals == [4, 20, 10]
+
+    def test_formule_spans_detects_90_multi(self):
+        """katʁvɛ̃dis dans un contexte multi-mot doit etre tokenisable."""
+        # 90 seul (1 mot) est filtre par le garde mots isoles,
+        # mais la reconnaissance STT individuelle fonctionne.
+        r = reconnaitre_ipa_stt("katʁvɛ̃dis")
+        assert r is not None
+        assert r.display_num == "90"
+
+    def test_tokenize_stt_backtrack_91(self):
+        """_tokenize_ipa_stt doit tokeniser katʁvɛ̃dizœ̃ (91)."""
+        tokens = _tokenize_ipa_stt("katʁvɛ̃dizœ̃")
+        assert tokens is not None
+        vals = [t.value for t in tokens if isinstance(t.value, int)]
+        # 4, 20, 10, 1 → _reconstruct_number → 91
+        assert vals == [4, 20, 10, 1]

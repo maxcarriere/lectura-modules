@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tts-monospeaker"
-version = "1.4.0"
+version = "1.5.0"
 description = "Synthese vocale neuronale monospeaker francais — FastPitch-Lite + HiFi-GAN (ONNX)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,8 @@ dependencies = []
 [project.optional-dependencies]
 onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
 g2p = ["lectura-g2p>=4.0"]
-all = ["lectura-tts-monospeaker[onnx,g2p]"]
+vc = ["lectura-vc-zeroshot>=1.1"]
+all = ["lectura-tts-monospeaker[onnx,g2p,vc]"]
 
 [project.urls]
 Homepage = "https://www.lec-tu-ra.com/solutions/modules/tts/"

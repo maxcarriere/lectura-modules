@@ -49,9 +49,16 @@ def _normalize_basic_punctuation(text: str) -> str:
     # Ponctuation forte : traiter par groupes
     def _repl_strong(match: re.Match) -> str:
         grp = match.group(1)
-        # Factorielle : ne pas ajouter d'espace autour de ! si précédé d'alphanum
-        if grp == "!" and match.start() > 0 and text[match.start() - 1].isalnum():
-            return "!"
+        # Factorielle : garder ! collé seulement après un chiffre (5!)
+        # ou une lettre isolée/variable (n!, x!) — pas après un mot (Bonjour!)
+        if grp == "!":
+            pos = match.start()
+            if pos > 0:
+                prev = text[pos - 1]
+                if prev.isdigit():
+                    return "!"
+                if prev.isalpha() and (pos < 2 or not text[pos - 2].isalpha()):
+                    return "!"
         return f" {grp} "
 
     text = _RE_STRONG_PUNCT_GROUP.sub(_repl_strong, text)

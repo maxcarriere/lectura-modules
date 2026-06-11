@@ -60,7 +60,7 @@ Host lectura-vps
 
 /home/lectura/.lectura/models/   # Modeles ONNX
 ├── g2p/                   # unifie_v2_int8.onnx, vocab, etc.
-├── p2g/                   # unifie_p2g_v3_int8.onnx, vocab
+├── p2g/                   # unifie_p2g_v7_int8.onnx, v6, v3, vocab, phone_lexicon.db
 ├── tts_mono/              # fastpitch + hifigan (6 fichiers ONNX)
 └── tts_diphone/           # diphones.dpk.gz, diphone_statistics.pkl
 ```
@@ -122,21 +122,30 @@ curl http://localhost:8000/health
 | `/correcteur/corriger` | POST | Correction orthographique et grammaticale |
 | `/tts/synthesize` | POST | Synthese vocale monospeaker (audio base64) |
 | `/tts-diphone/synthesize` | POST | Synthese vocale diphone WORLD (audio base64) |
+| `/vc/convert` | POST | Conversion vocale (multipart/form-data) |
+| `/vc/speakers` | GET | Liste des speakers RVC |
+| `/vc/presets` | GET | Liste des presets zero-shot |
 
 ## Packages installes sur le VPS
 
 ```
 lectura-aligneur          4.0.0
 lectura-correcteur        1.0.1
-lectura-formules          3.0.1
+lectura-ctc               2.0.0
+lectura-formules          3.5.0
 lectura-g2p               4.1.0
-lectura-phonemiseur       4.0.0
-lectura-lexique           1.3.0
-lectura-graphemiseur      4.0.0
+lectura-graphemiseur      4.3.2
+lectura-lexique           1.4.0
+lectura-p2g               4.5.0
+lectura-phonemiseur       4.1.2
+lectura-stt               3.0.2
 lectura-tokeniseur        2.2.1
-lectura-tts-monospeaker   1.4.0
-lectura-tts-multispeaker  1.2.0
-lectura-tts-diphone       1.4.0
+lectura-tts-monospeaker   1.5.0
+lectura-tts-multispeaker  1.3.1
+lectura-tts-diphone       1.7.0
+lectura-vc                2.1.1
+lectura-vc-zeroshot       1.2.0
+lectura-vc-locuteurs      1.0.0
 ```
 
 ---

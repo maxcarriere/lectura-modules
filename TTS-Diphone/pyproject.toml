@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tts-diphone"
-version = "1.4.0"
+version = "1.7.0"
 description = "Synthese vocale par concatenation de diphones WORLD — francais"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,8 @@ dependencies = []
 [project.optional-dependencies]
 local = ["pyworld>=0.3.4", "numpy>=1.24", "scipy>=1.10", "soundfile>=0.12"]
 g2p = ["lectura-g2p>=4.0"]
-all = ["lectura-tts-diphone[local,g2p]"]
+vc = ["lectura-vc-zeroshot>=1.1"]
+all = ["lectura-tts-diphone[local,g2p,vc]"]
 
 [project.urls]
 Homepage = "https://www.lec-tu-ra.com/solutions/modules/tts-diphone/"
@@ -35,4 +36,4 @@ Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/TTS-Dipho
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_tts_diphone = ["data/*.json", "modeles/*.dpk.gz", "modeles/*.enc"]
+lectura_tts_diphone = ["data/*.json", "*.json", "modeles/*.dpk.gz", "modeles/*.enc"]

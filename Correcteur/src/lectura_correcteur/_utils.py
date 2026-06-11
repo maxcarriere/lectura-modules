@@ -6,7 +6,9 @@ import re
 
 PUNCT_RE = re.compile(r'^[,;:!?.\u2026\u00ab\u00bb"()\[\]{}\u2013\u2014/]+$')
 
-_NO_SPACE_BEFORE = frozenset(",.;:!?)\u00bb\u2026")
+_NO_SPACE_BEFORE = frozenset(",.;:)\u00bb\u2026")
+# French typography: space before ? and !
+_FRENCH_SPACE_BEFORE = frozenset("!?")
 _NO_SPACE_AFTER = frozenset("(\u00ab")
 
 
@@ -54,6 +56,10 @@ def normaliser_info(entry: dict) -> dict:
         v = result.get(key)
         if v and isinstance(v, str):
             result[key] = normaliser_morpho(v)
+    # Sanitize genre: seules valeurs valides sont "m" et "f"
+    g = result.get("genre")
+    if g and g not in ("m", "f"):
+        result["genre"] = ""
     return result
 
 
@@ -74,6 +80,10 @@ class LexiqueNormalise:
         raw = self._lexique.info(mot)
         return [normaliser_info(e) for e in raw]
 
+    def formes_de(self, *args, **kwargs):
+        raw = self._lexique.formes_de(*args, **kwargs)
+        return [normaliser_info(e) for e in raw]
+
 
 def reconstruire_phrase(tokens: list[str]) -> str:
     """Reconstruit une phrase a partir des tokens en gerant les espaces."""
@@ -86,6 +96,10 @@ def reconstruire_phrase(tokens: list[str]) -> str:
         prev = tokens[i - 1]
 
         if tok and tok[0] in _NO_SPACE_BEFORE:
+            parts.append(tok)
+        elif tok and tok[0] in _FRENCH_SPACE_BEFORE:
+            # French typography: space before ? ! : ; »
+            parts.append(" ")
             parts.append(tok)
         elif prev and prev[-1] in _NO_SPACE_AFTER:
             parts.append(tok)

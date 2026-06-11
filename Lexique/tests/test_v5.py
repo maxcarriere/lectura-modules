@@ -36,8 +36,7 @@ def db_v5_path():
             freq_frwac REAL,
             freq_composite REAL,
             source TEXT,
-            orthocode TEXT DEFAULT '',
-            consonne_latente TEXT DEFAULT ''
+            orthocode TEXT DEFAULT ''
         );
         CREATE TABLE lemmes (
             id INTEGER PRIMARY KEY,

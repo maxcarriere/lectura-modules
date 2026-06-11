@@ -1,0 +1,12 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}Page introuvable — Lexique Lectura{% endblock %}
+{% block meta_description %}La page demandée n'existe pas.{% endblock %}
+
+{% block content %}
+<div class="page-404">
+  <h1>404</h1>
+  <p>La page demandée n'existe pas.</p>
+  {% include "lexique/partials/_search_bar.html" %}
+</div>
+{% endblock %}

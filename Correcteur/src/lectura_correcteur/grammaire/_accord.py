@@ -67,6 +67,8 @@ def verifier_accords(
     morpho: dict[str, list[str]],
     lexique,
     originaux: list[str] | None = None,
+    *,
+    pm_guidance=None,
 ) -> tuple[list[str], list[Correction]]:
     """Applique les regles d'accord sur la phrase.
 
@@ -81,12 +83,19 @@ def verifier_accords(
     if not mots:
         return mots, []
 
+    # Positions deja corrigees par le module PM
+    _pm_handled: set[int] = set()
+    if pm_guidance:
+        _pm_handled = {g.index for g in pm_guidance}
+
     origs = originaux if originaux else mots
     result = list(mots)
     corrections: list[Correction] = []
     n = len(result)
 
     for i in range(n):
+        if i in _pm_handled:
+            continue
         pos = pos_tags[i] if i < len(pos_tags) else ""
         curr = result[i]
         curr_low = curr.lower()
@@ -118,6 +127,78 @@ def verifier_accords(
                             type_correction=TypeCorrection.GRAMMAIRE,
                             regle="accord.genre_det",
                             explication="'ce' -> 'cette' (NOM feminin)",
+                        ))
+
+        # Regle 11d : Possessif + NOM → accord genre
+        # "son mère" → "sa mère", "sa père" → "son père"
+        # + euphonie : "sa école" → "son école", "ma amie" → "mon amie"
+        _POSS_MASC = {"son": "sa", "mon": "ma", "ton": "ta"}
+        _POSS_FEM = {"sa": "son", "ma": "mon", "ta": "ton"}
+        if curr_low in _POSS_MASC or curr_low in _POSS_FEM:
+            if i + 1 < n and lexique is not None:
+                # Find the NOM (direct or through intercalated ADJ)
+                _nom_idx_r11d = None
+                _next_pos_r11d = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+                if _next_pos_r11d == "NOM":
+                    _nom_idx_r11d = i + 1
+                elif _next_pos_r11d in ("ADJ", "ADJ:pos") and i + 2 < n:
+                    _next2_pos_r11d = (
+                        pos_tags[i + 2] if i + 2 < len(pos_tags) else ""
+                    )
+                    if _next2_pos_r11d == "NOM":
+                        _nom_idx_r11d = i + 2
+                # Use immediate next for euphonic check
+                _next_r11d = result[i + 1].lower()
+                _nom_infos_r11d = (
+                    lexique.info(result[_nom_idx_r11d])
+                    if _nom_idx_r11d is not None else []
+                )
+                _nom_only_r11d = [
+                    e for e in _nom_infos_r11d
+                    if e.get("cgram") == "NOM"
+                ]
+                if _nom_only_r11d:
+                    _nom_genres_r11d = {
+                        e.get("genre") for e in _nom_only_r11d
+                        if e.get("genre")
+                    }
+                    _starts_vowel = (
+                        _next_r11d
+                        and _next_r11d[0] in "aeiouyàâéèêëïîôùûüæœh"
+                    )
+                    _new_poss = None
+                    # Case 1: euphonie — sa/ma/ta + voyelle → son/mon/ton
+                    if curr_low in _POSS_FEM and _starts_vowel:
+                        _new_poss = _POSS_FEM[curr_low]
+                    # Case 2: son/mon/ton + NOM fem (consonant) → sa/ma/ta
+                    elif (
+                        curr_low in _POSS_MASC
+                        and not _starts_vowel
+                        and len(_nom_genres_r11d) == 1
+                        and "f" in _nom_genres_r11d
+                    ):
+                        _new_poss = _POSS_MASC[curr_low]
+                    # Case 3: sa/ma/ta + NOM masc (consonant) → son/mon/ton
+                    elif (
+                        curr_low in _POSS_FEM
+                        and not _starts_vowel
+                        and len(_nom_genres_r11d) == 1
+                        and "m" in _nom_genres_r11d
+                    ):
+                        _new_poss = _POSS_FEM[curr_low]
+                    if _new_poss and _new_poss != curr_low:
+                        ancien = result[i]
+                        result[i] = transferer_casse(curr, _new_poss)
+                        corrections.append(Correction(
+                            index=i,
+                            original=ancien,
+                            corrige=result[i],
+                            type_correction=TypeCorrection.GRAMMAIRE,
+                            regle="accord.genre_possessif",
+                            explication=(
+                                f"'{ancien}' -> '{result[i]}'"
+                                f" (NOM '{result[_nom_idx_r11d]}')"
+                            ),
                         ))
 
         # Guard : ne jamais modifier les mots-outils par accord
@@ -284,6 +365,52 @@ def verifier_accords(
                                             ),
                                         ))
                                         break
+                    # Fallback: le/la + NOM (no adj intercalé)
+                    # Correct if NOM is unambiguous high-freq
+                    # "le table" → "la table", "la soleil" → "le soleil"
+                    else:
+                        _nom_infos_le = lexique.info(result[nom_idx])
+                        _nom_only_le = [
+                            e for e in _nom_infos_le
+                            if e.get("cgram", "").startswith("NOM")
+                        ]
+                        if _nom_only_le:
+                            _nom_genres_le = {
+                                e.get("genre") for e in _nom_only_le
+                                if e.get("genre")
+                            }
+                            _nom_freq_le = max(
+                                float(e.get("freq") or 0)
+                                for e in _nom_only_le
+                            )
+                            _det_g_le = (
+                                "m" if curr_low in SING_MASC_DET else "f"
+                            )
+                            if (
+                                len(_nom_genres_le) == 1
+                                and _det_g_le not in _nom_genres_le
+                                and _nom_freq_le > 10.0
+                            ):
+                                _new_det_le = DET_GENRE_MAP.get(curr_low)
+                                if _new_det_le:
+                                    ancien = result[i]
+                                    result[i] = transferer_casse(
+                                        curr, _new_det_le,
+                                    )
+                                    corrections.append(Correction(
+                                        index=i,
+                                        original=ancien,
+                                        corrige=result[i],
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="accord.genre_det",
+                                        explication=(
+                                            f"DET {_det_g_le}→"
+                                            f"{next(iter(_nom_genres_le))} "
+                                            f"(NOM '{result[nom_idx]}')"
+                                        ),
+                                    ))
+                                    curr = result[i]
+                                    curr_low = curr.lower()
                 else:
                     nom_infos = lexique.info(result[nom_idx])
                     # Only consider NOM entries for genre (ignore ADJ homographs)
@@ -428,8 +555,15 @@ def verifier_accords(
                         next_pos = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
                         if next_pos == "NOM":
                             nom_infos = lexique.info(result[i + 1])
-                            nom_est_fem = nom_infos and any(
-                                e.get("genre") == "f" for e in nom_infos
+                            # Require UNAMBIGUOUS feminine (all NOM entries)
+                            _nom_entries_3a = [
+                                e for e in nom_infos
+                                if e.get("cgram") == "NOM"
+                            ]
+                            nom_est_fem = _nom_entries_3a and all(
+                                e.get("genre") == "f"
+                                for e in _nom_entries_3a
+                                if e.get("genre")
                             )
                             adj_infos = lexique.info(result[i])
                             adj_genred = [e for e in adj_infos if e.get("genre")]
@@ -584,6 +718,196 @@ def verifier_accords(
                             explication=f"Accord pluriel (det+adj+nom) apres '{prev2_low}'",
                         ))
                         break
+
+        # Regle 2b : PLUR_DET + word(ADJ_lexique) + NOM → full accord cascade
+        # Handles cases where P2G mistagged the ADJ as NOM, or ADJ ends in
+        # s/x/z (skipped by Regle 1). Uses formes_de for irregular forms.
+        # "les vieux maison" → "les vieilles maisons"
+        # "les blanc chemise" → "les blanches chemises"
+        if i > 1 and lexique is not None:
+            _prev2_low_r2b = result[i - 2].lower()
+            if _prev2_low_r2b in PLUR_DET:
+                _prev_low_r2b = result[i - 1].lower()
+                _curr_low_r2b = result[i].lower()
+                # Check prev word has ADJ entries in lexique
+                _prev_infos_r2b = lexique.info(_prev_low_r2b)
+                _prev_adj_r2b = [
+                    e for e in _prev_infos_r2b
+                    if (e.get("cgram") or "").startswith("ADJ")
+                ]
+                # Check current word has NOM entries in lexique.
+                # Use ORIGINAL form for gender (avoids pluralized form
+                # having different entries, e.g. "vagues" only m but
+                # "vague" has both m and f)
+                _orig_low_r2b = (
+                    origs[i].lower() if i < len(origs) else _curr_low_r2b
+                )
+                _curr_infos_r2b = lexique.info(_orig_low_r2b)
+                if not _curr_infos_r2b:
+                    _curr_infos_r2b = lexique.info(_curr_low_r2b)
+                _curr_nom_r2b = [
+                    e for e in _curr_infos_r2b
+                    if e.get("cgram") == "NOM"
+                ]
+                if (
+                    _prev_adj_r2b
+                    and _curr_nom_r2b
+                    and _prev_low_r2b not in _ACCORD_EXCLUS
+                    and _prev_low_r2b not in INVARIABLES
+                ):
+                    # Get NOM gender (must be unambiguous)
+                    _nom_genres_r2b = {
+                        e.get("genre") for e in _curr_nom_r2b
+                        if e.get("genre")
+                    }
+                    if len(_nom_genres_r2b) == 1:
+                        _tgt_g_r2b = next(iter(_nom_genres_r2b))
+                        # Get ADJ gender(s)
+                        _adj_genres_r2b = {
+                            e.get("genre") for e in _prev_adj_r2b
+                            if e.get("genre")
+                        }
+                        # Check if gender flip needed
+                        _needs_flip_r2b = (
+                            _adj_genres_r2b
+                            and _tgt_g_r2b not in _adj_genres_r2b
+                        )
+                        # Check if pluralization needed
+                        _needs_plur_r2b = not _prev_low_r2b.endswith(
+                            ("s", "x", "z"),
+                        )
+                        if _needs_flip_r2b or _needs_plur_r2b:
+                            # Find target form via formes_de
+                            _lemme_r2b = (
+                                _prev_adj_r2b[0].get("lemme")
+                                or _prev_adj_r2b[0].get("lemma")
+                                or _prev_low_r2b
+                            )
+                            _RAW_G = {"f": ("f", "feminin", "Fem"),
+                                      "m": ("m", "masculin", "Masc")}
+                            _RAW_N = ("p", "pluriel", "Plur")
+                            _RAW_S = ("s", "singulier", "Sing")
+                            _tgt_form_r2b = None
+                            if hasattr(lexique, "formes_de"):
+                                _formes = lexique.formes_de(_lemme_r2b)
+                                # Try target gender + plural directly
+                                for _f in _formes:
+                                    if (
+                                        _f.get("genre") in _RAW_G.get(_tgt_g_r2b, ())
+                                        and _f.get("nombre") in _RAW_N
+                                        and (
+                                            _f.get("cgram") or ""
+                                        ).startswith("ADJ")
+                                    ):
+                                        _tgt_form_r2b = _f.get("ortho")
+                                        break
+                                # Fallback: target gender + singular, then pluralize
+                                if not _tgt_form_r2b:
+                                    for _f in _formes:
+                                        if (
+                                            _f.get("genre")
+                                            in _RAW_G.get(_tgt_g_r2b, ())
+                                            and _f.get("nombre") in _RAW_S
+                                            and (
+                                                _f.get("cgram") or ""
+                                            ).startswith("ADJ")
+                                        ):
+                                            _fem_sing = _f.get("ortho", "")
+                                            if _fem_sing:
+                                                for _pc in generer_candidats_pluriel(
+                                                    _fem_sing,
+                                                ):
+                                                    if lexique.existe(_pc):
+                                                        _tgt_form_r2b = _pc
+                                                        break
+                                            break
+                            # Fallback: generer_candidats + pluralize
+                            if not _tgt_form_r2b and _needs_flip_r2b:
+                                _gen_fn_r2b = (
+                                    generer_candidats_feminin
+                                    if _tgt_g_r2b == "f"
+                                    else generer_candidats_masculin
+                                )
+                                for _c in _gen_fn_r2b(_prev_low_r2b):
+                                    _c_infos = lexique.info(_c)
+                                    if _c_infos and any(
+                                        e.get("genre") == _tgt_g_r2b
+                                        and (
+                                            e.get("cgram") or ""
+                                        ).startswith("ADJ")
+                                        for e in _c_infos
+                                    ):
+                                        # Pluralize the feminized form
+                                        for _pc in generer_candidats_pluriel(
+                                            _c,
+                                        ):
+                                            if lexique.existe(_pc):
+                                                _tgt_form_r2b = _pc
+                                                break
+                                        if not _tgt_form_r2b:
+                                            _tgt_form_r2b = _c
+                                        break
+                            # Only pluralization needed (right gender)
+                            if (
+                                not _tgt_form_r2b
+                                and not _needs_flip_r2b
+                                and _needs_plur_r2b
+                            ):
+                                for _pc in generer_candidats_pluriel(
+                                    _prev_low_r2b,
+                                ):
+                                    if lexique.existe(_pc):
+                                        _tgt_form_r2b = _pc
+                                        break
+                            # Apply ADJ correction
+                            if (
+                                _tgt_form_r2b
+                                and _tgt_form_r2b.lower()
+                                != result[i - 1].lower()
+                            ):
+                                _anc_r2b = result[i - 1]
+                                result[i - 1] = transferer_casse(
+                                    _anc_r2b, _tgt_form_r2b,
+                                )
+                                corrections.append(Correction(
+                                    index=i - 1,
+                                    original=_anc_r2b,
+                                    corrige=result[i - 1],
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.adj_antepose",
+                                    explication=(
+                                        f"ADJ antepose → accord "
+                                        f"{'fem' if _tgt_g_r2b == 'f' else 'masc'}"
+                                        f" plur (NOM '{result[i]}')"
+                                    ),
+                                ))
+                    # Also pluralize the NOM at i if needed
+                    # Guard: don't pluralize VER/AUX as NOM (est→ests)
+                    _pos_r2b_i = pos_tags[i] if i < len(pos_tags) else ""
+                    if (
+                        _pos_r2b_i not in ("VER", "AUX")
+                        and not _curr_low_r2b.endswith(("s", "x", "z"))
+                        and len(_curr_low_r2b) > 1
+                        and _curr_low_r2b not in INVARIABLES
+                    ):
+                        for _pc_nom in generer_candidats_pluriel(
+                            result[i],
+                        ):
+                            if lexique.existe(_pc_nom):
+                                _anc_nom_r2b = result[i]
+                                result[i] = _pc_nom
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=_anc_nom_r2b,
+                                    corrige=_pc_nom,
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.nombre_nom",
+                                    explication=(
+                                        f"Accord pluriel (adj+nom) "
+                                        f"apres '{_prev2_low_r2b}'"
+                                    ),
+                                ))
+                                break
 
         # Regle 7 : NOM feminin + ADJ masculin -> forme feminine
         # (avant Regle 1b pour que "vert" devienne "verte" avant "vertes")
@@ -1291,7 +1615,19 @@ def verifier_accords(
         # Regle 9 : Copule (etre/sembler/devenir...) + ADJ -> accord genre
         # avec le sujet. Applique AVANT Regle 5 (nombre) pour que
         # "elles sont petit" → petite (genre) → petites (nombre).
-        if i > 0 and pos == "ADJ" and lexique is not None:
+        # Also handle NOM when the word has higher-freq ADJ entries
+        # (P2G sometimes tags "chaud", "froid" etc. as NOM instead of ADJ)
+        _is_adj_r9 = pos == "ADJ"
+        if not _is_adj_r9 and pos == "NOM" and lexique is not None:
+            _r9_infos = lexique.info(result[i])
+            _r9_adj = [e for e in _r9_infos if e.get("cgram") == "ADJ"]
+            _r9_nom = [e for e in _r9_infos if e.get("cgram") == "NOM"]
+            if _r9_adj and _r9_nom:
+                _r9_adj_freq = max(float(e.get("freq") or 0) for e in _r9_adj)
+                _r9_nom_freq = max(float(e.get("freq") or 0) for e in _r9_nom)
+                if _r9_adj_freq > _r9_nom_freq:
+                    _is_adj_r9 = True
+        if i > 0 and _is_adj_r9 and lexique is not None:
             prev_result_low = result[i - 1].lower()
             if prev_result_low in COPULES_ALL:
                 # Trouver le genre du sujet
@@ -1305,45 +1641,99 @@ def verifier_accords(
                     if s_genre == "Fem" and adj_genred and all(
                         e.get("genre") == "m" for e in adj_genred
                     ):
-                        for cand in generer_candidats_feminin(result[i]):
-                            c_infos = lexique.info(cand)
-                            if c_infos and any(
-                                e.get("genre") == "f" for e in c_infos
-                            ):
-                                ancien = result[i]
-                                result[i] = cand
-                                corrections.append(Correction(
-                                    index=i,
-                                    original=ancien,
-                                    corrige=cand,
-                                    type_correction=TypeCorrection.GRAMMAIRE,
-                                    regle="accord.genre_attribut",
-                                    explication="Accord attribut en genre (sujet fem)",
-                                ))
-                                curr = result[i]
-                                curr_low = curr.lower()
-                                break
+                        _found_fem = False
+                        # Essayer d'abord par formes_de (gere les irreguliers)
+                        if hasattr(lexique, "formes_de"):
+                            _lem_attr = adj_genred[0].get("lemme") or adj_genred[0].get("lemma") or result[i].lower()
+                            for f in lexique.formes_de(_lem_attr):
+                                if (
+                                    f.get("genre") in ("f", "feminin", "Fem")
+                                    and f.get("nombre") in ("s", "singulier", "Sing", _s_nombre)
+                                    and f.get("cgram") == "ADJ"
+                                ):
+                                    cand = f.get("ortho", "")
+                                    if cand and cand.lower() != result[i].lower():
+                                        ancien = result[i]
+                                        result[i] = transferer_casse(ancien, cand)
+                                        corrections.append(Correction(
+                                            index=i,
+                                            original=ancien,
+                                            corrige=result[i],
+                                            type_correction=TypeCorrection.GRAMMAIRE,
+                                            regle="accord.genre_attribut",
+                                            explication="Accord attribut en genre (sujet fem)",
+                                        ))
+                                        curr = result[i]
+                                        curr_low = curr.lower()
+                                        _found_fem = True
+                                        break
+                        # Fallback par suffixe
+                        if not _found_fem:
+                            for cand in generer_candidats_feminin(result[i]):
+                                c_infos = lexique.info(cand)
+                                if c_infos and any(
+                                    e.get("genre") == "f" for e in c_infos
+                                ):
+                                    ancien = result[i]
+                                    result[i] = cand
+                                    corrections.append(Correction(
+                                        index=i,
+                                        original=ancien,
+                                        corrige=cand,
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="accord.genre_attribut",
+                                        explication="Accord attribut en genre (sujet fem)",
+                                    ))
+                                    curr = result[i]
+                                    curr_low = curr.lower()
+                                    break
                     elif s_genre == "Masc" and adj_genred and all(
                         e.get("genre") == "f" for e in adj_genred
                     ):
-                        for cand in generer_candidats_masculin(result[i]):
-                            c_infos = lexique.info(cand)
-                            if c_infos and any(
-                                e.get("genre") == "m" for e in c_infos
-                            ):
-                                ancien = result[i]
-                                result[i] = cand
-                                corrections.append(Correction(
-                                    index=i,
-                                    original=ancien,
-                                    corrige=cand,
-                                    type_correction=TypeCorrection.GRAMMAIRE,
-                                    regle="accord.genre_attribut",
-                                    explication="Accord attribut en genre (sujet masc)",
-                                ))
-                                curr = result[i]
-                                curr_low = curr.lower()
-                                break
+                        _found_masc = False
+                        if hasattr(lexique, "formes_de"):
+                            _lem_attr_m = adj_genred[0].get("lemme") or adj_genred[0].get("lemma") or result[i].lower()
+                            for f in lexique.formes_de(_lem_attr_m):
+                                if (
+                                    f.get("genre") in ("m", "masculin", "Masc")
+                                    and f.get("nombre") in ("s", "singulier", "Sing", _s_nombre)
+                                    and f.get("cgram") == "ADJ"
+                                ):
+                                    cand = f.get("ortho", "")
+                                    if cand and cand.lower() != result[i].lower():
+                                        ancien = result[i]
+                                        result[i] = transferer_casse(ancien, cand)
+                                        corrections.append(Correction(
+                                            index=i,
+                                            original=ancien,
+                                            corrige=result[i],
+                                            type_correction=TypeCorrection.GRAMMAIRE,
+                                            regle="accord.genre_attribut",
+                                            explication="Accord attribut en genre (sujet masc)",
+                                        ))
+                                        curr = result[i]
+                                        curr_low = curr.lower()
+                                        _found_masc = True
+                                        break
+                        if not _found_masc:
+                            for cand in generer_candidats_masculin(result[i]):
+                                c_infos = lexique.info(cand)
+                                if c_infos and any(
+                                    e.get("genre") == "m" for e in c_infos
+                                ):
+                                    ancien = result[i]
+                                    result[i] = cand
+                                    corrections.append(Correction(
+                                        index=i,
+                                        original=ancien,
+                                        corrige=cand,
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="accord.genre_attribut",
+                                        explication="Accord attribut en genre (sujet masc)",
+                                    ))
+                                    curr = result[i]
+                                    curr_low = curr.lower()
+                                    break
 
         # Regle 5 : Copule plurielle + ADJ -> ajouter -s/-x (attribut du sujet)
         if i > 0 and pos == "ADJ":
@@ -1566,20 +1956,47 @@ def verifier_accords(
                 infos = lexique.info(result[i])
                 genred = [e for e in infos if e.get("genre")]
                 if genred and all(e.get("genre") == "m" for e in genred):
-                    for candidate in generer_candidats_feminin(result[i]):
-                        c_infos = lexique.info(candidate)
-                        if c_infos and any(e.get("genre") == "f" for e in c_infos):
-                            ancien = result[i]
-                            result[i] = candidate
-                            corrections.append(Correction(
-                                index=i,
-                                original=ancien,
-                                corrige=candidate,
-                                type_correction=TypeCorrection.GRAMMAIRE,
-                                regle="accord.genre_adj",
-                                explication=f"Accord en genre apres '{prev_low}'",
-                            ))
-                            break
+                    _found_r6 = False
+                    # Try formes_de first (handles irregulars: beau→belle)
+                    if hasattr(lexique, "formes_de"):
+                        _lem_r6 = genred[0].get("lemme") or genred[0].get("lemma") or result[i].lower()
+                        for f in lexique.formes_de(_lem_r6):
+                            if (
+                                f.get("genre") in ("f", "feminin", "Fem")
+                                and f.get("nombre") in ("s", "singulier", "Sing")
+                                and f.get("cgram") in ("ADJ", "NOM")
+                            ):
+                                cand = f.get("ortho", "")
+                                if cand and cand.lower() != result[i].lower():
+                                    ancien = result[i]
+                                    result[i] = transferer_casse(ancien, cand)
+                                    corrections.append(Correction(
+                                        index=i,
+                                        original=ancien,
+                                        corrige=result[i],
+                                        type_correction=TypeCorrection.GRAMMAIRE,
+                                        regle="accord.genre_adj",
+                                        explication=f"Accord en genre apres '{prev_low}'",
+                                    ))
+                                    _found_r6 = True
+                                    break
+                    # Fallback: suffix-based candidates
+                    if not _found_r6:
+                        for candidate in generer_candidats_feminin(result[i]):
+                            c_infos = lexique.info(candidate)
+                            if c_infos and any(e.get("genre") == "f" for e in c_infos):
+                                ancien = result[i]
+                                result[i] = candidate
+                                corrections.append(Correction(
+                                    index=i,
+                                    original=ancien,
+                                    corrige=candidate,
+                                    type_correction=TypeCorrection.GRAMMAIRE,
+                                    regle="accord.genre_adj",
+                                    explication=f"Accord en genre apres '{prev_low}'",
+                                ))
+                                _found_r6 = True
+                                break
 
         # Regle 11 : DET singulier + NOM/ADJ pluriel → depluralize
         # "une parties" → "une partie", "le généraux" → "le général"
@@ -2085,6 +2502,42 @@ def verifier_accords(
                         regle="accord.expression",
                         explication="'fautes de' -> 'faute de' (expression)",
                     ))
+
+    # Regle 20 : "des" + ADJ + NOM pluriel → "de" + ADJ + NOM
+    # French grammar: "des" becomes "de" before plural ADJ + NOM
+    # "des nouvelles chaussures" → "de nouvelles chaussures"
+    # "des bons gâteaux" → "de bons gâteaux"
+    for i in range(n - 2):
+        if result[i].lower() != "des":
+            continue
+        _pos_i20 = pos_tags[i] if i < len(pos_tags) else ""
+        if not _pos_i20.startswith(("ART", "DET")):
+            continue
+        _pos_next20 = pos_tags[i + 1] if i + 1 < len(pos_tags) else ""
+        _pos_next2_20 = pos_tags[i + 2] if i + 2 < len(pos_tags) else ""
+        # Accept ADJ tag or NOM tag with ADJ entries in lexique
+        _is_adj_r20 = _pos_next20 == "ADJ"
+        if not _is_adj_r20 and _pos_next20 == "NOM" and lexique is not None:
+            _r20_infos = lexique.info(result[i + 1].lower())
+            if any(
+                (e.get("cgram") or "").startswith("ADJ")
+                for e in _r20_infos
+            ):
+                _is_adj_r20 = True
+        if _is_adj_r20 and _pos_next2_20 == "NOM":
+            # Guard: NOM must be plural (ends in s/x/z)
+            _nom_low20 = result[i + 2].lower()
+            if _nom_low20.endswith(("s", "x", "z")) and len(_nom_low20) > 2:
+                ancien = result[i]
+                result[i] = transferer_casse(ancien, "de")
+                corrections.append(Correction(
+                    index=i,
+                    original=ancien,
+                    corrige=result[i],
+                    type_correction=TypeCorrection.GRAMMAIRE,
+                    regle="accord.des_de",
+                    explication="'des' -> 'de' devant ADJ + NOM pluriel",
+                ))
 
     return result, corrections
 

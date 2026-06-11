@@ -65,6 +65,7 @@ def analyser_phrase(
     engine: object | None = None,
     options_groupes: OptionsGroupes | None = None,
     syllabifier: bool = False,
+    engine_kwargs: dict | None = None,
 ) -> ResultatPhraseG2P | object:
     """Analyse G2P complete d'une phrase en francais.
 
@@ -80,6 +81,9 @@ def analyser_phrase(
         Options pour les groupes de lecture (liaisons, elisions, etc.).
     syllabifier : bool
         Si True, ajoute la syllabification (necessite lectura-aligneur).
+    engine_kwargs : dict | None
+        Kwargs supplementaires passes a ``engine.analyser()``
+        (ex: ``sep_apos=True``, ``sep_hyphen=True``).
 
     Returns
     -------
@@ -87,13 +91,15 @@ def analyser_phrase(
         Resultat avec mots analyses et groupes de lecture.
         Si ``syllabifier=True``, retourne un ResultatSyllabation.
     """
-    from lectura_tokeniseur import tokenise
+    from lectura_tokeniseur import normalise, tokenise
 
     if engine is None:
         engine = creer_engine()
 
-    tokens = tokenise(texte)
-    result = analyser_phrase_complete(tokens, engine=engine)
+    tokens = tokenise(normalise(texte))
+    result = analyser_phrase_complete(
+        tokens, engine=engine, engine_kwargs=engine_kwargs,
+    )
 
     # Construire les groupes de lecture
     groupes = construire_groupes_lecture(result, options_groupes)
@@ -200,12 +206,12 @@ def texte_vers_phrases_ipa(
     >>> texte_vers_phrases_ipa("Les enfants jouent.")
     [('lez‿ɑ̃fɑ̃ ʒu.', 0)]
     """
-    from lectura_tokeniseur import tokenise
+    from lectura_tokeniseur import normalise, tokenise
 
     if engine is None:
         engine = creer_engine()
 
-    all_tokens = tokenise(texte)
+    all_tokens = tokenise(normalise(texte))
 
     # Enrichir les formules
     try:

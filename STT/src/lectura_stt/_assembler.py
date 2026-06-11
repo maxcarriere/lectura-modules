@@ -2,7 +2,12 @@
 
 Gere la majuscule initiale, les elisions (l', d', j', ...) et la ponctuation.
 
-Copyright (C) 2025 Max Carriere
+Deux niveaux :
+  - ``assembler_texte``    : reconstruction simple (ortho-only)
+  - ``rejoin_elisions``    : reconstruction avancee avec contexte IPA
+    (clitiques, elisions, mots composes)
+
+Copyright (C) 2025-2026 Max Carriere
 Licence : AGPL-3.0-or-later — voir LICENCE.txt
 """
 
@@ -118,3 +123,143 @@ def assembler_texte(
         texte += ponctuation_finale
 
     return texte
+
+
+# ── Mapping IPA clitique → forme apostrophe / forme pleine ──────
+
+_IPA_CLITIC_MAP: dict[str, str] = {
+    "l": "l'", "d": "d'", "n": "n'", "s": "s'",
+    "ʒ": "j'", "k": "qu'", "m": "m'", "t": "t'",
+}
+
+_IPA_CLITIC_FULL: dict[str, str] = {
+    "l": "le", "d": "de", "n": "ne", "s": "se",
+    "ʒ": "je", "k": "que", "m": "me", "t": "te",
+}
+
+# Mots ortho qui prennent une apostrophe devant voyelle (prefixes multi-phones)
+_ORTHO_ELISION_PREFIXES: dict[str, str] = {
+    "jusqu": "jusqu'",
+    "lorsqu": "lorsqu'",
+    "puisqu": "puisqu'",
+    "quelqu": "quelqu'",
+    "quoiqu": "quoiqu'",
+}
+
+# Mapping forme apostrophe → forme pleine (pour le cas non-elide)
+_APOSTROPHE_TO_FULL: dict[str, str] = {
+    "l'": "le", "d'": "de", "n'": "ne", "s'": "se",
+    "j'": "je", "qu'": "que", "m'": "me", "t'": "te",
+    "c'": "ce",  # ce/ca — phone s → c' resolu par le P2G
+}
+
+# Voyelles IPA (pour detecter si le mot suivant commence par voyelle)
+_IPA_VOWELS = frozenset("aeiouyøœəɛɔɑɥ")
+
+
+def _starts_with_ipa_vowel(ipa_word: str) -> bool:
+    """Verifie si un mot IPA commence par une voyelle."""
+    if not ipa_word:
+        return False
+    return ipa_word[0] in _IPA_VOWELS
+
+
+def rejoin_elisions(
+    ortho_words: list[str],
+    ipa_words: list[str],
+    compound_joins: set[int] | None = None,
+) -> str:
+    """Recombine les mots graphemiques en gerant elisions et composes.
+
+    Utilise le contexte IPA pour decider du traitement des clitiques :
+      - Clitique + mot IPA commencant par voyelle → apostrophe (l'abattoir)
+      - Clitique + mot IPA commencant par consonne → forme pleine (le chat)
+      - Composes (compound_joins) → mots joints par tiret (grand-pere)
+
+    Parameters
+    ----------
+    ortho_words : list[str]
+        Mots orthographiques (sortie P2G).
+    ipa_words : list[str]
+        Mots IPA correspondants (pour contexte elision).
+    compound_joins : set[int] | None
+        Indices i tels que ortho_words[i] et ortho_words[i+1] doivent
+        etre joints par un tiret.
+
+    Returns
+    -------
+    str
+        Texte reconstruit.
+    """
+    if compound_joins is None:
+        compound_joins = set()
+
+    parts: list[str] = []
+    i = 0
+    while i < len(ortho_words):
+        ipa = ipa_words[i] if i < len(ipa_words) else ""
+        ortho = ortho_words[i]
+
+        if ipa in _IPA_CLITIC_MAP and i + 1 < len(ortho_words):
+            next_ipa = ipa_words[i + 1] if i + 1 < len(ipa_words) else ""
+            if _starts_with_ipa_vowel(next_ipa):
+                # Elision : l'abattoir, d'abord, j'ai, c'est
+                if ortho.endswith("'"):
+                    parts.append(ortho + ortho_words[i + 1])
+                elif ortho + "'" in _APOSTROPHE_TO_FULL:
+                    # P2G a resolu la base du clitique (ex: "c" pour c'est)
+                    parts.append(ortho + "'" + ortho_words[i + 1])
+                else:
+                    parts.append(_IPA_CLITIC_MAP[ipa] + ortho_words[i + 1])
+                i += 2
+                continue
+            else:
+                # Devant consonne : forme pleine (le, de, je...)
+                if ortho.endswith("'"):
+                    parts.append(_IPA_CLITIC_FULL.get(ipa, ortho))
+                elif len(ortho) > 1:
+                    parts.append(ortho)
+                else:
+                    parts.append(_IPA_CLITIC_FULL.get(ipa, ortho))
+                if i in compound_joins:
+                    parts[-1] = parts[-1] + "-"
+                i += 1
+                continue
+
+        # Prefixes elidables multi-phones (jusqu', lorsqu', puisqu'...)
+        ortho_lower = ortho.lower()
+        if (ortho_lower in _ORTHO_ELISION_PREFIXES
+                and i + 1 < len(ortho_words)
+                and _commence_par_voyelle(ortho_words[i + 1])):
+            prefix = _ORTHO_ELISION_PREFIXES[ortho_lower]
+            if ortho[0].isupper():
+                prefix = prefix[0].upper() + prefix[1:]
+            parts.append(prefix + ortho_words[i + 1])
+            i += 2
+            continue
+
+        parts.append(ortho)
+        if i in compound_joins:
+            parts[-1] = parts[-1] + "-"
+        i += 1
+
+    # Fusionner les parties tiretees
+    final: list[str] = []
+    for p in parts:
+        if final and final[-1].endswith("-"):
+            final[-1] = final[-1] + p
+        else:
+            final.append(p)
+
+    # Filtrer les mots vides
+    final = [f for f in final if f]
+
+    if not final:
+        return ""
+
+    # Majuscule au premier mot
+    first = final[0]
+    if first and first[0].islower():
+        final[0] = first[0].upper() + first[1:]
+
+    return " ".join(final)

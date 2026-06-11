@@ -80,3 +80,20 @@ Cela exclut tout sous-dossier `modeles/` quel que soit le module.
 3. `git add` le fichier dans le workspace (l'exporter utilise `git ls-files`)
 4. Verifier : `python exporter.py --mode public --dry-run` (modele absent)
 5. Verifier : `python exporter.py --mode private --dry-run` (modele present)
+
+## Independence Tokeniseur / Formules (v2.3.0 / v3.1.0)
+
+Les deux modules sont entierement independants (zero dependance chacun).
+
+- `_maths.py` (tokenize_maths, MathToken) vit dans Formules (source de verite)
+- Tokeniseur importe optionnellement `lectura_formules._maths` si Formules est installe
+- Sans Formules : mode degrade (unites non reconnues, enfants MATHS vides)
+- Formules n'a aucune dependance sur Tokeniseur
+
+```
+Tokeniseur (zero-dep)           Formules (zero-dep)
+├── Detecte les formules         ├── _maths.py (source de verite)
+├── Classifie (DATE, TEL...)     ├── Lit/vocalise les formules
+├── [si Formules] unites, MATHS  └── enrichir_formules()
+└── [sinon] mode degrade
+```

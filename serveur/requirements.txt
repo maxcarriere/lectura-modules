@@ -3,3 +3,5 @@ uvicorn[standard]>=0.24
 lectura-tts-monospeaker[onnx,g2p]
 lectura-tts-diphone[all]
 lectura-phonemiseur[onnx]
+lectura-graphemiseur[onnx]>=4.3.1
+lectura-p2g>=4.5.0

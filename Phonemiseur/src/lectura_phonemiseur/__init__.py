@@ -28,7 +28,7 @@ Exemple avec backend local::
 import os
 from pathlib import Path
 
-__version__ = "4.0.0"
+__version__ = "4.1.2"
 
 _MODELES_DIR = Path(__file__).parent / "modeles"
 
@@ -57,7 +57,7 @@ def _resoudre_modeles_dir(models_dir: str | Path | None = None) -> Path | None:
     candidats.append(_MODELES_DIR)
 
     for d in candidats:
-        if (d / "unifie_v2_int8.onnx").exists():
+        if (d / "unifie_v4_int8.onnx").exists():
             return d
     return None
 
@@ -69,16 +69,11 @@ def _resoudre_lexique(
     """Cascade de resolution du lexique pour les lex_features.
 
     1. Chemin explicite (si passe)
-    2. Fichier JSON dans le dossier modeles resolu
-    3. lectura_lexique installe -> generer le dict
-    4. None (pas de lexique -> lex_features = zeros)
+    2. lectura_lexique installe -> generer le dict
+    3. None (pas de lexique -> lex_features = zeros)
     """
     if lexicon_path is not None:
         return lexicon_path
-    if models_dir is not None:
-        json_path = models_dir / "lexique_pos_candidates.json"
-        if json_path.exists():
-            return json_path
     try:
         from lectura_lexique import Lexique
         lex = Lexique()
@@ -100,31 +95,42 @@ class _EngineAvecCorrections:
     """Wrapper qui applique le post-traitement (corrections, homographes,
     regles) automatiquement apres l'inference."""
 
-    def __init__(self, engine: object) -> None:
+    def __init__(self, engine: object, corrections_lexique: bool = False) -> None:
         self._engine = engine
+        self._corrections_lexique = corrections_lexique
         self._loaded = False
 
     def _charger_tables(self) -> None:
         if self._loaded:
             return
-        from lectura_phonemiseur.posttraitement import charger_corrections, charger_homographes
+        from lectura_phonemiseur.posttraitement import (
+            charger_corrections, charger_corrections_supplementaires, charger_homographes,
+        )
         data_dir = Path(__file__).parent / "data"
+        # 1) Corrections de base (table plate)
         corr = data_dir / "g2p_corrections_unifie.json"
-        homo = data_dir / "homographes.json"
         if corr.exists():
             charger_corrections(corr)
+        # 2) Corrections etendues du lexique (optionnel, priorite plus basse)
+        if self._corrections_lexique:
+            corr_lex = data_dir / "g2p_corrections_lexique.json"
+            if corr_lex.exists():
+                charger_corrections_supplementaires(corr_lex)
+        # 3) Homographes (priorite la plus haute, retire les conflits)
+        homo = data_dir / "homographes.json"
         if homo.exists():
             charger_homographes(homo)
         self._loaded = True
 
-    def analyser(self, tokens: list[str]) -> dict:
+    def analyser(self, tokens: list[str], **kwargs) -> dict:
         self._charger_tables()
-        result = self._engine.analyser(tokens)
+        result = self._engine.analyser(tokens, **kwargs)
         from lectura_phonemiseur.posttraitement import corriger_g2p
+        keep_sep = bool(kwargs.get("sep_hyphen") or kwargs.get("sep_apos"))
         g2p_list = result.get("g2p", [])
         pos_list = result.get("pos", [])
         result["g2p"] = [
-            corriger_g2p(tok, ipa, pos)
+            corriger_g2p(tok, ipa, pos, keep_sep=keep_sep)
             for tok, ipa, pos in zip(tokens, g2p_list, pos_list)
         ]
         return result
@@ -139,6 +145,7 @@ def creer_engine(
     api_url: str | None = None,
     api_key: str | None = None,
     lexicon_path: str | Path | None = None,
+    corrections_lexique: bool = False,
 ):
     """Factory pour creer un engine d'inference G2P.
 
@@ -162,6 +169,11 @@ def creer_engine(
     lexicon_path : str | Path | None
         Chemin vers le fichier lexique POS (JSON).
         Si None, resolution automatique (cascade).
+    corrections_lexique : bool
+        Si True, charge les corrections etendues du lexique
+        (g2p_corrections_lexique.json, ~225K entrees).
+        Ameliore la precision sur les mots rares au prix d'un chargement
+        plus lourd (~7 Mo).
     """
     if mode == "api":
         from lectura_phonemiseur.inference_api import ApiInferenceEngine
@@ -173,9 +185,10 @@ def creer_engine(
         from lectura_phonemiseur.inference_api import ApiInferenceEngine
         return ApiInferenceEngine(api_url=api_url, api_key=api_key)
 
-    # Mode local — essayer les backends dans l'ordre de preference
-    model_onnx = resolved_dir / "unifie_v2_int8.onnx" if resolved_dir else _MODELES_DIR / "unifie_v2_int8.onnx"
-    model_vocab = resolved_dir / "unifie_v2_vocab.json" if resolved_dir else _MODELES_DIR / "unifie_v2_vocab.json"
+    # Mode local — V4 uniquement
+    base = resolved_dir or _MODELES_DIR
+    model_onnx = base / "unifie_v4_int8.onnx"
+    model_vocab = base / "unifie_v4_vocab.json"
     resolved_lexicon = _resoudre_lexique(lexicon_path, resolved_dir)
 
     engine = None
@@ -233,7 +246,7 @@ def creer_engine(
             "Verifiez que les modeles sont installes ou utilisez mode='api'."
         )
 
-    return _EngineAvecCorrections(engine)
+    return _EngineAvecCorrections(engine, corrections_lexique=corrections_lexique)
 
 
 # API publique
@@ -242,6 +255,7 @@ from lectura_phonemiseur.posttraitement import (
     appliquer_liaison,
     appliquer_regles_g2p,
     charger_corrections,
+    charger_corrections_supplementaires,
     charger_homographes,
     corriger_g2p,
 )

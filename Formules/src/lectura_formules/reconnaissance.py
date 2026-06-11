@@ -35,8 +35,10 @@ from lectura_formules.lecture_formules import (
     lire_monnaie,
     lire_pourcentage,
     lire_ordinal,
+    lire_fraction,
     lire_sigle,
     lire_maths,
+    lire_telephone,
 )
 
 
@@ -46,7 +48,7 @@ from lectura_formules.lecture_formules import (
 
 FormulaType = Literal[
     "nombre", "date", "heure", "monnaie",
-    "pourcentage", "ordinal", "sigle",
+    "pourcentage", "ordinal", "sigle", "fraction",
 ]
 
 
@@ -183,7 +185,12 @@ def _tokenize_ipa(ipa: str) -> list[IpaToken] | None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _detect_type(tokens: list[IpaToken], type_hint: str | None) -> FormulaType:
+def _detect_type(
+    tokens: list[IpaToken],
+    type_hint: str | None,
+    *,
+    multi_word: bool = False,
+) -> FormulaType:
     """Detecte le type de formule a partir des tokens."""
     if type_hint is not None:
         return type_hint  # type: ignore[return-value]
@@ -207,8 +214,11 @@ def _detect_type(tokens: list[IpaToken], type_hint: str | None) -> FormulaType:
     if "pourcent" in categories:
         return "pourcentage"
 
-    # 5. Ordinal present → ordinal
+    # 5. Ordinal present → verifier si c'est une fraction
     if "ordinal" in categories:
+        # En multi-mots : nombre + ordinal = fraction
+        if multi_word and "nombre" in categories and tokens[-1].category == "ordinal":
+            return "fraction"
         return "ordinal"
 
     # 5b. "premier"/"premiere" seul → ordinal
@@ -536,6 +546,38 @@ def _reconstruct_ordinal(tokens: list[IpaToken]) -> str | None:
     return f"{total}e"
 
 
+def _reconstruct_fraction(tokens: list[IpaToken]) -> str | None:
+    """Reconstruit une fraction depuis les tokens.
+
+    Pattern : nombre(s) + ordinal → numerateur/denominateur.
+    Ex: [trois(3), cinquieme(5)] → "3/5"
+    """
+    if not tokens or tokens[-1].category != "ordinal":
+        return None
+
+    ordinal_tok = tokens[-1]
+    nombre_tokens = [t for t in tokens[:-1] if t.category == "nombre"]
+
+    if not nombre_tokens:
+        return None
+
+    numerateur = _reconstruct_number(nombre_tokens)
+
+    # Valeur du denominateur depuis le token ordinal
+    from lectura_formules._chargeur import inv_fr_nombre
+    cardinal_name = ordinal_tok.value
+    fr_table = inv_fr_nombre()
+
+    denominateur = 0
+    if cardinal_name in fr_table:
+        denominateur = fr_table[cardinal_name][0]
+
+    if denominateur <= 0 or numerateur <= 0:
+        return None
+
+    return f"{numerateur}/{denominateur}"
+
+
 def _reconstruct_sigle(tokens: list[IpaToken]) -> str | None:
     """Reconstruit un sigle depuis les tokens."""
     parts: list[str] = []
@@ -576,12 +618,19 @@ def _levenshtein(s1: str, s2: str) -> int:
 def _stt_max_distance(phone_len: int) -> int:
     """Tolerance de distance en fonction de la longueur de la chaine IPA.
 
-    - < 5 phones : 0 (match exact requis)
-    - >= 5 phones : floor(len * 0.1) — environ 10% d'erreur tolere
+    - < 3 phones : 0 (match exact requis)
+    - 3-5 phones : 1 edit
+    - 6+ phones : ~30% d'erreur tolere (min 2)
+
+    La tokenisation avec variantes CTC gere les confusions simples ;
+    la verification aller-retour rattrape les residus de composition
+    multi-mots (2+ confusions empilees, ex: nasale + glide manquante).
     """
-    if phone_len < 5:
+    if phone_len < 3:
         return 0
-    return phone_len // 10
+    if phone_len <= 5:
+        return 1
+    return max(2, phone_len * 30 // 100)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -632,6 +681,50 @@ def _normalize_ipa_for_stt(ipa: str) -> str:
     return s
 
 
+# Regles de confusion CTC : substitutions plausibles (IPA canonique → variante CTC)
+_CTC_CONFUSION_RULES: list[tuple[str, str]] = [
+    # Nasales : ɛ̃ ↔ œ̃ ↔ ɑ̃
+    ("ɛ̃", "ɑ̃"),
+    ("ɛ̃", "œ̃"),
+    ("œ̃", "ɑ̃"),
+    ("ɑ̃", "œ̃"),
+    ("ɑ̃", "ɛ̃"),
+    ("œ̃", "ɛ̃"),
+    # Voisement
+    ("k", "ɡ"),
+    ("ɡ", "k"),
+    ("t", "d"),
+    ("d", "t"),
+    ("p", "b"),
+    ("b", "p"),
+    # Glides manquantes
+    ("lj", "l"),     # miljɔ̃ → milɔ̃
+    ("l", "lj"),     # reverse
+    # Consonnes finales
+    ("tʁ", "t"),     # katʁ → kat
+    ("ys", "y"),     # plys → ply (consonne finale /s/ optionnelle)
+]
+
+
+def _generate_variants(canonical_ipa: str, max_variants: int = 12) -> list[str]:
+    """Variantes CTC plausibles d'un IPA canonique (1 regle a la fois)."""
+    variants: set[str] = set()
+    nfc = _nfc(_strip_spaces(canonical_ipa))
+    for pattern, replacement in _CTC_CONFUSION_RULES:
+        if pattern in nfc:
+            v = nfc.replace(pattern, replacement, 1)
+            if v != nfc:
+                variants.add(v)
+    # + versions STT-normalisees
+    extra: set[str] = set()
+    for v in variants:
+        nv = _normalize_ipa_for_stt(v)
+        if nv and nv != v and nv != nfc:
+            extra.add(nv)
+    variants.update(extra)
+    return list(variants)[:max_variants]
+
+
 # Table de variantes CTC supplementaires pour la tokenisation STT
 _STT_PHONE_VARIANTS: dict[str, list[tuple[str, int, str]]] | None = None
 
@@ -656,6 +749,14 @@ def _build_stt_variants() -> dict[str, list[tuple[str, int, str]]]:
     for phone, val, key in variants:
         normalized = _nfc(_strip_spaces(phone))
         _STT_PHONE_VARIANTS[normalized] = (val, key)
+
+    # Variantes auto-generees depuis les regles de confusion CTC
+    for canonical_phone, (val, unit_key) in inv_phone_nombre().items():
+        nfc = _nfc(_strip_spaces(canonical_phone))
+        for variant in _generate_variants(nfc):
+            if variant not in _STT_PHONE_VARIANTS:
+                _STT_PHONE_VARIANTS[variant] = (val, unit_key)
+
     return _STT_PHONE_VARIANTS
 
 
@@ -679,6 +780,14 @@ def _build_stt_lookup_table() -> list[tuple[str, IpaToken]]:
         if nphone not in base_table:
             base_table[nphone] = IpaToken("nombre", val, key, nphone)
 
+    # Variantes CTC auto-generees pour toutes les categories
+    variant_entries: dict[str, IpaToken] = {}
+    for ipa_key, token in list(base_table.items()):
+        for variant in _generate_variants(ipa_key):
+            if variant not in base_table and variant not in variant_entries:
+                variant_entries[variant] = token
+    base_table.update(variant_entries)
+
     # Re-normaliser les entrees existantes (strip schwas, ɑ→a)
     extended: dict[str, IpaToken] = {}
     for ipa_key, token in base_table.items():
@@ -699,6 +808,8 @@ def _tokenize_ipa_stt(ipa: str) -> list[IpaToken] | None:
     Comme _tokenize_ipa mais :
     - Pre-normalise l'IPA (schwas, ɑ→a)
     - Utilise la table etendue avec variantes CTC
+    - Backtracking : si le match le plus long mene a une impasse,
+      essaie des matches plus courts (memoisation sur position).
     """
     table = _build_stt_lookup_table()
     normalized = _normalize_ipa_for_stt(ipa)
@@ -706,23 +817,26 @@ def _tokenize_ipa_stt(ipa: str) -> list[IpaToken] | None:
     if not normalized:
         return None
 
-    tokens: list[IpaToken] = []
-    pos = 0
     length = len(normalized)
+    tokens: list[IpaToken] = []
+    failed: set[int] = set()
 
-    while pos < length:
-        matched = False
+    def _backtrack(pos: int) -> bool:
+        if pos == length:
+            return True
+        if pos in failed:
+            return False
         for entry_key, entry_token in table:
             entry_len = len(entry_key)
             if pos + entry_len <= length and normalized[pos:pos + entry_len] == entry_key:
                 tokens.append(entry_token)
-                pos += entry_len
-                matched = True
-                break
-        if not matched:
-            return None
+                if _backtrack(pos + entry_len):
+                    return True
+                tokens.pop()
+        failed.add(pos)
+        return False
 
-    return tokens
+    return tokens if _backtrack(0) else None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -770,6 +884,8 @@ def reconnaitre_ipa(
         formula_str = _reconstruct_pourcentage(tokens)
     elif formula_type == "ordinal":
         formula_str = _reconstruct_ordinal(tokens)
+    elif formula_type == "fraction":
+        formula_str = _reconstruct_fraction(tokens)
     elif formula_type == "sigle":
         formula_str = _reconstruct_sigle(tokens)
 
@@ -784,6 +900,7 @@ def reconnaitre_ipa(
         "monnaie": lire_monnaie,
         "pourcentage": lire_pourcentage,
         "ordinal": lire_ordinal,
+        "fraction": lire_fraction,
         "sigle": lire_sigle,
     }.get(formula_type)
 
@@ -809,6 +926,8 @@ def reconnaitre_ipa(
 def reconnaitre_ipa_stt(
     ipa: str,
     type_hint: str | None = None,
+    *,
+    multi_word: bool = False,
 ) -> LectureFormuleResult | None:
     """Reconnait une formule a partir d'IPA produit par un pipeline STT.
 
@@ -821,6 +940,8 @@ def reconnaitre_ipa_stt(
     Args:
         ipa: Chaine IPA (espaces toleres).
         type_hint: Force le type de formule.
+        multi_word: Indique que l'IPA provient de plusieurs mots. Permet de
+            distinguer fraction (nombre + ordinal sur 2+ mots) d'ordinal.
 
     Returns:
         LectureFormuleResult si reconnu, None sinon.
@@ -841,7 +962,7 @@ def reconnaitre_ipa_stt(
             tokens = filtered
 
     # Detection du type
-    formula_type = _detect_type(tokens, type_hint)
+    formula_type = _detect_type(tokens, type_hint, multi_word=multi_word)
 
     # Reconstruction
     formula_str: str | None = None
@@ -858,6 +979,8 @@ def reconnaitre_ipa_stt(
         formula_str = _reconstruct_pourcentage(tokens)
     elif formula_type == "ordinal":
         formula_str = _reconstruct_ordinal(tokens)
+    elif formula_type == "fraction":
+        formula_str = _reconstruct_fraction(tokens)
     elif formula_type == "sigle":
         formula_str = _reconstruct_sigle(tokens)
 
@@ -872,6 +995,7 @@ def reconnaitre_ipa_stt(
         "monnaie": lire_monnaie,
         "pourcentage": lire_pourcentage,
         "ordinal": lire_ordinal,
+        "fraction": lire_fraction,
         "sigle": lire_sigle,
     }.get(formula_type)
 
@@ -928,11 +1052,87 @@ def _is_letter_token(ipa_word: str) -> bool:
     return len(tokens) == 1 and tokens[0].category == "lettre"
 
 
+_FORMULE_CATEGORIES = frozenset({
+    "nombre", "special", "mois", "heure_word",
+    "devise", "pourcent", "ordinal",
+})
+
+_FORMULE_CATEGORIES_PERMISSIVE = _FORMULE_CATEGORIES | frozenset({
+    "symbole", "connecteur", "unite",
+    "lettre", "grec", "fonction", "fragment",
+})
+
+
+def _is_formule_token(ipa_word: str) -> bool:
+    """Verifie si un mot IPA peut etre un token de formule (tout type).
+
+    Plus large que _is_number_token : accepte aussi mois, heure_word,
+    devise, pourcent, ordinal en plus de nombre et special.
+    """
+    tokens = _tokenize_ipa_stt(ipa_word)
+    if not tokens:
+        return False
+    for tok in tokens:
+        if tok.category in _FORMULE_CATEGORIES:
+            continue
+        if tok.category == "lettre" and tok.value == "E":
+            continue  # schwa residuel
+        return False
+    return True
+
+
+def _is_formule_token_permissive(ipa_word: str) -> bool:
+    """Pre-filtre permissif : utilise la table math (symboles, connecteurs).
+
+    Permet a "ply" (symbole +), "eɡal" (symbole =), "syʁ" (connecteur /)
+    de passer le pre-filtre en mode num. Accepte aussi les lettres math
+    (a, b, c, x, y, z), lettres grecques, fonctions et fragments.
+    """
+    tokens = _tokenize_ipa_math_stt(ipa_word)
+    if not tokens:
+        return False
+    for tok in tokens:
+        if tok.category in _FORMULE_CATEGORIES_PERMISSIVE:
+            continue
+        return False
+    return True
+
+
+# Phones IPA ambigus : homophones nombre/mot courant.
+# En mode "auto", les spans de 1 seul mot dont le phone normalise
+# (apres _normalize_ipa_for_stt) est dans cette liste sont rejetes.
+# Les spans >= 2 mots les contenant sont preserves (ex: "sept cent" → 700).
+_AMBIGUOUS_NUMBER_PHONES: frozenset[str] = frozenset()
+
+def _get_ambiguous_number_phones() -> frozenset[str]:
+    """Retourne l'ensemble des phones normalises ambigus (lazy init)."""
+    global _AMBIGUOUS_NUMBER_PHONES
+    if _AMBIGUOUS_NUMBER_PHONES:
+        return _AMBIGUOUS_NUMBER_PHONES
+
+    # IPA bruts des mots ambigus (nombre vs mot courant)
+    raw_ambiguous = [
+        "sɛt",   # sept (7) vs cette
+        "sɑ̃",    # cent (100) vs sang/sent/sans
+        "vɛ̃",    # vingt (20) vs vain
+        "œ̃",     # un (1) vs article un
+        "yn",    # une (1) vs article une
+    ]
+    normalized = set()
+    for raw in raw_ambiguous:
+        norm = _normalize_ipa_for_stt(raw)
+        if norm:
+            normalized.add(norm)
+    _AMBIGUOUS_NUMBER_PHONES = frozenset(normalized)
+    return _AMBIGUOUS_NUMBER_PHONES
+
+
 def detect_number_spans(
     ipa_words: list[str],
     *,
     min_span: int = 2,
     max_span: int = 8,
+    mode: str = "num",
 ) -> list[tuple[int, int, LectureFormuleResult]]:
     """Detecte les spans de mots IPA formant des nombres/formules.
 
@@ -944,11 +1144,24 @@ def detect_number_spans(
         ipa_words: Liste de mots IPA.
         min_span: Taille minimum de span (defaut: 2).
         max_span: Taille maximum de span (defaut: 8).
+        mode: Mode de detection :
+            - ``"num"``   : agressif (min_span respecte tel quel, tous les
+              nombres isoles sont convertis) — comportement original.
+            - ``"texte"`` : pas de conversion numerique (retourne []).
+            - ``"auto"``  : detection intelligente — la tokenisation IPA
+              doit produire au moins 2 tokens nombre pour declencher la
+              conversion. Un mot isole (trois, cent, vingt) n'est jamais
+              converti, meme s'il est non ambigu. Un mot unique qui
+              contient 2+ tokens (ex: "kaʁɑ̃tdø" → quarante + deux)
+              est accepte.
 
     Returns:
         Liste de (start, end, LectureFormuleResult) triee par position.
         Les spans ne se chevauchent pas (greedy plus long d'abord).
     """
+    if mode == "texte":
+        return []
+
     n = len(ipa_words)
     if n < min_span:
         return []
@@ -980,6 +1193,18 @@ def detect_number_spans(
             merged_ipa = " ".join(ipa_words[i:end])
             result = reconnaitre_ipa_stt(merged_ipa, type_hint="nombre")
             if result is not None:
+                # Mode auto : exiger au moins 2 tokens nombre
+                # (jamais de conversion pour un mot isole : trois, cent, vingt)
+                if mode == "auto":
+                    tokens = _tokenize_ipa_stt(merged_ipa)
+                    if tokens is None:
+                        continue
+                    nombre_count = sum(
+                        1 for t in tokens if t.category == "nombre"
+                    )
+                    if nombre_count < 2:
+                        continue
+
                 results.append((i, end, result))
                 used.update(range(i, end))
                 break  # passer au span suivant (greedy)
@@ -1041,6 +1266,194 @@ def detect_sigle_spans(
                 break  # passer au span suivant (greedy)
 
     # Trier par position
+    results.sort(key=lambda x: x[0])
+    return results
+
+
+def detect_formule_spans_stt(
+    ipa_words: list[str],
+    *,
+    min_span: int = 1,
+    max_span: int = 15,
+    permissive: bool = False,
+) -> list[tuple[int, int, LectureFormuleResult]]:
+    """Detecte les spans de mots IPA formant des formules de tout type.
+
+    Utilise _is_formule_token comme pre-filtre (accepte nombre, mois,
+    heure_word, devise, pourcent, ordinal, special) puis
+    reconnaitre_ipa_stt sans type_hint pour auto-detection du type.
+
+    Args:
+        ipa_words: Liste de mots IPA.
+        min_span: Taille minimum de span (defaut: 1).
+        max_span: Taille maximum de span (defaut: 15).
+        permissive: Si True, utilise le pre-filtre permissif (table math)
+            et active la chaine de fallback (type → ordinal → math).
+
+    Returns:
+        Liste de (start, end, LectureFormuleResult) triee par position.
+    """
+    n = len(ipa_words)
+    if n < min_span:
+        return []
+
+    token_check = _is_formule_token_permissive if permissive else _is_formule_token
+    is_form = [token_check(w) for w in ipa_words]
+
+    results: list[tuple[int, int, LectureFormuleResult]] = []
+    used: set[int] = set()
+
+    for span_len in range(min(max_span, n), min_span - 1, -1):
+        for i in range(n - span_len + 1):
+            end = i + span_len
+            if any(j in used for j in range(i, end)):
+                continue
+            if not all(is_form[j] for j in range(i, end)):
+                continue
+
+            merged_ipa = " ".join(ipa_words[i:end])
+
+            # 1. Essai type (heures, dates, nombres, fractions...)
+            result = reconnaitre_ipa_stt(merged_ipa, multi_word=(span_len >= 2))
+
+            # 2. Fallback : si fraction echoue, retenter en ordinal
+            if result is None and span_len >= 2:
+                result = reconnaitre_ipa_stt(merged_ipa, multi_word=False)
+
+            # 3. Fallback : essai math (pour "deux plus trois", etc.)
+            if result is None and span_len >= 2:
+                result = reconnaitre_maths_ipa_stt(merged_ipa)
+
+            if result is not None:
+                results.append((i, end, result))
+                used.update(range(i, end))
+
+    # Post-processing : fusion date + nombre adjacent pour annees longues
+    # Ex: "13/12/1900" + "91" → "13/12/1991"
+    merged_results = []
+    skip: set[int] = set()
+    for idx, (start, end, result) in enumerate(results):
+        if idx in skip:
+            continue
+        dn = result.display_num or ""
+        if dn.count("/") == 2:
+            # Ressemble a une date JJ/MM/AAAA — chercher un nombre adjacent
+            for idx2, (start2, end2, result2) in enumerate(results):
+                if idx2 <= idx or idx2 in skip:
+                    continue
+                if start2 != end:
+                    break
+                dn2 = (result2.display_num or "").replace("'", "")
+                if not dn2.isdigit():
+                    break
+                # Verifier : annee multiple de 100, nombre < 100
+                parts = dn.split("/")
+                if len(parts) == 3:
+                    try:
+                        annee = int(parts[2])
+                        complement = int(dn2)
+                    except ValueError:
+                        break
+                    if annee % 100 == 0 and 0 < complement < 100:
+                        new_annee = annee + complement
+                        new_date = f"{parts[0]}/{parts[1]}/{new_annee}"
+                        try:
+                            new_result = lire_date(new_date)
+                            merged_results.append((start, end2, new_result))
+                            skip.add(idx)
+                            skip.add(idx2)
+                        except Exception:
+                            pass
+                break
+        if idx not in skip:
+            merged_results.append((start, end, result))
+    results = merged_results
+
+    # Trier par position avant la fusion telephone
+    results.sort(key=lambda x: x[0])
+
+    # Post-processing : fusion telephone (nombres adjacents → 10 chiffres = tel)
+    # Le greedy peut absorber des zeros dans des spans plus grands
+    # (ex: "cinquante trois zero" → "53" au lieu de "53" + "0").
+    # On re-scanne les mots couverts avec max_span=2 pour obtenir les vrais
+    # groupes de chiffres (dizaines + unites), puis on verifie le pattern.
+    merged2 = []
+    skip2: set[int] = set()
+    for idx, (start, end, result) in enumerate(results):
+        if idx in skip2:
+            continue
+        dn = (result.display_num or "").replace("'", "").replace(" ", "")
+        if not dn.lstrip("-").isdigit():
+            merged2.append((start, end, result))
+            continue
+        # Accumuler les spans numeriques adjacents
+        run_indices = [idx]
+        run_end = end
+        for idx2 in range(idx + 1, len(results)):
+            if idx2 in skip2:
+                continue
+            start2, end2, result2 = results[idx2]
+            # Adjacent ou gap de 1 mot
+            gap = start2 - run_end
+            if gap > 1:
+                break
+            if gap < 0:
+                break
+            dn2 = (result2.display_num or "").replace("'", "").replace(" ", "")
+            if not dn2.lstrip("-").isdigit():
+                break
+            run_indices.append(idx2)
+            run_end = end2
+        if len(run_indices) < 3:
+            merged2.append((start, end, result))
+            continue
+        # Re-scanner les mots couverts avec max_span=2 pour decomposer
+        # correctement les groupes (evite absorption de zeros).
+        sub_words = ipa_words[start:run_end]
+        sub_n = len(sub_words)
+        sub_used: set[int] = set()
+        sub_spans: list[tuple[int, int, str]] = []
+        for sl in (2, 1):
+            for si in range(sub_n - sl + 1):
+                se = si + sl
+                if any(sj in sub_used for sj in range(si, se)):
+                    continue
+                merged_ipa = " ".join(sub_words[si:se])
+                sr = reconnaitre_ipa_stt(merged_ipa, multi_word=(sl >= 2))
+                if sr is not None:
+                    sd = (sr.display_num or "").replace("'", "").replace(" ", "")
+                    if sd.lstrip("-").isdigit():
+                        sub_spans.append((si, se, sd))
+                        sub_used.update(range(si, se))
+        sub_spans.sort(key=lambda x: x[0])
+        full_digits = "".join(s[2] for s in sub_spans)
+        # Pattern telephone francais : 10 chiffres, commence par 0
+        if len(full_digits) == 10 and full_digits[0] == "0":
+            phone_str = ".".join(full_digits[k:k+2] for k in range(0, 10, 2))
+            try:
+                new_result = lire_telephone(phone_str)
+                merged2.append((start, run_end, new_result))
+                skip2.update(run_indices)
+            except Exception:
+                if idx not in skip2:
+                    merged2.append((start, end, result))
+        else:
+            merged2.append((start, end, result))
+    results = merged2
+
+    # Post-processing : rejeter les nombres isoles (span = 1 mot IPA).
+    # En mode standard, un mot seul ("vɛ̃", "tʁwa", "sɑ̃"...) ne doit PAS
+    # etre converti en nombre — il faut au minimum 2 mots consecutifs.
+    # Les spans d'1 mot non-numeriques (heures "midi" → 12h00, ordinaux
+    # "tʁɑ̃tjɛm" → 30e) sont preserves car display_num n'est pas isdigit.
+    # Les nombres d'1 mot qui ont ete fusionnes (date, telephone) ont deja
+    # ete remplaces par le span fusionne et ne sont plus presents ici.
+    results = [
+        (start, end, result) for start, end, result in results
+        if end - start >= 2
+        or not (result.display_num or "").replace("'", "").replace(" ", "").lstrip("-").isdigit()
+    ]
+
     results.sort(key=lambda x: x[0])
     return results
 
@@ -1779,6 +2192,24 @@ def _build_math_stt_lookup_table() -> list[tuple[str, IpaToken]]:
         nphone = _nfc(phone)
         if nphone not in base:
             base[nphone] = IpaToken("nombre", val, key, nphone)
+
+    # Variantes CTC explicites pour symboles math
+    _MATH_CTC_VARIANTS = {
+        "ply": IpaToken("symbole", "+", "+", "ply"),    # plus sans /s/ final
+        "fwa": IpaToken("symbole", "×", "×", "fwa"),    # fois (variante)
+    }
+    for phone, token in _MATH_CTC_VARIANTS.items():
+        nphone = _nfc(phone)
+        if nphone not in base:
+            base[nphone] = token
+
+    # Variantes CTC auto-generees pour toutes les categories
+    variant_entries: dict[str, IpaToken] = {}
+    for ipa_key, token in list(base.items()):
+        for variant in _generate_variants(ipa_key):
+            if variant not in base and variant not in variant_entries:
+                variant_entries[variant] = token
+    base.update(variant_entries)
 
     # Re-normaliser les entrees existantes (strip schwas, ɑ→a, ɔ→o, ɛ→e)
     extended: dict[str, IpaToken] = {}

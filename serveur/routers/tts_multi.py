@@ -39,11 +39,11 @@ class SynthesizeRequest(BaseModel):
     speaker: str = Field("siwis", description="Nom du speaker")
     style: str | None = Field(None, description="Preset de style")
     style_vector: list[float] | None = Field(None, description="Vecteur style [5 dims]")
-    duration_scale: float = Field(1.0, gt=0.1, le=5.0)
-    pitch_shift: float = Field(0.0, ge=-12.0, le=12.0)
-    pitch_range: float = Field(1.3, gt=0.0, le=5.0)
-    energy_scale: float = Field(1.0, gt=0.0, le=3.0)
-    pause_scale: float = Field(1.0, gt=0.0, le=5.0)
+    duration_scale: float | None = Field(None, gt=0.1, le=5.0)
+    pitch_shift: float | None = Field(None, ge=-12.0, le=12.0)
+    pitch_range: float | None = Field(None, gt=0.0, le=5.0)
+    energy_scale: float | None = Field(None, gt=0.0, le=3.0)
+    pause_scale: float | None = Field(None, gt=0.0, le=5.0)
 
 
 class PhonemeTimingResponse(BaseModel):

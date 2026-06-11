@@ -1,0 +1,148 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}Catégories — Lexique Lectura{% endblock %}
+{% block meta_description %}Explorer les catégories du Lexique Lectura : lieux, personnes, sciences, arts…{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Catégories", "url": ""}] %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+<h1 class="page-title">Catégories</h1>
+
+<div class="cat-layout">
+  <aside class="cat-sidebar">
+    <div class="cat-toolbar">
+      <input type="text" id="cat-filter" placeholder="Filtrer..." class="cat-filter-input">
+      <label class="cat-toggle"><input type="checkbox" id="cat-hide-empty" checked> Masquer vides</label>
+    </div>
+    <div class="cat-tree" id="cat-tree">
+      <p style="color:var(--c-text-light)">Chargement…</p>
+    </div>
+  </aside>
+
+  <div class="cat-content" id="cat-content">
+    <p style="color:var(--c-text-light)">Sélectionnez une catégorie dans l'arbre pour voir ses entités.</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  var tree = document.getElementById('cat-tree');
+  var content = document.getElementById('cat-content');
+  var filterInput = document.getElementById('cat-filter');
+  var hideEmpty = document.getElementById('cat-hide-empty');
+
+  function slugify(s) {
+    return s.toLowerCase().replace(/[^\w\sàâäéèêëïîôùûüÿçœæ-]/g, '').replace(/[\s_]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function renderNode(node, depth) {
+    var hasChildren = node.children && node.children.length > 0;
+    var li = document.createElement('li');
+    li.className = 'cat-node' + (hasChildren ? ' cat-branch' : ' cat-leaf');
+    li.dataset.label = node.label.toLowerCase();
+    li.dataset.rc = node.rc;
+
+    var row = document.createElement('div');
+    row.className = 'cat-row';
+
+    if (hasChildren) {
+      var toggle = document.createElement('span');
+      toggle.className = 'cat-toggle-icon';
+      toggle.textContent = '\u25B6';
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var ul = li.querySelector(':scope > ul');
+        if (!ul) return;
+        var open = ul.style.display !== 'none';
+        ul.style.display = open ? 'none' : '';
+        toggle.textContent = open ? '\u25B6' : '\u25BC';
+      });
+      row.appendChild(toggle);
+    } else {
+      var spacer = document.createElement('span');
+      spacer.className = 'cat-toggle-icon cat-spacer';
+      spacer.textContent = '\u2022';
+      row.appendChild(spacer);
+    }
+
+    var link = document.createElement('a');
+    link.href = '#';
+    link.className = 'cat-label';
+    link.textContent = node.label;
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      // Mark active
+      tree.querySelectorAll('.cat-label.active').forEach(function(el) { el.classList.remove('active'); });
+      link.classList.add('active');
+      // Navigate to category page in the content area
+      window.location.href = '/categorie/' + slugify(node.label);
+    });
+    row.appendChild(link);
+
+    var count = document.createElement('span');
+    count.className = 'cat-count';
+    count.textContent = node.rc > 0 ? '(' + node.rc + ')' : '';
+    row.appendChild(count);
+
+    li.appendChild(row);
+
+    if (hasChildren) {
+      var ul = document.createElement('ul');
+      ul.className = 'cat-children';
+      ul.style.display = 'none';
+      for (var i = 0; i < node.children.length; i++) {
+        ul.appendChild(renderNode(node.children[i], depth + 1));
+      }
+      li.appendChild(ul);
+    }
+
+    return li;
+  }
+
+  function renderTree(roots) {
+    var ul = document.createElement('ul');
+    ul.className = 'cat-root';
+    for (var i = 0; i < roots.length; i++) {
+      ul.appendChild(renderNode(roots[i], 0));
+    }
+    tree.innerHTML = '';
+    tree.appendChild(ul);
+    applyFilters();
+  }
+
+  function applyFilters() {
+    var q = filterInput.value.toLowerCase().trim();
+    var hide = hideEmpty.checked;
+    var nodes = tree.querySelectorAll('.cat-node');
+
+    nodes.forEach(function(node) {
+      var label = node.dataset.label;
+      var rc = parseInt(node.dataset.rc, 10) || 0;
+      var matchText = !q || label.indexOf(q) !== -1;
+      var matchEmpty = !hide || rc > 0;
+      node.style.display = (matchText && matchEmpty) ? '' : 'none';
+      if (q && matchText) {
+        var parent = node.parentElement;
+        while (parent && parent.classList) {
+          if (parent.classList.contains('cat-children')) {
+            parent.style.display = '';
+            var icon = parent.parentElement.querySelector(':scope > .cat-row > .cat-toggle-icon');
+            if (icon && icon.textContent === '\u25B6') icon.textContent = '\u25BC';
+          }
+          parent = parent.parentElement;
+        }
+      }
+    });
+  }
+
+  filterInput.addEventListener('input', applyFilters);
+  hideEmpty.addEventListener('change', applyFilters);
+
+  fetch('/api/categories/arbre')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { renderTree(d); })
+    .catch(function() { tree.innerHTML = '<p>Erreur de chargement.</p>'; });
+})();
+</script>
+{% endblock %}

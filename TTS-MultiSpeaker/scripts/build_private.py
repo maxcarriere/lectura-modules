@@ -123,6 +123,17 @@ def main() -> None:
     total += config_dst.stat().st_size
     print(f"\n  Taille totale embarquee: {total / 1024 / 1024:.1f} Mo")
 
+    # Deplacer temporairement les .onnx pour eviter de les inclure dans le wheel
+    tmp_dir = PACKAGE_ROOT / "_tmp_onnx_backup"
+    tmp_dir.mkdir(exist_ok=True)
+    moved_onnx: list[tuple[Path, Path]] = []
+    for onnx_file in MODELES_DIR.glob("*.onnx"):
+        dst_tmp = tmp_dir / onnx_file.name
+        shutil.move(str(onnx_file), str(dst_tmp))
+        moved_onnx.append((dst_tmp, onnx_file))
+    if moved_onnx:
+        print(f"  {len(moved_onnx)} fichier(s) .onnx deplaces temporairement")
+
     # Build le wheel
     print("\nConstruction du wheel...")
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -149,9 +160,12 @@ def main() -> None:
     print("\nNettoyage des fichiers temporaires...")
     for enc in MODELES_DIR.glob("*.enc"):
         enc.unlink()
-    # Supprimer config.json copie (deja present dans modeles/ du repo en permanence)
-    # On ne le supprime pas s'il existait deja avant le build
-    # Les .enc sont les seuls fichiers temporaires
+
+    # Restaurer les .onnx deplaces
+    for src_tmp, dst_orig in moved_onnx:
+        shutil.move(str(src_tmp), str(dst_orig))
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
 
     print("\nBuild prive termine avec succes.")
 

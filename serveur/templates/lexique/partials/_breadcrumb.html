@@ -1,0 +1,11 @@
+<nav class="breadcrumb" aria-label="Fil d'Ariane">
+  <a href="/">Accueil</a>
+  {% for crumb in breadcrumbs %}
+  <span class="sep">&rsaquo;</span>
+  {% if loop.last %}
+  <span>{{ crumb.label }}</span>
+  {% else %}
+  <a href="{{ crumb.url }}">{{ crumb.label }}</a>
+  {% endif %}
+  {% endfor %}
+</nav>

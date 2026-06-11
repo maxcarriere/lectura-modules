@@ -25,7 +25,7 @@ Deux modes de fonctionnement :
 
 __version__ = "1.1.0"
 
-from lectura_correcteur._config import CorrecteurConfig
+from lectura_correcteur._config import CorrecteurConfig, CorrecteurV2Config, CorrecteurV3Config, CorrecteurV4Config, CorrecteurV5Config, CorrecteurV6Config
 from lectura_correcteur._types import (
     Correction,
     MotAnalyse,
@@ -35,6 +35,11 @@ from lectura_correcteur._types import (
     TypeCorrection,
 )
 from lectura_correcteur.correcteur import Correcteur
+from lectura_correcteur.correcteur_v2 import CorrecteurV2
+from lectura_correcteur.correcteur_v3 import CorrecteurV3
+from lectura_correcteur.correcteur_v4 import CorrecteurV4
+from lectura_correcteur.correcteur_v5 import CorrecteurV5
+from lectura_correcteur.correcteur_v6 import CorrecteurV6
 
 
 def creer_correcteur(
@@ -112,7 +117,17 @@ def creer_correcteur(
 
 __all__ = [
     "Correcteur",
+    "CorrecteurV2",
+    "CorrecteurV3",
+    "CorrecteurV4",
+    "CorrecteurV5",
     "CorrecteurConfig",
+    "CorrecteurV2Config",
+    "CorrecteurV3Config",
+    "CorrecteurV4Config",
+    "CorrecteurV5Config",
+    "CorrecteurV6",
+    "CorrecteurV6Config",
     "CorrecteurAPI",
     "Correction",
     "MotAnalyse",

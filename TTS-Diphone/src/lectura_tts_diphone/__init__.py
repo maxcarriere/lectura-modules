@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
-__version__ = "1.4.0"
+__version__ = "1.7.0"
 
 
 def creer_engine(
@@ -92,12 +92,18 @@ def synthetiser(
     macro_expressivity: float = 1.0,
     micro_expressivity: float = 1.0,
     seed: int | None = None,
-    prosody_style: str = "auto",
+    prosody_style: str = "regles",
     ap_cleanup: float = 1.5,
     formant_sharpening: float = 1.3,
     vtln_alpha: float = 1.0,
     timbre: str | None = None,
     base_f0: float = 175.0,
+    sentence_pause_ms: float = 400.0,
+    # -- Retimbre (OpenVoice zero-shot) --
+    voix: str | list[str] | dict[str, float] | None = None,
+    voix_variante: float = 0.0,
+    voix_tau: float = 0.3,
+    vc_models_dir: str | Path | None = None,
 ) -> Any:
     """Convenience : texte → numpy audio float32 @ 44100 Hz.
 
@@ -122,8 +128,8 @@ def synthetiser(
         Graine aleatoire pour la micro-prosodie.
         None = aleatoire, meme seed = meme resultat.
     prosody_style : str
-        Style prosodique force. "auto" = determine par la ponctuation.
-        Autres : "declaratif", "question", "exclamation", "suspensif", "neutre".
+        Style prosodique : "regles" (defaut, prosodie a base de regles LHiLH*)
+        ou "corpus" (prosodie extraite du corpus SIWIS, plus variee).
     ap_cleanup : float
         Compression AP (1.0=off, 1.5=defaut, max 3.0). Reduit la raucite.
     formant_sharpening : float
@@ -136,6 +142,25 @@ def synthetiser(
     base_f0 : float
         Pitch de base en Hz (defaut 175.0). homme ~120, femme ~200,
         enfant ~280.
+    sentence_pause_ms : float
+        Pause inter-phrase en ms (defaut 400). Controle la duree du
+        silence entre deux phrases (separees par . ! ? ...).
+    voix : str | list[str] | dict[str, float] | None
+        Voix cible pour retimbre OpenVoice. Polymorphe :
+        - str : nom de preset ("siwis") ou chemin fichier audio.
+        - list[str] : plusieurs references (poids egaux).
+        - dict[str, float] : blend pondere.
+          Ex: {"siwis": 0.5, "nadine": 0.3, "ezwa": 0.2}
+        None = pas de retimbre.
+        Presets: siwis, ezwa, nadine, bernard, gilles, zeckou.
+        Requires: pip install 'lectura-tts-diphone[vc]'
+    voix_variante : float
+        Curseur de variante vocale (-1 a +1).
+        -1 = grave/masculin, 0 = neutre, +1 = aigu/enfant.
+    voix_tau : float
+        Parametre tau d'OpenVoice (0 = deterministe, 0.3 = defaut).
+    vc_models_dir : str | Path | None
+        Repertoire des modeles VC (defaut: auto-detection).
 
     Returns
     -------
@@ -165,6 +190,11 @@ def synthetiser(
         vtln_alpha=vtln_alpha,
         timbre=timbre,
         base_f0=base_f0,
+        sentence_pause_ms=sentence_pause_ms,
+        voix=voix,
+        voix_variante=voix_variante,
+        voix_tau=voix_tau,
+        vc_models_dir=vc_models_dir,
     )
 
 

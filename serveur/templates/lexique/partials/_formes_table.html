@@ -1,0 +1,27 @@
+{% if formes %}
+<div class="section">
+  <h2 class="section-title">Formes fléchies</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Forme</th>
+        <th>Phonétique</th>
+        <th>Traits</th>
+        <th>Syllabes</th>
+        <th>Orthocode</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in formes %}
+      <tr>
+        <td><strong>{{ f.ortho }}</strong></td>
+        <td class="ipa">{% if f.phone %}/{{ f.phone }}/{% endif %}</td>
+        <td>{{ f.get('traits', '') or f.get('multext', '') }}</td>
+        <td class="ipa">{{ f.get('syllabes', '') }}</td>
+        <td>{{ f.get('orthocode', '') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

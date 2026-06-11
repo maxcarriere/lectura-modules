@@ -161,12 +161,76 @@ duration floor, synchronisation modules.
 - `_En Cours/Voix/tts/world_siwis/acoustic/fastpitch_lite/train.py`
 - `_En Cours/Voix/tts/world_siwis/scripts/audit_phones_v5.py` (nouveau)
 
+**f) Bug inference.py corrige (16 mai 2026)**
+- `inference.py` ligne 109 : `if self._version != "v2":` zeroisait les poids de
+  phrase_type_emb, energy_emb, energy_predictor, speaker_emb pour les checkpoints v1.
+  En bumpant la version a "v5", ce guard se declenchait et detruisait les poids entraines.
+- Fix : change en `if self._version == "v1":` — le zeroing ne s'applique qu'aux vrais v1.
+
+**g) Diagnostic echec du premier entrainement V5 (16 mai 2026)**
+
+Le premier entrainement V5 (50K steps, from scratch) produisait des mels inaudibles.
+Trois causes identifiees :
+
+1. **LR trop bas** : 1e-4 au lieu de 1e-3 (le mono original utilisait 1e-3).
+   Val loss V5=4.97 vs mono original=3.98. Le modele n'a pas assez converge.
+2. **Pas de GAN** : le mono original avait un fine-tuning GAN (discriminateur mel)
+   qui ajoute le contraste spectral. Sans ca, les mels L1 sont trop lisses.
+3. **Bug version check** (corrige ci-dessus) : zeroisait les poids a l'inference.
+
+Analyse comparative des checkpoints :
+- Mono original (`Modeles/TTS_Monospeaker/entrainement/`) : n_speakers=1, version=v2,
+  step=45000, val_loss=3.98, **entraine avec GAN**, lr=1e-3 L1 puis 2e-4 GAN
+- V5 echoue (`checkpoints/fastpitch_v5_mono/`) : n_speakers=1, version=v5,
+  step=45000, val_loss=4.97, **L1 seulement**, lr=1e-4
+- V4 fine-tune (`checkpoints/fastpitch_ft_siwis_v4/`) : fine-tuning du multi-speaker,
+  step=20000, poids quasi-identiques au MS (distance ~0.01)
+
+Le code d'entrainement original est conserve dans :
+`Modeles/TTS_Monospeaker/entrainement/train_fastpitch.py`
+
+**Donnees d'entrainement :**
+Les donnees sont identiques entre le mono original et le V5 :
+- `siwis_entries_syllabified.json` : champ `phones` = MFA (TextGrids, avec timings).
+  Le champ `ipa` (G2P) n'est PAS lu par le training. La re-phonemisation G2P v4
+  (pour le STT) n'affecte pas le training FastPitch.
+- `data_ssd/mels_pow2/` : spectrogrammes extraits de l'audio (invariants)
+- `data_ssd/f0_phones/`, `energy_phones/` : pitch/energy extraits (invariants)
+- `data_ssd/style_vectors_siwis.npy` : (97406, 5), 9762/9762 entries non-zero
+
+**Plan d'entrainement V5 (option A — from scratch) :**
+
+```bash
+cd _En Cours/Voix/tts/world_siwis
+
+# Phase 1 — L1 pre-entrainement (~55K steps, lr=1e-3)
+python3 acoustic/fastpitch_lite/train.py \
+    --mel-dir data_ssd/mels_pow2 \
+    --f0-dir data_ssd/f0_phones \
+    --energy-dir data_ssd/energy_phones \
+    --checkpoint-dir checkpoints/fastpitch_v5_mono_scratch \
+    --batch-size 32 --steps 55000 --lr 1e-3 \
+    --n-speakers 1 --n-style-dims 5 \
+    --save-interval 5000
+
+# Phase 2 — GAN fine-tuning (~14K steps, lr=2e-4)
+python3 acoustic/fastpitch_lite/train.py \
+    --resume checkpoints/fastpitch_v5_mono_scratch/fastpitch_best.pt \
+    --gan --lr 2e-4 \
+    --mel-dir data_ssd/mels_pow2 \
+    --f0-dir data_ssd/f0_phones \
+    --energy-dir data_ssd/energy_phones \
+    --checkpoint-dir checkpoints/fastpitch_v5_mono_scratch_gan \
+    --batch-size 32 --steps 14000 \
+    --n-speakers 1 --n-style-dims 5 \
+    --save-interval 2000
+```
+
 **Prochaines etapes :**
-- [ ] Training test 500 steps (validation chargement + ponctuation dans logs)
-- [ ] Entrainement L1 complet 50K steps (`--d-model 128 --batch-size 32`)
-- [ ] Fine-tuning GAN 50K steps
+- [ ] Entrainement L1 complet 55K steps (lr=1e-3, from scratch)
+- [ ] Fine-tuning GAN 14K steps (lr=2e-4, resume du L1)
 - [ ] Export ONNX du meilleur checkpoint V5
-- [ ] Comparaison audio V5 vs V2
+- [ ] Comparaison audio V5 vs mono original
 - [ ] V5 Multi-Speaker (si mono satisfaisant)
 
 ---

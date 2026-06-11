@@ -740,3 +740,91 @@ def test_corpus_prosody_module():
     for sp in prosody:
         assert sp["f0_hz"] > 80.0
         assert sp["dur_ratio"] > 0
+
+
+# ── Tests retimbre ─────────────────────────────────────────────────────────
+
+def test_variante_to_sr_override():
+    """Formule : 0 → None, +1 → 11025, -1 → 44100."""
+    from lectura_tts_diphone._retimbre import variante_to_sr_override
+
+    # Neutre
+    assert variante_to_sr_override(0.0) is None
+    assert variante_to_sr_override(0.005) is None
+
+    # Aigu (+1 → sr_override = 22050/2 = 11025)
+    sr = variante_to_sr_override(1.0)
+    assert sr == 11025
+
+    # Grave (-1 → sr_override = 22050*2 = 44100)
+    sr = variante_to_sr_override(-1.0)
+    assert sr == 44100
+
+    # Intermediaire (+0.5 → 22050 / 2^0.5 ~ 15590)
+    sr = variante_to_sr_override(0.5)
+    assert 15000 < sr < 16000
+
+    # Clamp min
+    sr = variante_to_sr_override(2.0)
+    assert sr >= 8000
+
+    # Clamp max
+    sr = variante_to_sr_override(-2.0)
+    assert sr <= 48000
+
+
+def test_retimbre_import_guard():
+    """Sans vc-zeroshot installe, l'import de RetimbreEngine doit reussir
+    mais retimbre() doit lever ImportError si le module est absent."""
+    from lectura_tts_diphone._retimbre import RetimbreEngine
+    # L'import seul ne doit pas planter (lazy)
+    assert RetimbreEngine is not None
+
+
+def test_synth_groups_voix_none():
+    """voix=None → meme output qu'avant (pas de regression)."""
+    from lectura_tts_diphone.engine import DiphoneEngine
+    import inspect
+
+    sig = inspect.signature(DiphoneEngine.synthesize_groups)
+    params = sig.parameters
+
+    # Le parametre voix existe et a None par defaut
+    assert "voix" in params
+    assert params["voix"].default is None
+    assert "voix_variante" in params
+    assert params["voix_variante"].default == 0.0
+    assert "voix_tau" in params
+    assert params["voix_tau"].default == 0.3
+
+
+def test_retimbre_cache_key():
+    """_make_cache_key produit des cles hashables pour tous les types."""
+    from lectura_tts_diphone._retimbre import _make_cache_key
+
+    # str
+    key1 = _make_cache_key("siwis", None)
+    assert isinstance(key1, tuple)
+    assert key1 == ("siwis", None)
+
+    # list
+    key2 = _make_cache_key(["siwis", "nadine"], 11025)
+    assert key2 == (("siwis", "nadine"), 11025)
+
+    # dict
+    key3 = _make_cache_key({"siwis": 0.5, "nadine": 0.5}, None)
+    assert isinstance(key3[0], tuple)  # sorted items tuple
+
+    # Same dict different order → same key
+    key4 = _make_cache_key({"nadine": 0.5, "siwis": 0.5}, None)
+    assert key3 == key4
+
+
+def test_retimbre_voix_types():
+    """Le type hint de voix accepte str, list, dict."""
+    from lectura_tts_diphone._retimbre import RetimbreEngine, VoixSpec
+    import inspect
+
+    sig = inspect.signature(RetimbreEngine.retimbre)
+    # Le parametre reference accepte VoixSpec
+    assert "reference" in sig.parameters

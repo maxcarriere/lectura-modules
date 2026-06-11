@@ -1,0 +1,45 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}{% if terminaison %}Rimes en « {{ terminaison }} »{% else %}Rimes{% endif %} — Lexique Lectura{% endblock %}
+{% block meta_description %}{% if terminaison %}Mots qui riment en « {{ terminaison }} »{% else %}Trouver des rimes par terminaison phonétique{% endif %} — Lexique Lectura.{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{"label": "Rimes", "url": "/rimes"}] %}
+{% if terminaison %}{% set breadcrumbs = breadcrumbs + [{"label": terminaison, "url": ""}] %}{% endif %}
+{% include "lexique/partials/_breadcrumb.html" %}
+
+<h1 class="page-title">{% if terminaison %}Rimes en « {{ terminaison }} »{% else %}Rimes{% endif %}</h1>
+
+<form action="" method="get" id="rimes-form" style="margin-bottom:1.5rem">
+  <div class="search-bar">
+    <input type="text" id="rimes-input" value="{{ terminaison }}" placeholder="Terminaison phonétique (ex: aʁ, ɛl, ɔ̃)…" autofocus>
+    <button type="submit">Chercher</button>
+  </div>
+</form>
+<script>
+document.getElementById('rimes-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var val = document.getElementById('rimes-input').value.trim();
+  if (val) window.location.href = '/rimes/' + encodeURIComponent(val);
+});
+</script>
+
+{% if terminaison %}
+<p class="page-subtitle">{{ resultats|length }} mot{{ 's' if resultats|length > 1 else '' }}</p>
+{% if resultats %}
+<ul class="results-list">
+  {% for r in resultats %}
+  <li class="result-item">
+    <a href="/mot/{{ r.lemme or r.ortho }}" class="result-word">{{ r.ortho }}</a>
+    {% if r.phone %}<span class="ipa">/{{ r.phone }}/</span>{% endif %}
+    <span class="result-meta">
+      {% if r.cgram %}<span class="cgram-tag">{{ r.cgram }}</span>{% endif %}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Aucun mot trouvé rimant en « {{ terminaison }} ».</p>
+{% endif %}
+{% endif %}
+{% endblock %}

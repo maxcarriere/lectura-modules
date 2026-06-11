@@ -60,6 +60,7 @@ PUBLIC_EXCLUDE_PATTERNS = [
     "Correcteur/benchmark/",
     "Correcteur/checkpoints/",
     "Correcteur/data/",
+    "benchmark_posttraitement.py",
 ]
 
 # ── Exclusions PRIVE (→ VPS / client) ───────────────────────────────────

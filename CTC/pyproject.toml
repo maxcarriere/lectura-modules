@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-ctc"
-version = "1.0.0"
+version = "2.0.0"
 description = "Decodeur phonetique CTC du francais — audio vers phones IPA (CNN-BiGRU-CTC)"
 readme = "README.md"
 requires-python = ">=3.10"

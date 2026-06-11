@@ -29,26 +29,76 @@ _TOKEN_RE = re.compile(
 # grammaticaux, jamais des noms communs en contexte reel.
 _FUNCTION_WORD_POS: dict[str, str] = {
     # Pronoms personnels (NOM domine par freq dans v4)
+    "je": "PRO:per",
+    "tu": "PRO:per",
+    "il": "PRO:per",
     "elle": "PRO:per",
+    "nous": "PRO:per",
+    "vous": "PRO:per",
+    "ils": "PRO:per",
     "elles": "PRO:per",
     "on": "PRO:per",
     # Articles / determinants (NOM domine par freq dans v4)
+    "le": "ART:def",
+    "les": "ART:def",
     "un": "ART:ind",
     "une": "ART:ind",
     "des": "ART",
     "du": "ART",
     "la": "ART",
+    # Demonstratifs
+    "ce": "ADJ:dem",
+    "ces": "ADJ:dem",
+    "cet": "ADJ:dem",
+    "cette": "ADJ:dem",
     # Possessifs (NOM domine par freq dans v4)
     "mon": "ADJ:pos",
     "ton": "ADJ:pos",
+    "son": "ADJ:pos",
     "sa": "ADJ:pos",
     "ma": "ADJ:pos",
     "ta": "ADJ:pos",
+    "mes": "ADJ:pos",
+    "tes": "ADJ:pos",
+    "ses": "ADJ:pos",
+    "nos": "ADJ:pos",
+    "vos": "ADJ:pos",
+    "leur": "ADJ:pos",
+    "leurs": "ADJ:pos",
+    # Indefinis
+    "quelques": "ART:ind",
+    "plusieurs": "ART:ind",
+    "chaque": "ART:ind",
+    "tout": "ADJ:ind",
+    "tous": "ADJ:ind",
+    "toute": "ADJ:ind",
+    "toutes": "ADJ:ind",
     # Prepositions / contractions
+    "de": "PRE",
     "au": "PRE",
     "aux": "ART:def",
+    "dans": "PRE",
+    "sur": "PRE",
+    "sous": "PRE",
+    "avec": "PRE",
+    "sans": "PRE",
+    "pour": "PRE",
+    "par": "PRE",
+    "entre": "PRE",
+    # Adverbes accentues (proteger contre P2G la→là, ou→où)
+    "là": "ADV",
+    "où": "PRO:rel",
     # Verbe etre (ADJ "est"=east domine par freq egale dans v4)
     "est": "AUX",
+    # Auxiliaires etre/avoir (G2P classifie en VER)
+    "sont": "AUX",    # ils sont
+    "suis": "AUX",    # je suis
+    "es": "AUX",      # tu es
+    "sommes": "AUX",  # nous sommes
+    "êtes": "AUX",    # vous êtes
+    "ont": "AUX",     # ils ont
+    "avons": "AUX",   # nous avons
+    "avez": "AUX",    # vous avez
 }
 
 # POS grammaticaux a preferer pour les mots courts (<=3 chars)

@@ -146,6 +146,7 @@ def analyser_phrase_complete(
     tokens: list[Any],
     engine: Any | None = None,
     options_lecture: OptionsLecture | None = None,
+    engine_kwargs: dict | None = None,
 ) -> ResultatPhraseG2P:
     """Pipeline complet : mots via neural, formules via algo.
 
@@ -181,6 +182,24 @@ def analyser_phrase_complete(
 
     if not items:
         return ResultatPhraseG2P()
+
+    # ── Étape 1b : détecter les élisions (clitique + apostrophe) ──
+    # Le Tokeniseur découpe "s'est" → MOT("s") + SEP("'") + MOT("est").
+    # On doit passer "s'" au neural pour que g2p_corrections_unifie.json
+    # renvoie le son du clitique ("s") et non le nom de la lettre ("ɛs").
+    elision_indices: set[int] = set()
+    corrections = _get_compound_corrections()
+    for i, tok in enumerate(tokens):
+        ttype = getattr(tok, "type", None)
+        tname = str(getattr(ttype, "value", str(ttype))).lower() if ttype else ""
+        if tname == "mot" and i + 1 < len(tokens):
+            nxt = tokens[i + 1]
+            nt = getattr(nxt, "type", None)
+            nn = str(getattr(nt, "value", str(nt))).lower() if nt else ""
+            if nn == "separateur" and getattr(nxt, "text", "") == "'":
+                candidate = getattr(tok, "text", str(tok)).lower() + "'"
+                if candidate in corrections:
+                    elision_indices.add(i)
 
     # ── Étape 2 : préparer tokens pour le modèle neural ──
     # Seuls les mots et formules (placeholder) passent au neural.
@@ -219,14 +238,18 @@ def analyser_phrase_complete(
             else:
                 # Mot simple ou composé avec correction dédiée : passer entier
                 item_to_neural[item_idx] = len(neural_tokens)
-                neural_tokens.append(getattr(tok, "text", str(tok)))
+                tok_text = getattr(tok, "text", str(tok))
+                if orig_idx in elision_indices:
+                    tok_text = tok_text + "'"
+                neural_tokens.append(tok_text)
 
     # ── Étape 3 : exécuter le modèle neural ──
 
     neural_result: dict[str, Any] = {}
     if engine is not None and neural_tokens:
         try:
-            neural_result = engine.analyser(neural_tokens)
+            _ekw = engine_kwargs or {}
+            neural_result = engine.analyser(neural_tokens, **_ekw)
         except Exception:
             neural_result = {}
 
@@ -288,7 +311,9 @@ def analyser_phrase_complete(
                 sub_phones = appliquer_liaison(
                     sub_tokens, sub_phones, sub_liaisons,
                 )
-                phone = "".join(sub_phones)
+                _ekw = engine_kwargs or {}
+                compound_sep = "-" if _ekw.get("sep_hyphen") else ""
+                phone = compound_sep.join(sub_phones)
                 pos = pos_list[c_start] if c_start < len(pos_list) else ""
                 liaison = ""
                 word_morpho: dict[str, str] = {}
@@ -311,5 +336,12 @@ def analyser_phrase_complete(
                 liaison=liaison,
                 morpho=word_morpho,
             ))
+
+    # ── Étape 5 : neutraliser les liaisons avant ponctuation ──
+    # Le modèle prédit les liaisons sans contexte du token suivant.
+    # Une ponctuation de fin de phrase bloque toute liaison.
+    for i in range(len(mots_resultat) - 1):
+        if mots_resultat[i + 1].est_ponctuation:
+            mots_resultat[i].liaison = ""
 
     return ResultatPhraseG2P(mots=mots_resultat)

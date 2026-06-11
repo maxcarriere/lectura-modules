@@ -38,5 +38,6 @@ async def analyser(req: AnalyserRequest):
         {"ipa_words": [...], "ortho": [...], "pos": [...], "morpho": {...}}
     """
     engine = _get_engine()
-    result = engine.analyser(req.ipa_words)
-    return result
+
+    import lectura_p2g
+    return lectura_p2g.analyser(req.ipa_words, engine=engine)

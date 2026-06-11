@@ -1,0 +1,34 @@
+{% extends "lexique/base.html" %}
+
+{% block title %}Lexique Lectura — Dictionnaire français{% endblock %}
+{% block meta_description %}{{ '{:,}'.format(nb_lemmes).replace(',', ' ') }} mots, définitions, phonétique IPA, conjugaisons, synonymes, rimes. Lexique complet de la langue française.{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>Lexique Lectura</h1>
+  <p>Dictionnaire français — définitions, phonétique, conjugaisons, synonymes, rimes</p>
+  {% include "lexique/partials/_search_bar.html" %}
+  <div class="stats-bar">
+    <span><strong>{{ '{:,}'.format(nb_lemmes).replace(',', ' ') }}</strong> lemmes</span>
+    <span><strong>{{ '{:,}'.format(nb_entites).replace(',', ' ') }}</strong> entités</span>
+    <span><strong>{{ '{:,}'.format(nb_categories).replace(',', ' ') }}</strong> catégories</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block json_ld %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Lexique Lectura",
+  "url": "https://lexique.lec-tu-ra.com/",
+  "description": "Dictionnaire français : définitions, phonétique IPA, conjugaisons, synonymes, rimes.",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://lexique.lec-tu-ra.com/rechercher?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+{% endblock %}

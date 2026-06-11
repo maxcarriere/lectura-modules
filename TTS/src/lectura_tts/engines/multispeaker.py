@@ -32,6 +32,7 @@ class MultispeakerTTSEngine:
         variability: str = "off",
         seed: str = "",
         determinism: float = 0.5,
+        style: str = "",
     ) -> None:
         self._models_dir = models_dir or None
         self._speaker = speaker.lower()
@@ -50,6 +51,7 @@ class MultispeakerTTSEngine:
             self._variability = True
         else:
             self._variability = str(variability).lower() in ("on", "true", "1")
+        self._style = style or None
         self._engine = None
 
     def _ensure_loaded(self) -> None:
@@ -72,6 +74,7 @@ class MultispeakerTTSEngine:
             energy_scale=self._energy_scale,
             pause_scale=self._pause_scale,
             variability=self._variability,
+            style=self._style,
         )
         return self._convert_result(result)
 
@@ -87,6 +90,7 @@ class MultispeakerTTSEngine:
             energy_scale=self._energy_scale,
             pause_scale=self._pause_scale,
             variability=self._variability,
+            style=self._style,
         )
         return self._convert_result(result)
 
@@ -131,6 +135,10 @@ register(EngineInfo(
         EngineParam("speaker", "Voix", "choice", "Siwis",
                     choices=["Siwis", "Ezwa", "Nadine", "Bernard", "Gilles", "Zeckou"],
                     role="speaker"),
+        EngineParam("style", "Style", "choice", "",
+                    choices=["", "neutre", "narratif", "dialogue",
+                             "expressif", "meditatif", "rapide", "lent"],
+                    role="style"),
         EngineParam("phrase_type", "Type de phrase", "choice", "Auto",
                     choices=["Auto",
                              "0 (declaratif)", "1 (interrogatif)",

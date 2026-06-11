@@ -23,10 +23,18 @@ def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
 
 def _smooth_temporal(mel: np.ndarray, sigma: float = 3.0) -> np.ndarray:
     """Lissage temporel par convolution gaussienne, bande par bande."""
+    T = mel.shape[1]
     kernel = _gaussian_kernel_1d(sigma)
+    # Pour les sequences tres courtes (< taille kernel), tronquer le kernel
+    if T < len(kernel):
+        center = len(kernel) // 2
+        half = T // 2
+        kernel = kernel[center - half : center + half + (T % 2)]
+        if kernel.sum() > 0:
+            kernel /= kernel.sum()
     smoothed = np.zeros_like(mel)
     for i in range(mel.shape[0]):
-        smoothed[i] = np.convolve(mel[i], kernel, mode="same")
+        smoothed[i] = np.convolve(mel[i], kernel, mode="same")[:T]
     return smoothed
 
 
