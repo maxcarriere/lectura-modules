@@ -1622,6 +1622,10 @@ class CorrecteurV6:
         if self._config.activer_phase2:
             corrections.extend(self._corriger_nom_p2g(mots))
 
+        # 3f-quater. Phase 2 — ADJ generique via P2G
+        if self._config.activer_phase2:
+            corrections.extend(self._corriger_adj_p2g(mots))
+
         # 3g. Accord attribut a travers verbe d'etat
         if self._config.activer_accord_attribut:
             corrections.extend(self._corriger_accord_attribut(mots))
@@ -5122,20 +5126,21 @@ class CorrecteurV6:
         """Corrige le nombre d'un NOM via le signal P2G (Phase 2 suggestion).
 
         Cas typique : "les activite" -> "activites" quand P2G propose
-        la forme plurielle avec confiance suffisante et meme lemme.
+        la forme plurielle avec confiance suffisante et changement
+        de nombre morphologique confirme.
 
         Guards :
         1. mv.regle vide (pas deja corrige)
         2. mv.div_ortho = True (P2G diverge)
         3. P2G propose une forme differente
-        4. mv.p2g_confiance >= 0.75
+        4. mv.p2g_confiance >= 0.65
         5. mv.g2p_pos.startswith("NOM")
         6. Pas dans _MOTS_PROTEGES, _INVARIABLES_S
         7. len(forme) > 2, alphabetique
         8. Pas nom propre capitalise en milieu de phrase
         9. P2G existe dans le lexique comme NOM
-        10. Meme lemme
-        11. Nombre differe entre original et P2G
+        10. Changement de nombre morphologique (_est_changement_nombre_seul)
+        11. Guard contexte : sans DET/PREP, exiger confiance >= 0.90
         12. Pas de ponctuation intercalaire
         """
         corrections: list[Correction] = []
@@ -5156,7 +5161,7 @@ class CorrecteurV6:
                 continue
 
             # 4. Confiance P2G suffisante
-            if mv.p2g_confiance < 0.75:
+            if mv.p2g_confiance < 0.65:
                 continue
 
             # 5. G2P dit NOM
@@ -5187,6 +5192,11 @@ class CorrecteurV6:
             if mv.preceded_by_punct:
                 continue
 
+            # Guard contexte : sans DET/PREP confirmant, exiger confiance haute
+            _ctx_ok = self._contexte_confirme_nombre_p2g(mots, i, mv, p2g_low)
+            if not _ctx_ok and mv.p2g_confiance < 0.90:
+                continue
+
             # 9. P2G existe dans le lexique comme NOM
             if not lex.existe(p2g_low):
                 continue
@@ -5197,25 +5207,8 @@ class CorrecteurV6:
             if not p2g_est_nom:
                 continue
 
-            # 10. Meme lemme
-            if not self._meme_lemme(forme_low, p2g_low):
-                continue
-
-            # 11. Nombre differe entre original et P2G
-            orig_infos = lex.info(forme_low)
-            orig_nombre = None
-            for e in orig_infos:
-                if (e.get("cgram") or "").startswith("NOM"):
-                    orig_nombre = e.get("nombre", "")
-                    break
-            p2g_nombre = None
-            for e in p2g_infos:
-                if (e.get("cgram") or "").startswith("NOM"):
-                    p2g_nombre = e.get("nombre", "")
-                    break
-            if not orig_nombre or not p2g_nombre:
-                continue
-            if orig_nombre == p2g_nombre:
+            # 10. Changement de nombre morphologique
+            if not self._est_changement_nombre_seul(forme_low, p2g_low):
                 continue
 
             # Appliquer
@@ -5230,7 +5223,118 @@ class CorrecteurV6:
                 regle=mv.regle,
                 explication=(
                     f"NOM P2G: '{mv.forme}' -> '{p2g}' "
-                    f"(nombre {orig_nombre}->{p2g_nombre})"
+                    f"(changement nombre)"
+                ),
+            ))
+
+        return corrections
+
+    # ------------------------------------------------------------------
+    # 3f-quater. ADJ generique via P2G (Phase 2)
+    # ------------------------------------------------------------------
+
+    def _corriger_adj_p2g(self, mots: list[MotV6]) -> list[Correction]:
+        """Corrige le nombre d'un ADJ via le signal P2G (Phase 2).
+
+        Cas typique : "des resultats important" -> "importants" quand P2G
+        propose la forme plurielle avec confiance suffisante et changement
+        de nombre morphologique confirme.
+
+        Guards :
+        1. mv.regle vide (pas deja corrige)
+        2. mv.div_ortho = True (P2G diverge)
+        3. P2G propose une forme differente
+        4. mv.p2g_confiance >= 0.65
+        5. g2p_pos ou p2g_pos commence par "ADJ"
+        6. Pas dans _MOTS_PROTEGES
+        7. len(forme) > 2, alphabetique
+        8. Pas nom propre capitalise en milieu de phrase
+        9. Pas de ponctuation intercalaire
+        10. P2G existe dans le lexique comme ADJ
+        11. Changement de nombre morphologique (_est_changement_nombre_seul)
+        12. Guard contexte : sans DET/PREP, exiger confiance >= 0.90
+        """
+        corrections: list[Correction] = []
+        lex = self._lexique
+
+        for i, mv in enumerate(mots):
+            # 1. Pas deja corrige
+            if mv.regle:
+                continue
+
+            # 2. Divergence ortho
+            if not mv.div_ortho:
+                continue
+
+            # 3. P2G propose une forme differente
+            p2g = mv.p2g_ortho
+            if not p2g or p2g == mv.forme:
+                continue
+
+            # 4. Confiance P2G suffisante
+            if mv.p2g_confiance < 0.65:
+                continue
+
+            # 5. G2P ou P2G dit ADJ
+            g2p_adj = mv.g2p_pos and mv.g2p_pos.startswith("ADJ")
+            p2g_adj = mv.p2g_pos and mv.p2g_pos.startswith("ADJ")
+            if not g2p_adj and not p2g_adj:
+                continue
+
+            forme_low = mv.forme.lower()
+            p2g_low = p2g.lower()
+
+            # 6. Pas dans mots proteges
+            if forme_low in _MOTS_PROTEGES:
+                continue
+
+            # 7. Longueur et alphabetique
+            if len(forme_low) <= 2:
+                continue
+            if not forme_low.isalpha():
+                continue
+
+            # 8. Pas nom propre capitalise en milieu de phrase
+            _orig = mv.correction or mv.forme
+            if i > 0 and _orig[0].isupper():
+                continue
+
+            # 9. Pas de ponctuation intercalaire
+            if mv.preceded_by_punct:
+                continue
+
+            # Guard contexte : sans DET/PREP confirmant, exiger confiance haute
+            _ctx_ok = self._contexte_confirme_nombre_p2g(mots, i, mv, p2g_low)
+            if not _ctx_ok and mv.p2g_confiance < 0.90:
+                continue
+
+            # 10. P2G existe dans le lexique comme ADJ
+            if not lex.existe(p2g_low):
+                continue
+            p2g_infos = lex.info(p2g_low)
+            p2g_est_adj = any(
+                (e.get("cgram") or "").startswith("ADJ") for e in p2g_infos
+            )
+            if not p2g_est_adj:
+                continue
+
+            # 11. Changement de nombre morphologique
+            if not self._est_changement_nombre_seul(forme_low, p2g_low):
+                continue
+
+            # Appliquer
+            mv.correction = transferer_casse(mv.correction, p2g)
+            mv.regle = "p2.accord.adj_p2g"
+
+            corrections.append(Correction(
+                index=mv.index,
+                original=mv.forme,
+                corrige=mv.correction,
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle=mv.regle,
+                explication=(
+                    f"ADJ P2G: '{mv.forme}' -> '{p2g}' "
+                    f"(changement nombre)"
                 ),
             ))
 
