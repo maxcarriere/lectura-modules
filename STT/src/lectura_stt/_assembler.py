@@ -23,6 +23,8 @@ _H_ASPIRE = {
     "hiérarchie", "hisser", "hobby", "hocher", "hockey", "hollande", "homard",
     "hongrie", "honte", "hoquet", "horde", "hors", "houille", "houle",
     "hublot", "huche", "huer", "hurler", "hussard", "hutte",
+    # Mots sans elision (pas h aspire mais meme comportement)
+    "onze", "onzieme", "onzième", "huit", "huitieme", "huitième",
 }
 
 # Clitiques pouvant s'elider devant voyelle

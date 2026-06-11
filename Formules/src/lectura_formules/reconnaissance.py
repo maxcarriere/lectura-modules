@@ -1068,17 +1068,23 @@ def _is_formule_token(ipa_word: str) -> bool:
 
     Plus large que _is_number_token : accepte aussi mois, heure_word,
     devise, pourcent, ordinal en plus de nombre et special.
+
+    Un mot compose uniquement de lettres E (schwas residuels CTC) est
+    rejete — sinon "est" (/ɛ/) et "et" (/e/) seraient inclus dans les
+    spans de formules et disparaitraient du texte.
     """
     tokens = _tokenize_ipa_stt(ipa_word)
     if not tokens:
         return False
+    has_real = False
     for tok in tokens:
         if tok.category in _FORMULE_CATEGORIES:
+            has_real = True
             continue
         if tok.category == "lettre" and tok.value == "E":
-            continue  # schwa residuel
+            continue  # schwa residuel (tolere si accompagne d'un vrai token)
         return False
-    return True
+    return has_real
 
 
 def _is_formule_token_permissive(ipa_word: str) -> bool:
