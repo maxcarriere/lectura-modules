@@ -84,6 +84,8 @@ INVARIABLES = frozenset({
     "terminus", "prospectus", "virus", "oasis", "atlas",
     # Mots deja au pluriel (latin, etc.)
     "minima", "maxima", "media",
+    # Emprunts anglais invariables en français
+    "data", "news", "business", "stress", "boss", "miss",
     # Adverbes et mots invariables courants
     "plus", "moins", "très", "assez", "trop",
     # Mois (quasi-jamais pluralises)

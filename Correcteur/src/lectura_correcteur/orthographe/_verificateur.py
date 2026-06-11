@@ -376,11 +376,12 @@ class VerificateurOrthographe:
                     # Guard: only apply accent disambiguation for ADDING accents
                     # (ecole→école is safe; né→ne or classé→classe is dangerous)
                     # Exception: whitelist of safe accent REMOVAL pairs (là→la, où→ou)
+                    _ACCENTED = "àâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ"
                     _n_accents_orig = sum(
-                        1 for c in mot if c in "àâäéèêëïîôùûüÿç"
+                        1 for c in mot if c in _ACCENTED
                     )
                     _n_accents_alt = sum(
-                        1 for c in accent_alt if c in "àâäéèêëïîôùûüÿç"
+                        1 for c in accent_alt if c in _ACCENTED
                     )
                     # Guard: skip accent disambiguation in foreign context
                     # (prev or next word is capitalized proper noun or OOV)
@@ -454,7 +455,9 @@ class VerificateurOrthographe:
                 _len = len(low)
                 _seuil_suspect = 5.0 if _len > 3 else 2.0
 
-                if freq_actuelle < _seuil_suspect:
+                # Guard: mots d'une lettre (a, à, y, etc.) sont des mots
+                # grammaticaux valides, ne pas les corriger par frequence
+                if freq_actuelle < _seuil_suspect and _len > 1:
                     # Guards: nom propre, mot etranger, contexte etranger
                     _is_proper = (
                         i > 0

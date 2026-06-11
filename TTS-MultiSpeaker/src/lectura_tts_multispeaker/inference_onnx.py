@@ -26,7 +26,7 @@ SEMITONE = 0.0577622  # log(2) / 12
 _PROSODY_DEFAULTS = {
     "duration_scale": 1.0,
     "pitch_shift": 0.0,
-    "pitch_range": 1.3,
+    "pitch_range": 1.0,
     "energy_scale": 1.0,
     "pause_scale": 1.0,
 }
@@ -423,7 +423,7 @@ class OnnxTTSEngine:
             phrase_type: 0=decl, 1=inter, 2=excl, 3=susp
             duration_scale: Multiplicateur de duree globale (None = preset ou 1.0)
             pitch_shift: Decalage F0 en demi-tons (None = preset ou 0.0)
-            pitch_range: Echelle de variation F0 (None = preset ou 1.3)
+            pitch_range: Echelle de variation F0 (None = preset ou 1.0)
             energy_scale: Multiplicateur d'energie (None = preset ou 1.0)
             pause_scale: Multiplicateur pour les pauses (None = preset ou 1.0)
             style: Nom d'un preset de style (ex: "narratif", "dialogue")
@@ -523,6 +523,34 @@ class OnnxTTSEngine:
             min_dur = get_phone_min_frames(phone)
             durations[frame_idx] = max(durations[frame_idx], min_dur)
 
+        # Duree minimale du dernier phone parle (position finale de mot).
+        # Le modele multi sous-predit les consonnes finales sur mots isoles.
+        _MIN_FINAL_PHONE_FRAMES = 6  # ~70 ms
+        last_phone_idx = len(phone_ids) - 2  # avant le SIL final
+        durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
+
+        # SIL final minimum (evite la coupure en fin de mot)
+        _MIN_FINAL_SIL_FRAMES = 8  # ~93 ms a 22050 Hz / 256 hop
+        durations[-1] = max(durations[-1], _MIN_FINAL_SIL_FRAMES)
+
+        # Detection sequence courte (mots isoles / 2-3 mots)
+        _spoken_mask = np.array(
+            [False]  # SIL initial
+            + [p not in _SILENCE_PHONES for p in phones]
+            + [False],  # SIL final
+            dtype=bool,
+        )
+        _n_spoken = int(_spoken_mask.sum())
+        _has_punct = any(p in _PUNCT_MIN_FRAMES for p in phones)
+        _is_short_sequence = _n_spoken <= 10 and not _has_punct and _n_spoken >= 2
+
+        # Ralentissement des phones parles sur sequences courtes
+        if _is_short_sequence:
+            _SLOW_FACTOR = 1.15
+            _spoken_indices = np.where(_spoken_mask)[0]
+            for _si in _spoken_indices:
+                durations[_si] = max(1, int(round(durations[_si] * _SLOW_FACTOR)))
+
         # Pitch avec shift et range
         pitch_mean = pitch_pred[0].mean()
         pitch_values = (
@@ -530,6 +558,34 @@ class OnnxTTSEngine:
             + (pitch_pred[0] - pitch_mean) * pitch_range
             + pitch_shift * SEMITONE
         )
+
+        # Clamper les valeurs aberrantes (phones non-SIL)
+        # Le modele multi produit parfois des extremes sur les mots courts.
+        _PITCH_CLAMP_SIGMA = 2.0
+        speech_mask = ~pause_mask
+        if speech_mask.any():
+            sp = pitch_values[speech_mask]
+            sp_mean = sp.mean()
+            sp_std = max(sp.std(), 0.1)
+            lo = sp_mean - _PITCH_CLAMP_SIGMA * sp_std
+            hi = sp_mean + _PITCH_CLAMP_SIGMA * sp_std
+            pitch_values = np.clip(pitch_values, lo, hi)
+
+        # Contour prosodique pour sequences courtes (mots isoles / 2-3 mots)
+        if _is_short_sequence:
+            _CONTOUR_AMP = 0.5
+            _spoken_indices = np.where(_spoken_mask)[0]
+            _positions = np.linspace(0.0, 1.0, _n_spoken)
+            # Demi-sinusoide asymetrique : pic a 60% de la sequence
+            _stretched = np.where(
+                _positions <= 0.6,
+                _positions / 0.6 * 0.5,       # [0, 0.6] -> [0, 0.5]
+                0.5 + (_positions - 0.6) / 0.4 * 0.5,  # [0.6, 1] -> [0.5, 1]
+            )
+            _contour = _CONTOUR_AMP * np.sin(np.pi * _stretched)
+            _contour -= _contour.mean()  # centrer : montee puis descente sous baseline
+            for _ci, _si in enumerate(_spoken_indices):
+                pitch_values[_si] += _contour[_ci]
 
         if variability:
             pitch_values *= rng.normal(1.0, 0.03, size=pitch_values.shape)
