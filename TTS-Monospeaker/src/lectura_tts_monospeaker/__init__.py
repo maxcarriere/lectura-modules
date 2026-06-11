@@ -15,7 +15,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-__version__ = "1.5.0"
+__version__ = "1.5.2"
 
 
 def creer_engine(

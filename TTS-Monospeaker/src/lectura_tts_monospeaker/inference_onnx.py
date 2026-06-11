@@ -405,6 +405,32 @@ class OnnxTTSEngine:
             + pitch_shift * SEMITONE
         )
 
+        # Contour prosodique pour sequences courtes (mots isoles / 2-3 mots)
+        # Detecte les phones parles (hors SIL et ponctuation)
+        _spoken_mask = np.array(
+            [False]  # SIL initial
+            + [p not in _SILENCE_PHONES for p in phones]
+            + [False],  # SIL final
+            dtype=bool,
+        )
+        _n_spoken = int(_spoken_mask.sum())
+        _has_punct = any(p in _PUNCT_MIN_FRAMES for p in phones)
+        if _n_spoken <= 10 and not _has_punct and _n_spoken >= 2:
+            # Demi-sinusoide asymetrique : pic a 60% de la sequence
+            _CONTOUR_AMP = 0.3
+            _spoken_indices = np.where(_spoken_mask)[0]
+            _positions = np.linspace(0.0, 1.0, _n_spoken)
+            # Etirer pour que sin(pi * x_stretched) atteigne son max a 60%
+            _stretched = np.where(
+                _positions <= 0.6,
+                _positions / 0.6 * 0.5,       # [0, 0.6] -> [0, 0.5]
+                0.5 + (_positions - 0.6) / 0.4 * 0.5,  # [0.6, 1] -> [0.5, 1]
+            )
+            _contour = _CONTOUR_AMP * np.sin(np.pi * _stretched)
+            _contour -= _contour.mean()  # centrer : montee puis descente sous baseline
+            for _ci, _si in enumerate(_spoken_indices):
+                pitch_values[_si] += _contour[_ci]
+
         if variability:
             pitch_values *= rng.normal(1.0, 0.03, size=pitch_values.shape)
 

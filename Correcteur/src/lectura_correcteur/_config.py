@@ -18,7 +18,7 @@ class CorrecteurConfig:
     seuil_remplacement: float = 0.15
     activer_azerty: bool = True
     activer_sms: bool = False
-    activer_negation: bool = True
+    activer_negation: bool = False  # Insertion ne/n' : trop de FP sur texte correct
     activer_viterbi: bool = False
     seuil_confiance_pos: float = 0.7
     max_suggestions: int = 5
@@ -28,12 +28,12 @@ class CorrecteurConfig:
     # present dans le lexique est quand meme soumis aux candidats d=1/d=2.
     # 0.0 = desactive (seuls les OOV sont corriges).
     # 5.0 = mots rares aussi candidats a la correction (aligne verificateur).
-    activer_editeur_homophones: bool = True  # BiLSTM edit tagger pour homophones
+    activer_editeur_homophones: bool = False  # BiLSTM edit tagger pour homophones (trop de FP)
     seuil_editeur: float = 0.95  # seuil de confiance minimum pour accepter
     # une prediction du BiLSTM editeur. 0.95 = conservative (haute precision).
     activer_lm: bool = False  # Modele de langue n-gram generique (desactive, remplace par lm_homophones)
     chemin_lm: str = ""  # Chemin vers ngram.db (vide = auto-detect dans data/)
-    activer_lm_homophones: bool = True  # LM trigramme specialise homophones
+    activer_lm_homophones: bool = False  # LM trigramme specialise homophones (trop de FP)
     chemin_lm_homophones: str = ""  # Chemin vers homophones_trigrams.db
     activer_pos_ngram: bool = True  # N-gram POS pour validation des corrections
     chemin_pos_ngram: str = ""  # Chemin vers pos_ngram.db

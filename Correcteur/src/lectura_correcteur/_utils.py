@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import re
 
-PUNCT_RE = re.compile(r'^[,;:!?.\u2026\u00ab\u00bb"()\[\]{}\u2013\u2014/]+$')
+PUNCT_RE = re.compile(r'^[,;:!?.\u2026\u00ab\u00bb"()\[\]{}\u2013\u2014/*_~#`]+$')
 
-_NO_SPACE_BEFORE = frozenset(",.;:)\u00bb\u2026")
-# French typography: space before ? and !
-_FRENCH_SPACE_BEFORE = frozenset("!?")
-_NO_SPACE_AFTER = frozenset("(\u00ab")
+_NO_SPACE_BEFORE = frozenset(",.)]\u2026")
+# French typography: space before ? ! : ; » (espace insecable en francais)
+_FRENCH_SPACE_BEFORE = frozenset("!?;:\u00bb")
+_NO_SPACE_AFTER = frozenset("([")
+# French guillemet ouvrant : espace apres (« mot)
+_FRENCH_SPACE_AFTER = frozenset("\u00ab")
 
 
 def transferer_casse(original: str, nouveau: str) -> str:
@@ -102,6 +104,10 @@ def reconstruire_phrase(tokens: list[str]) -> str:
             parts.append(" ")
             parts.append(tok)
         elif prev and prev[-1] in _NO_SPACE_AFTER:
+            parts.append(tok)
+        elif prev and prev[-1] in _FRENCH_SPACE_AFTER:
+            # French guillemet ouvrant : « mot (espace apres)
+            parts.append(" ")
             parts.append(tok)
         elif prev and prev.endswith(("'", "\u2019")):
             parts.append(tok)

@@ -1264,6 +1264,19 @@ def verifier_accords(
                         _kw = result[_k].lower()
                         if _kw in SING_DET and _kw not in PLUR_DET:
                             if _kw not in _PREP_DET:
+                                # Guard PP : si une PRE precede ce DET,
+                                # le NOM est dans un complement prepositionnel
+                                # (ex: "contre la poitrine, incapables")
+                                if _k > 0:
+                                    _pre_pos = pos_tags[_k - 1] if _k - 1 < len(pos_tags) else ""
+                                    _pre_mot = result[_k - 1].lower()
+                                    if _pre_pos == "PRE" or _pre_mot in (
+                                        "de", "dans", "sur", "sous", "pour",
+                                        "par", "avec", "sans", "contre",
+                                        "entre", "vers", "chez", "devant",
+                                        "derrière", "après", "avant",
+                                    ):
+                                        break
                                 _sing_det_1c = True
                             break
                         _kp = pos_tags[_k] if _k < len(pos_tags) else ""

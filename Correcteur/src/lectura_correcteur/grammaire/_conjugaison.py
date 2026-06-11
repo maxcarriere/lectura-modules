@@ -176,6 +176,22 @@ def _nombre_sujet_nominal(
     if j < 0:
         return None
 
+    # Guard coordination verbale : si on tombe sur NOM + VER/AUX juste avant,
+    # c'est probablement COD + verbe coordonne (virgule supprimee des tokens).
+    # Ex: "accusaient leur connexion, redémarraient" → connexion est COD, pas sujet.
+    if j >= 2:
+        _pos_j = pos_tags[j] if j < len(pos_tags) else ""
+        _pos_jm1 = pos_tags[j - 1] if j - 1 < len(pos_tags) else ""
+        _pos_jm2 = pos_tags[j - 2] if j - 2 < len(pos_tags) else ""
+        # Pattern: ... VER DET/ADJ NOM VER_cible → coordination
+        if (
+            _pos_j in ("NOM", "NOM PROPRE")
+            and _pos_jm1 in ("ART:def", "ART:ind", "ART", "DET", "ADJ:pos",
+                             "ADJ:dem", "DET:dem")
+            and _pos_jm2 in ("VER", "AUX")
+        ):
+            return None
+
     # Memoriser le premier NOM rencontre (pour le fallback)
     _first_nom_j = -1
     # Track if we've crossed a PP boundary (du/au/des/PRE)
