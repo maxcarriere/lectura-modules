@@ -869,6 +869,31 @@ def corriger_grammatical(
                              f"{result[i-1]} {result[i]} → {pp}")
                     continue
 
+        # ── Groupe N : etre + PP feminin -ée → masculin -é (defaut) ──
+        # Par defaut le PP avec etre est masculin, sauf si le sujet est
+        # explicitement feminin (elle, elles).
+        # Ex: "je suis née" → "je suis né" (masculin par defaut)
+        # Ex: "elle est née" → reste "elle est née" (sujet feminin)
+
+        if (i > 0 and lower_i.endswith("ée") and len(lower_i) >= 3
+                and i not in modified and i - 1 not in skip):
+            # Verifier qu'on est apres une forme d'etre
+            is_after_etre = False
+            if prev_lower in _ETRE_FORMS_SAFE or prev_lower == "est":
+                is_after_etre = True
+            if is_after_etre:
+                # Chercher le sujet : remonter les clitiques
+                subj_idx = i - 2
+                while subj_idx >= 0 and result[subj_idx].lower() in _CLITIC_OBJECTS:
+                    subj_idx -= 1
+                subj = result[subj_idx].lower() if subj_idx >= 0 else ""
+                is_fem_subject = subj in ("elle", "elles")
+                if not is_fem_subject:
+                    masc = result[i][:-1]  # retirer le 'e' final : née → né
+                    _correct(i, masc, "etre_pp_masc_default",
+                             f"{result[i-1]} {result[i]} → {masc}")
+                    continue
+
         # ── Groupe L : preposition + PP -é → infinitif -er ──
 
         if (i > 0 and lower_i.endswith("é") and len(lower_i) >= 3
