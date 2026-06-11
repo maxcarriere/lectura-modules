@@ -9,7 +9,7 @@ description = "Correcteur orthographique et grammatical du francais — regles, 
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["correcteur", "french", "nlp", "orthographe", "grammaire", "homophones", "accords"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -32,7 +32,7 @@ models = []
 dev = ["pytest>=7.0"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Correcteur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

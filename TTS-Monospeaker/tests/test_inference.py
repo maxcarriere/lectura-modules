@@ -95,7 +95,7 @@ class TestApiTTSEngine:
         from lectura_tts_monospeaker.inference_api import ApiTTSEngine
 
         engine = ApiTTSEngine()
-        assert "lec-tu-ra.com" in engine._url
+        assert "lectura.world" in engine._url
 
     def test_init_custom(self):
         from lectura_tts_monospeaker.inference_api import ApiTTSEngine

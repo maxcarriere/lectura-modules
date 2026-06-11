@@ -9,7 +9,7 @@ description = "Suite complète de traitement linguistique du français — token
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["nlp", "french", "g2p", "aligneur", "syllabeur", "tokeniseur", "phonétique"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -45,7 +45,7 @@ onnx = [
 ]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/modules/"
+Homepage = "https://www.lectura.world/solutions/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

@@ -59,4 +59,4 @@ Les modeles ONNX sont distribues separement — voir [MODEL_LICENCE.md](../MODEL
 
 ## Auteur
 
-Max Carriere — [lec-tu-ra.com](https://www.lec-tu-ra.com)
+Max Carriere — [lectura.world](https://www.lectura.world)

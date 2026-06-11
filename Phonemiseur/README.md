@@ -62,7 +62,7 @@ Sans modeles locaux, `creer_engine()` utilise automatiquement l'API Lectura :
 ```python
 engine = creer_engine()  # mode="auto" → API si pas de modeles locaux
 # ou explicitement :
-engine = creer_engine(mode="api", api_url="https://api.lec-tu-ra.com")
+engine = creer_engine(mode="api", api_url="https://api.lectura.world")
 ```
 
 Variables d'environnement : `LECTURA_API_URL`, `LECTURA_API_KEY`.
@@ -70,7 +70,7 @@ Variables d'environnement : `LECTURA_API_URL`, `LECTURA_API_KEY`.
 ## Modeles locaux (licence commerciale)
 
 Pour utiliser l'inference locale sans API, achetez les modeles sur
-https://www.lec-tu-ra.com/solutions/services/
+https://www.lectura.world/solutions/services/
 
 Installez les modeles dans `~/.lectura/models/g2p/` :
 
@@ -224,6 +224,6 @@ Phrase → Char Embedding (64d) → Shared BiLSTM (2x160h → 320d)
 
 Ce module est distribue sous licence **AGPL-3.0** (non commerciale) — voir [LICENCE.txt](LICENCE.txt).
 
-Pour un usage commercial, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com).
+Pour un usage commercial, contacter [admin@lectura.world](mailto:admin@lectura.world).
 
 Voir aussi [ATTRIBUTION.md](ATTRIBUTION.md) pour les credits.

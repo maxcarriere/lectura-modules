@@ -9,7 +9,7 @@ description = "Synthese vocale neuronale monospeaker francais — FastPitch-Lite
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["tts", "french", "speech-synthesis", "onnx", "fastpitch"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -29,7 +29,7 @@ vc = ["lectura-vc-zeroshot>=1.1"]
 all = ["lectura-tts-monospeaker[onnx,g2p,vc]"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/modules/tts/"
+Homepage = "https://www.lectura.world/solutions/modules/tts/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/TTS-Monospeaker"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

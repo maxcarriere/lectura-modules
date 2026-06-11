@@ -282,7 +282,7 @@ class TestApiTTSEngine:
         from lectura_tts_multispeaker.inference_api import ApiTTSEngine
 
         engine = ApiTTSEngine()
-        assert "lec-tu-ra.com" in engine._url
+        assert "lectura.world" in engine._url
         assert engine.speaker == "siwis"
 
     def test_init_custom(self):

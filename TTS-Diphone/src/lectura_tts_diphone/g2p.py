@@ -233,7 +233,7 @@ class LecturaNlpG2P:
 class LecturaApiG2P:
     """G2P via API Lectura (urllib seul, zero deps)."""
 
-    DEFAULT_URL = "https://api.lec-tu-ra.com"
+    DEFAULT_URL = "https://api.lectura.world"
 
     def __init__(self, api_url: str | None = None) -> None:
         self._api_url = (api_url or self.DEFAULT_URL).rstrip("/")

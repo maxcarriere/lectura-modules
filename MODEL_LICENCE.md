@@ -35,7 +35,7 @@ sous les termes de :
 ### Licence commerciale
 
 Une licence commerciale couvrant les modeles est disponible.
-Voir `LICENCE-COMMERCIALE.md` ou https://www.lec-tu-ra.com/solutions/services/
+Voir `LICENCE-COMMERCIALE.md` ou https://www.lectura.world/solutions/services/
 
 ---
 

@@ -633,7 +633,10 @@ class CorrecteurV6:
                 conf = 1.0  # pas de correction
             elif mv.regle:
                 # Etape 3 (P2G / structurel) : utiliser p2g_confiance
-                conf = max(0.50, min(0.99, mv.p2g_confiance))
+                if mv.regle.startswith("p2."):
+                    conf = max(0.50, min(0.70, mv.p2g_confiance))
+                else:
+                    conf = max(0.50, min(0.99, mv.p2g_confiance))
             elif i in _regle_ortho:
                 # Etape 1 (OOV) : confiance par type de regle
                 conf = _CONF_REGLE.get(_regle_ortho[i], 0.65)
@@ -1614,6 +1617,10 @@ class CorrecteurV6:
         # 3f-bis. Accord NOM+ADJ en nombre
         if self._config.activer_accord_nom_adj:
             corrections.extend(self._corriger_accord_nom_adj(mots))
+
+        # 3f-ter. Phase 2 — NOM generique via P2G
+        if self._config.activer_phase2:
+            corrections.extend(self._corriger_nom_p2g(mots))
 
         # 3g. Accord attribut a travers verbe d'etat
         if self._config.activer_accord_attribut:
@@ -3040,8 +3047,12 @@ class CorrecteurV6:
                      and e.get("temps") in ("pre", "present"))),
                 default=0.0,
             )
+            _phase2_freq = False
             if _nom_max_freq > _ver_pre_max_freq:
-                continue
+                if self._config.activer_phase2 and _nom_max_freq <= 2.0 * _ver_pre_max_freq:
+                    _phase2_freq = True
+                else:
+                    continue
 
             # Chercher la variante PP accentuée (mange->mangé, sonne->sonné)
             # Pattern: forme -e -> -é, forme -es -> -és
@@ -3100,6 +3111,8 @@ class CorrecteurV6:
 
             mv.correction = transferer_casse(mv.correction, pp_candidat)
             mv.regle = "pp.accent.struct"
+            if _phase2_freq:
+                mv.regle = "p2." + mv.regle
             corrections.append(Correction(
                 index=mv.index, original=mv.forme,
                 corrige=mv.correction,
@@ -3158,8 +3171,8 @@ class CorrecteurV6:
                 infos = lex.info(forme_low)
                 est_inf = any(
                     e.get("cgram", "").startswith("VER")
-                    and len(e.get("multext", "")) >= 3
-                    and e.get("multext", "")[2] == "n"
+                    and len(e.get("multext") or "") >= 3
+                    and (e.get("multext") or "")[2] == "n"
                     for e in infos
                 )
                 if not est_inf:
@@ -3277,8 +3290,8 @@ class CorrecteurV6:
             infos = lex.info(forme_low)
             est_inf = any(
                 e.get("cgram", "").startswith("VER")
-                and len(e.get("multext", "")) >= 3
-                and e.get("multext", "")[2] == "n"
+                and len(e.get("multext") or "") >= 3
+                and (e.get("multext") or "")[2] == "n"
                 for e in infos
             )
             if not est_inf:
@@ -4449,8 +4462,8 @@ class CorrecteurV6:
             inf_infos = lex.info(inf_forme)
             est_inf = any(
                 e.get("cgram", "").startswith("VER")
-                and len(e.get("multext", "")) >= 3
-                and e.get("multext", "")[2] == "n"
+                and len(e.get("multext") or "") >= 3
+                and (e.get("multext") or "")[2] == "n"
                 for e in inf_infos
             )
             if not est_inf:
@@ -4566,8 +4579,12 @@ class CorrecteurV6:
                      and e.get("temps") in ("pre", "present"))),
                 default=0.0,
             )
+            _phase2_freq = False
             if _nom_max_freq > 0 and _ver_pre_max_freq < 2.0 * _nom_max_freq:
-                continue
+                if self._config.activer_phase2 and _ver_pre_max_freq >= 1.0 * _nom_max_freq:
+                    _phase2_freq = True
+                else:
+                    continue
 
             # Guard ADJ : si freq ADJ > freq VER present -> skip
             _adj_max_freq = max(
@@ -4599,8 +4616,8 @@ class CorrecteurV6:
             inf_infos = lex.info(inf_forme)
             est_inf = any(
                 e.get("cgram", "").startswith("VER")
-                and len(e.get("multext", "")) >= 3
-                and e.get("multext", "")[2] == "n"
+                and len(e.get("multext") or "") >= 3
+                and (e.get("multext") or "")[2] == "n"
                 for e in inf_infos
             )
             if not est_inf:
@@ -4639,6 +4656,8 @@ class CorrecteurV6:
             # Appliquer
             mv.correction = transferer_casse(mv.correction, inf_forme)
             mv.regle = "participe.pp_inf.struct.noaccent"
+            if _phase2_freq:
+                mv.regle = "p2." + mv.regle
 
             corrections.append(Correction(
                 index=mv.index,
@@ -4748,8 +4767,12 @@ class CorrecteurV6:
             # Garde : possessifs ambigus (leur/notre/votre sont singuliers
             # en forme mais peuvent accompagner un pluriel semantique)
             # "leur activités" est ambigu → ne pas corriger le NOM
+            _possessif_phase2 = False
             if det_low in ("leur", "notre", "votre"):
-                continue
+                if self._config.activer_phase2 and mv.div_ortho:
+                    _possessif_phase2 = True
+                else:
+                    continue
 
             det_nombre = self._DET_NOMBRE.get(det_low) or self._DET_NOMBRE.get(det_corr)
             if not det_nombre:
@@ -4798,6 +4821,8 @@ class CorrecteurV6:
             # Appliquer
             mv.correction = transferer_casse(mv.correction, forme_corrigee)
             mv.regle = "accord.det_nom"
+            if _possessif_phase2:
+                mv.regle = "p2." + mv.regle
 
             corrections.append(Correction(
                 index=mv.index,
@@ -4919,7 +4944,7 @@ class CorrecteurV6:
                 continue
 
             # Garde 7 : confiance P2G
-            if mv.p2g_confiance < 0.80:
+            if mv.p2g_confiance < 0.70:
                 continue
 
             forme_low = mv.forme.lower()
@@ -5090,6 +5115,128 @@ class CorrecteurV6:
         return corrections
 
     # ------------------------------------------------------------------
+    # 3f-ter. Phase 2 — NOM generique via P2G
+    # ------------------------------------------------------------------
+
+    def _corriger_nom_p2g(self, mots: list[MotV6]) -> list[Correction]:
+        """Corrige le nombre d'un NOM via le signal P2G (Phase 2 suggestion).
+
+        Cas typique : "les activite" -> "activites" quand P2G propose
+        la forme plurielle avec confiance suffisante et meme lemme.
+
+        Guards :
+        1. mv.regle vide (pas deja corrige)
+        2. mv.div_ortho = True (P2G diverge)
+        3. P2G propose une forme differente
+        4. mv.p2g_confiance >= 0.75
+        5. mv.g2p_pos.startswith("NOM")
+        6. Pas dans _MOTS_PROTEGES, _INVARIABLES_S
+        7. len(forme) > 2, alphabetique
+        8. Pas nom propre capitalise en milieu de phrase
+        9. P2G existe dans le lexique comme NOM
+        10. Meme lemme
+        11. Nombre differe entre original et P2G
+        12. Pas de ponctuation intercalaire
+        """
+        corrections: list[Correction] = []
+        lex = self._lexique
+
+        for i, mv in enumerate(mots):
+            # 1. Pas deja corrige
+            if mv.regle:
+                continue
+
+            # 2. Divergence ortho
+            if not mv.div_ortho:
+                continue
+
+            # 3. P2G propose une forme differente
+            p2g = mv.p2g_ortho
+            if not p2g or p2g == mv.forme:
+                continue
+
+            # 4. Confiance P2G suffisante
+            if mv.p2g_confiance < 0.75:
+                continue
+
+            # 5. G2P dit NOM
+            if not mv.g2p_pos or not mv.g2p_pos.startswith("NOM"):
+                continue
+
+            forme_low = mv.forme.lower()
+            p2g_low = p2g.lower()
+
+            # 6. Pas dans mots proteges ni invariables
+            if forme_low in _MOTS_PROTEGES:
+                continue
+            if forme_low in _INVARIABLES_S:
+                continue
+
+            # 7. Longueur et alphabetique
+            if len(forme_low) <= 2:
+                continue
+            if not forme_low.isalpha():
+                continue
+
+            # 8. Pas nom propre capitalise en milieu de phrase
+            _orig = mv.correction or mv.forme
+            if i > 0 and _orig[0].isupper():
+                continue
+
+            # 12. Pas de ponctuation intercalaire
+            if mv.preceded_by_punct:
+                continue
+
+            # 9. P2G existe dans le lexique comme NOM
+            if not lex.existe(p2g_low):
+                continue
+            p2g_infos = lex.info(p2g_low)
+            p2g_est_nom = any(
+                (e.get("cgram") or "").startswith("NOM") for e in p2g_infos
+            )
+            if not p2g_est_nom:
+                continue
+
+            # 10. Meme lemme
+            if not self._meme_lemme(forme_low, p2g_low):
+                continue
+
+            # 11. Nombre differe entre original et P2G
+            orig_infos = lex.info(forme_low)
+            orig_nombre = None
+            for e in orig_infos:
+                if (e.get("cgram") or "").startswith("NOM"):
+                    orig_nombre = e.get("nombre", "")
+                    break
+            p2g_nombre = None
+            for e in p2g_infos:
+                if (e.get("cgram") or "").startswith("NOM"):
+                    p2g_nombre = e.get("nombre", "")
+                    break
+            if not orig_nombre or not p2g_nombre:
+                continue
+            if orig_nombre == p2g_nombre:
+                continue
+
+            # Appliquer
+            mv.correction = transferer_casse(mv.correction, p2g)
+            mv.regle = "p2.accord.nom_p2g"
+
+            corrections.append(Correction(
+                index=mv.index,
+                original=mv.forme,
+                corrige=mv.correction,
+                type_correction=TypeCorrection.GRAMMAIRE,
+                regle=mv.regle,
+                explication=(
+                    f"NOM P2G: '{mv.forme}' -> '{p2g}' "
+                    f"(nombre {orig_nombre}->{p2g_nombre})"
+                ),
+            ))
+
+        return corrections
+
+    # ------------------------------------------------------------------
     # 3g. Accord attribut a travers verbe d'etat
     # ------------------------------------------------------------------
 
@@ -5131,8 +5278,10 @@ class CorrecteurV6:
                 if any(e.get("cgram", "").startswith("VER") for e in _infos_ps):
                     continue
 
-            # Le mot doit etre un ADJ strict (pas ADJ:dem, ADJ:pos = determinants)
-            if not mv.g2p_pos or mv.g2p_pos != "ADJ":
+            # Le mot doit etre un ADJ (pas ADJ:dem, ADJ:pos, ADJ:ind = determinants)
+            if not mv.g2p_pos or not mv.g2p_pos.startswith("ADJ"):
+                continue
+            if mv.g2p_pos.startswith(("ADJ:pos", "ADJ:dem", "ADJ:ind")):
                 continue
 
             # Pas de correction sur mots courts (determinants mal tagges)
@@ -5411,11 +5560,12 @@ class CorrecteurV6:
             if mv.p2g_confiance < 0.75:
                 continue
 
-            # Garde 2 : auxiliaire etre dans fenetre 3 mots
+            # Garde 2 : auxiliaire etre dans fenetre 3 mots (5 en Phase 2)
             # (accepte ADV, negation, clitiques intercales)
             # Detecte aussi le passif compose : "a ete + PP" / "ont ete + PP"
+            _fenetre_etre = 5 if self._config.activer_phase2 else 3
             idx_aux = None
-            for j in range(max(0, i - 3), i):
+            for j in range(max(0, i - _fenetre_etre), i):
                 mj_low = mots[j].forme.lower()
                 if mj_low in _AUXILIAIRES_ETRE:
                     # Verifier que les mots entre etre et le PP sont des
@@ -5462,6 +5612,7 @@ class CorrecteurV6:
                             break
             if idx_aux is None:
                 continue
+            _etre_distant = (i - idx_aux) > 3
 
             # Verifier que le mot actuel est un PP ou un verbe
             # (G2P le tague comme VER ou ADJ — les PP sont souvent ADJ)
@@ -5548,6 +5699,8 @@ class CorrecteurV6:
             # Appliquer
             mv.correction = transferer_casse(mv.correction, p2g)
             mv.regle = "accord.pp_etre"
+            if _etre_distant:
+                mv.regle = "p2." + mv.regle
 
             corrections.append(Correction(
                 index=mv.index,
@@ -5629,7 +5782,7 @@ class CorrecteurV6:
             if not is_ver_pre:
                 continue
 
-            # Guard NOM strict : si NOM existe, exiger VER_pre > 2*NOM
+            # Guard NOM strict : si NOM existe, exiger VER_pre > 1.5*NOM
             _nom_max_freq = max(
                 (float(e.get("freq", 0))
                  for e in infos if e.get("cgram", "").startswith("NOM")),
@@ -5643,8 +5796,12 @@ class CorrecteurV6:
                      and e.get("temps") in ("pre", "present"))),
                 default=0.0,
             )
-            if _nom_max_freq > 0 and _ver_pre_max_freq < 2.0 * _nom_max_freq:
-                continue
+            _phase2_freq = False
+            if _nom_max_freq > 0 and _ver_pre_max_freq < 1.5 * _nom_max_freq:
+                if self._config.activer_phase2 and _ver_pre_max_freq >= 0.5 * _nom_max_freq:
+                    _phase2_freq = True
+                else:
+                    continue
 
             # Guard ADJ : si freq ADJ > freq VER present -> skip
             _adj_max_freq = max(
@@ -5688,10 +5845,11 @@ class CorrecteurV6:
             if not est_pp:
                 continue
 
-            # Chercher auxiliaire etre dans fenetre 3
+            # Chercher auxiliaire etre dans fenetre 3 (5 en Phase 2)
             # (inclut aussi passif compose "a ete")
+            _fenetre_etre = 5 if self._config.activer_phase2 else 3
             idx_aux = None
-            for j in range(max(0, i - 3), i):
+            for j in range(max(0, i - _fenetre_etre), i):
                 _mj_low = mots[j].forme.lower()
                 if _mj_low in _AUXILIAIRES_ETRE:
                     intercalaire_ok = True
@@ -5734,6 +5892,7 @@ class CorrecteurV6:
                             break
             if idx_aux is None:
                 continue
+            _etre_distant = (i - idx_aux) > 3
 
             # Trouver le sujet
             sujet = self._trouver_sujet(mots, idx_aux)
@@ -5768,6 +5927,8 @@ class CorrecteurV6:
             # Appliquer
             mv.correction = transferer_casse(mv.correction, forme_accord)
             mv.regle = "accord.pp_etre.struct"
+            if _phase2_freq or _etre_distant:
+                mv.regle = "p2." + mv.regle
 
             corrections.append(Correction(
                 index=mv.index,
@@ -5863,8 +6024,12 @@ class CorrecteurV6:
                  if (e.get("cgram") or "").startswith("NOM")),
                 default=0.0,
             )
+            _phase2_freq = False
             if _nom_max_freq3 > 0 and _pp_max_freq < 2.0 * _nom_max_freq3:
-                continue
+                if self._config.activer_phase2 and _pp_max_freq >= 0.5 * _nom_max_freq3:
+                    _phase2_freq = True
+                else:
+                    continue
 
             # Guard ADJ predominant : freq ADJ > 2 * freq VER PP
             _adj_max_freq3 = max(
@@ -5887,9 +6052,10 @@ class CorrecteurV6:
             if _ver_conj_freq > _pp_max_freq:
                 continue
 
-            # Chercher auxiliaire etre dans fenetre 3
+            # Chercher auxiliaire etre dans fenetre 3 (5 en Phase 2)
+            _fenetre_etre = 5 if self._config.activer_phase2 else 3
             idx_aux = None
-            for j in range(max(0, i - 3), i):
+            for j in range(max(0, i - _fenetre_etre), i):
                 _mj_low = mots[j].forme.lower()
                 if _mj_low in _AUXILIAIRES_ETRE:
                     intercalaire_ok = True
@@ -5932,9 +6098,9 @@ class CorrecteurV6:
                             break
             if idx_aux is None:
                 continue
+            _etre_distant = (i - idx_aux) > 3
 
-            # Trouver le sujet — exiger pronom sujet (signal genre/nombre fiable)
-            # Les sujets nominaux sont trop risques sans signal P2G
+            # Trouver le sujet — pronom OU nominal avec DET confirmant
             sujet = self._trouver_sujet(mots, idx_aux)
             if sujet is None:
                 continue
@@ -5946,7 +6112,23 @@ class CorrecteurV6:
             })
             sujet_low = sujet.forme.lower()
             if sujet_low not in _PRO_SUJET_PP3:
-                continue
+                # Sujet nominal : exiger DET confirmant devant le NOM
+                sujet_idx = None
+                for k in range(max(0, idx_aux - 3), idx_aux):
+                    if mots[k] is sujet:
+                        sujet_idx = k
+                        break
+                if sujet_idx is None:
+                    continue
+                # Chercher DET dans les 2 mots avant le NOM sujet
+                det_confirme = False
+                for k in range(max(0, sujet_idx - 2), sujet_idx):
+                    mk_low = mots[k].forme.lower()
+                    if mk_low in self._DET_NOMBRE:
+                        det_confirme = True
+                        break
+                if not det_confirme:
+                    continue
 
             nombre_sujet = sujet.p2g_nombre or sujet.g2p_nombre
             genre_sujet = sujet.p2g_genre or sujet.g2p_genre
@@ -5991,6 +6173,8 @@ class CorrecteurV6:
             # Appliquer
             mv.correction = transferer_casse(mv.correction, forme_accord)
             mv.regle = "accord.pp_etre.struct.all"
+            if _phase2_freq or _etre_distant:
+                mv.regle = "p2." + mv.regle
 
             corrections.append(Correction(
                 index=mv.index,

@@ -171,6 +171,9 @@ class CorrecteurV6Config:
     activer_homophones_struct: bool = True # Homophones structurels (sans P2G)
     activer_accord_sujet_verbe: bool = True  # Accord sujet-verbe (conjugaison)
 
+    # Phase 2 — Suggestions (recall elargi, confiance reduite)
+    activer_phase2: bool = True
+
     # P2G lex_select (v7)
     p2g_lex_select: bool = True       # Activer lex_select du P2G
     p2g_lex_threshold: float = 0.92   # Seuil softmax minimum pour lex_select

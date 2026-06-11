@@ -47,7 +47,7 @@ result = engine.synthesize_phonemes(
 ```python
 from lectura_tts_monospeaker import creer_engine
 
-engine = creer_engine(mode="api", api_url="https://api.lec-tu-ra.com")
+engine = creer_engine(mode="api", api_url="https://api.lectura.world")
 result = engine.synthesize("Bonjour")
 ```
 
