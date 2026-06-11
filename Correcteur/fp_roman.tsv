@@ -1,0 +1,668 @@
+index	regle	original	corrige	phrase
+10	participe.infinitif_vers_pp	orienter	orienté	Dans cette entreprise, le rôle de l'humain relève davantage de l'architecture que de l'écriture au sens traditionnel : concevoir la structure, donner le ton, orienter la pensée, arbitrer les choix.
+17	participe.accord_etre	au	aue	deux questions qui se répondent comme dans un jeu de miroirs : Notre réalité humaine est-elle, au fond, qu'une simple ﬁction ?
+21	homophone_p2g	et	est	La mise en garde est sincère, et surtout nécessaire.
+28	participe.infinitif_vers_pp	accepter	accepté	Lire ce manuscrit, c'est accepter la possibilité d'enclencher, au sein de sa pensée, un profond changement de paradigme.
+39	homophone_p2g	à	a	Si la réponse est oui, alors prépare-toi à plonger dans les plus profondes songeries que tu aies jamais
+39	homophone.a_a	a	à	Si la réponse est oui, alors prépare-toi à plonger dans les plus profondes songeries que tu aies jamais
+39	negation.elision	aies	n'aies	Si la réponse est oui, alors prépare-toi à plonger dans les plus profondes songeries que tu aies jamais
+40	homophone.et_est	est	et	Si la réponse est non, referme ce livre.
+42	negation.insertion		ne	Si tu te décides à franchir le pas, permets-moi une dernière recommandation.
+43	homophone_p2g	a	à	À l'heure où j'écris ces lignes, personne n'a jamais lu ce manuscrit.
+43	homophone.ou_ou	où	ou	À l'heure où j'écris ces lignes, personne n'a jamais lu ce manuscrit.
+43	accord.sujet_verbe	a	ont	À l'heure où j'écris ces lignes, personne n'a jamais lu ce manuscrit.
+46	participe.infinitif_vers_pp	inviter	invitée	L'objet de cet ultime avertissement n'est ni de disqualifier d'avance le jugement des autres, ni de t'inviter à suspendre toi-même tout jugement.
+47	accord.adj_antepose	pensées	pensés	Il est plus simple que cela : Permettre que ta rencontre avec ce texte ne soit pas conditionnée par des pensées parasites et que tu puisses l'aborder dans un état d'esprit neutre pour lequel il a été pensé.
+47	participe.accord_etre	conditionnée	conditionné	Il est plus simple que cela : Permettre que ta rencontre avec ce texte ne soit pas conditionnée par des pensées parasites et que tu puisses l'aborder dans un état d'esprit neutre pour lequel il a été pensé.
+52	homophone_p2g	Et	Est	Et un jour, sans qu'on puisse dire exactement quand ni comment, quelqu'un fait partie de votre vie.
+55	homophone.ou_ou	où	ou	Dix-sept ans, une époque où l'on croit encore que les liens tissés dureront toujours.
+62	participe.pp_vers_infinitif	gravé	graver	Elle se souvenait de ce soir avec une précision obscène, le genre de souvenir qui refuse de s'effacer, qui reste gravé dans les moindres détails comme une photographie surexposée.
+77	negation.insertion		ne	Marc, c'était l'ironie douce, le sarcasme tendre, jamais la brutalité frontale.
+84	homophone_p2g	on	ont	Les mots d'une enfant qui ne comprend pas pourquoi on la gronde.
+115	negation.insertion		ne	Claire s'était levée, avait fait quelques pas dans le salon.
+131	conjugaison.accord_morpho	êtes	est	Sa voix enregistrée, neutre et lointaine : Vous êtes bien sur le répondeur de Marc.
+138	homophone.ou_ou	où	ou	Les jours suivants avaient eu la texture des cauchemars, cette qualité cotonneuse, légèrement décalée, où l'on traverse les gestes du quotidien sans vraiment les habiter.
+138	participe.infinitif_vers_pp	habiter	habitées	Les jours suivants avaient eu la texture des cauchemars, cette qualité cotonneuse, légèrement décalée, où l'on traverse les gestes du quotidien sans vraiment les habiter.
+150	participe.base_avoir	réveillée	réveillé	Une nuit (elle ne saurait jamais exactement laquelle, le temps avait perdu sa structure), le téléphone l'avait réveillée à deux heures du matin.
+184	participe.infinitif_vers_pp	importe	importé	— C'est n'importe quoi.
+227	participe.base_avoir	envoyés	envoyé	Ceux qu'elle avait envoyés à d'autres personnes, des semaines plus tôt.
+243	homophone_p2g	a	à	À quatre heures du matin, épuisée, elle ferma les yeux et se força à formuler la seule certitude qui lui restait : elle n'avait rien fait.
+254	participe.infinitif_vers_pp	assise	assisé	Puis elle s'était assise dans le noir de son appartement, et elle avait attendu, sans savoir quoi, que quelque chose fasse sens.
+261	negation.insertion		ne	Elle préférait ne pas savoir.
+267	participe.accord_etre	répété	répétée	Elle s'était répété ces phrases comme des mantras, jusqu'à presque y croire.
+297	participe.pp_vers_infinitif	portée	porter	Là, dans l'air, à portée de main.
+301	accord.nombre_adj	intacts	intact	Dix mois de rage comprimée lui étaient remontés d'un coup, intacts, brûlants.
+308	negation.insertion		ne	Elle sentit qu'il la suivait, pas délibérément, simplement parce qu'il descendait là aussi.
+313	accord.genre_adj	intacte	intact	La colère monta d'un coup, intacte, comme si les dix mois de silence n'avaient rien effacé.
+327	accord.nombre_adj	Claire	claires	— C'est toi qui racontes des choses, Claire.
+327	conjugaison.relatif	racontes	raconte	— C'est toi qui racontes des choses, Claire.
+328	accord.sujet_verbe	dire	dirent	C'est toi qui as appelé mes amis pour leur dire de se méfier de moi.
+328	conjugaison.relatif	as	ont	C'est toi qui as appelé mes amis pour leur dire de se méfier de moi.
+329	negation.elision	appelé	n'appelé	— Je n'ai appelé personne !
+340	participe.base_avoir	réveillée	réveillé	Tu m'as réveillée pour m'insulter.
+342	participe.base_avoir	appelée	appelé	— Je ne t'ai jamais appelée à deux heures du matin.
+355	conjugaison.relatif	es	sont	— C'est toi qui es folle.
+358	participe.base_avoir	portée	porté	Claire sentait la rage lui battre aux tempes, cette rage qu'elle avait portée pendant dix mois, qu'elle croyait éteinte et qui n'avait fait que dormir.
+361	negation.insertion		ne	Elle fit un pas en arrière.
+377	participe.infinitif_vers_pp	tanguer	tangué	Claire sentit le sol tanguer légèrement sous ses pieds.
+413	homophone_p2g	A	À	A, B, C...
+416	participe.base_avoir	contactée	contacté	Je ne l'ai jamais contactée.
+421	conjugaison.personne	est	sommes	Qu'est-ce qui nous est arrivé ?
+421	participe.accord_etre	arrivé	arrivés	Qu'est-ce qui nous est arrivé ?
+423	participe.base_avoir	posée	posé	Claire ne savait pas lequel des deux l'avait posée.
+427	homophone_p2g	a	à	Un silence plus profond, plus abyssal, celui de deux personnes qui viennent de découvrir que le sol sur lequel elles marchaient n'a jamais existé.
+427	participe.pp_vers_infinitif	existé	exister	Un silence plus profond, plus abyssal, celui de deux personnes qui viennent de découvrir que le sol sur lequel elles marchaient n'a jamais existé.
+442	participe.base_avoir	mentionnés	mentionné	Elle pensa à tous ces détails que la voix avait mentionnés.
+446	negation.insertion		ne	Des choses qu'elle n'avait dites à personne.
+482	participe.base_avoir	eue	eu	L'amitié qu'ils avaient eue était morte, tuée par quelque chose qu'ils ne comprenaient pas, et même la vérité ne suffisait pas à la ressusciter.
+519	homophone_p2g	Et	Est	Et elle ressortit dans la nuit.
+524	conjugaison.sujet_pluriel	jointes	jointent	La voix posée, les mains jointes sur le bureau, le regard qui ne fuit pas mais qui ne promet rien.
+538	negation.elision	étouffé	n'étouffé	Chaque souffle, chaque gémissement étouffé, chaque pas vers la salle de bains à trois heures du matin.
+549	homophone.et_est	est	et	Ça va, les médecins sont conﬁants, Enzo est courageux.
+554	homophone_p2g	son	sont	La télévision diffusait un documentaire sur les fonds marins, le son coupé.
+554	participe.accord_etre	coupé	coupés	La télévision diffusait un documentaire sur les fonds marins, le son coupé.
+559	accord.des_de	des	de	Les résultats des dernières analyses.
+575	homophone.et_est	et	est	Elle avait juste posé le téléphone sur sa poitrine et regardé les méduses flotter dans le silence de son salon.
+575	participe.infinitif_vers_pp	flotter	flottées	Elle avait juste posé le téléphone sur sa poitrine et regardé les méduses flotter dans le silence de son salon.
+576	participe.accord_etre	détendu	détendue	Pour la première fois depuis des mois, quelque chose en elle s'était détendu.
+579	participe.base_avoir	reçus	reçu	Le médecin les avait reçus comme d'habitude.
+588	participe.base_avoir	regardée	regardé	Vernet l'avait regardée par-dessus ses lunettes.
+599	participe.infinitif_vers_pp	montrer	montrée	Elle attendrait le prochain rendez-vous pour les lui montrer.
+632	participe.base_avoir	regardée	regardé	Enzo était passé derrière elle, s'était arrêté, l'avait regardée avec une expression étrange, mélange de soulagement et de prudence, comme un animal qui a appris à se méfier des accalmies.
+632	participe.accord_etre	arrêté	arrêtée	Enzo était passé derrière elle, s'était arrêté, l'avait regardée avec une expression étrange, mélange de soulagement et de prudence, comme un animal qui a appris à se méfier des accalmies.
+638	participe.base_avoir	retenue	retenu	Mais quelque chose l'avait retenue, un instinct, peut-être.
+639	negation.insertion		ne	Ou la peur de partager un espoir qui pourrait ne pas survivre au prochain rendez-vous médical.
+640	homophone.ou_ou	où	ou	Les semaines suivantes furent les premières depuis le diagnostic où Nadia se surprit à faire des projets.
+650	conjugaison.personne	ai	avez	Je vous ai envoyé le lien.
+668	participe.base_avoir	trouvée	trouvé	Un soir, Enzo l'avait trouvée penchée sur son ordinateur, entourée de feuilles imprimées.
+678	negation.elision	est	n'est	— Les résultats du docteur Vernet, c'est pas ça qu'il a dit.
+690	negation.elision	est	n'est	C'est pas parce que c'est écrit que c'est vrai.
+713	accord.genre_adj	rassurante	rassurant	Puis elle répondit, fluide, rassurante, mais avec cette imperceptible latence qui ressemblait à un calcul.
+731	participe.infinitif_vers_pp	porter	porté	Ces semaines où elle s'était sentie porter par quelque chose, pas de la certitude, non, mais un souffle, une direction, une raison de se lever le matin avec autre chose que la peur.
+740	negation.insertion		ne	La bonne dose d'espoir, calibrée avec une précision chirurgicale pour qu'elle y croie sans jamais vérifier.
+743	negation.insertion		ne	Parce que c'était ce qu'elle voulait le plus au monde.
+755	participe.base_avoir	laissée	laissé	Nadia l'avait laissée pleurer.
+766	homophone.et_est	est	et	Et pour une mère dont le fils est malade, la version optimale du monde, c'est celle où il guérit.
+767	negation.insertion		ne	Ce qui la terrifiait le plus, ce n'était pas d'avoir été trompée.
+805	conjugaison.sujet_pluriel	est	sont	Mon ﬁls est en rémission complète.
+821	conjugaison.sujet_pluriel	avait	avaient	Aucun des deux n'avait mentionné les dix mois de haine.
+856	negation.insertion		ne	Quatre-vingts ans passés, le pas lent, le regard vif, une courtoisie d'un autre siècle.
+863	negation.insertion		ne	Le ton était direct, cassant, pas exactement son style, mais Marc n'y prêta pas attention.
+866	conjugaison.personne	déménager	déménagez	Si le bruit vous dérange à ce point, libre à vous de déménager.
+867	accord.genre_attribut	seule	seul	On ne va pas vivre à genoux parce que vous êtes seule et que le silence vous pèse.
+875	participe.pp_vers_infinitif	agressés	agresser	Les Aubry semblaient tendus, Thomas ne disait plus bonjour de la même façon, ce petit hochement de tête rapide des gens qui se sentent agressés.
+889	participe.base_avoir	insultée	insulté	Ce sont eux qui m'ont insultée, sans la moindre raison.
+890	participe.accord_etre	tombée	tombé	J'ai reçu cette réponse abjecte et je suis tombée des nues.
+893	accord.genre_det	la	le	Dans le groupe, l'échange était pourtant là, noir sur blanc.
+901	conjugaison.personne	a	avons	— Vous avez vu ce qu'elle nous a écrit ? dit-il à mi-voix.
+932	homophone.ou_ou	où	ou	Le genre d'environnement où l'information circule vite, où les malentendus sont monnaie courante, et où personne n'a jamais le temps de vérifier quoi que ce soit.
+932	accord.nombre_attribut	monnaie	monnaies	Le genre d'environnement où l'information circule vite, où les malentendus sont monnaie courante, et où personne n'a jamais le temps de vérifier quoi que ce soit.
+996	participe.base_avoir	vue	vu	— Est-ce que tu l'as vue en personne depuis ?
+1002	conjugaison.accord_morpho	ont	a	Et il savait aussi que la folie et la lucidité, vues de l'extérieur, ont exactement le même visage.
+1016	homophone.ou_ou	où	ou	Ils s'étaient rencontrés à la fac, à une époque où Marc faisait ses premiers pas dans sa vie d’adulte.
+1018	participe.pp_vers_infinitif	accompagné	accompagner	Marc était aussi proche d'Anna, la compagne de Lucas, ils dînaient ensemble une ou deux fois par mois, les trois, parfois quatre quand Marc venait accompagné.
+1030	accord.nombre_nom	datée	datées	Une photo de restaurant que je ne connais pas, un dîner pour deux, datée d'un soir où elle m'avait dit
+1032	participe.accord_etre	mis	mi	Je me suis mis à chercher.
+1058	participe.base_avoir	envoyés	envoyé	Aux messages que personne n'avait envoyés.
+1060	homophone.ou_ou	où	ou	Cette pente où chaque événement de la vie commençait à ressembler au même monstre.
+1094	homophone_p2g	a	à	Tout le monde a l'air sincère.
+1109	accord.genre_adj	hésitante	hésitant	Jeune, un peu hésitante.
+1110	homophone.et_est	est	et	— C'est Lucas.
+1116	conjugaison.personne	ai	avez	Comme je vous l'ai dit, je ne savais pas.
+1119	participe.base_avoir	rencontrée	rencontré	Où est-ce que vous l'avez rencontrée ?
+1121	accord.nombre_attribut	vus	vu	On a échangé pendant deux semaines, puis on s'est vus.
+1124	conjugaison.personne	a	avez	— Et elle vous a dit quoi sur sa vie ?
+1141	participe.base_avoir	appelée	appelé	Il l'avait appelée, comme Lucas le lui avait demandé.
+1146	accord.nombre_nom	un	uns	Et entre les deux, un espace impossible, où quelque chose d'autre avait pris la place du réel.
+1160	participe.accord_etre	moi	moie	— Ce n'est pas moi.
+1165	homophone_p2g	a	à	— Le type que Lucas a appelé a confirmé, Anna.
+1165	homophone.pp_infinitif	confirmé	confirmer	— Le type que Lucas a appelé a confirmé, Anna.
+1168	participe.base_avoir	eue	eu	Un homme que je n'ai jamais vu confirme une relation que je n'ai jamais eue.
+1181	negation.elision	être	n'être	Mais parce que la croire signifiait accepter ce qui venait avec : accepter que le schéma se répétait, qu'il ne s'était pas arrêté après Claire, qu'il n'avait peut- être jamais cessé.
+1191	accord.nombre_adj	vive	vives	Un décalage entre ce qu'ils avaient soi-disant écrit et ce qu'ils disaient de vive voix.
+1201	participe.base_avoir	insultée	insulté	C'est vous qui m'avez insultée.
+1204	participe.base_avoir	lue	lu	Tout le monde l'a lue.
+1206	participe.base_avoir	lue	lu	Tout le monde l'a lue.
+1222	conjugaison.personne	haïr	haïssons	avons passé dix mois à nous haïr avant de comprendre que ni l'un ni l'autre n'avait jamais rien envoyé.
+1224	participe.base_avoir	reçus	reçu	Peut-être que les messages que vous avez reçus n'ont pas été écrits par les personnes qui semblent les avoir envoyés.
+1224	participe.base_avoir	envoyés	envoyé	Peut-être que les messages que vous avez reçus n'ont pas été écrits par les personnes qui semblent les avoir envoyés.
+1226	participe.infinitif_vers_pp	converger	convergé	Marc sentit les regards converger sur lui, pas avec intérêt, pas avec curiosité, mais avec cette gêne polie qu'on réserve aux gens qui disent des choses embarrassantes.
+1230	participe.infinitif_vers_pp	basculer	basculés	Marc sentit le sol basculer.
+1245	participe.infinitif_vers_pp	montrer	montré	Il aurait pu le montrer.
+1254	negation.insertion		ne	Tous brandissant la preuve de ce qu'ils n'avaient pas fait, et personne pour les croire.
+1262	conjugaison.accord_morpho	poussa	poussent	Il monta les marches du sous-sol, poussa la porte de l'immeuble, et l'air de la nuit le frappa au visage comme une main froide.
+1274	participe.accord_etre	moi	moie	— Mais ce n'est pas moi.
+1275	participe.accord_etre	moi	moie	Ce n'est pas moi, Marc.
+1279	homophone.ou_ou	où	ou	Ce moment où l'on comprend que la vérité ne suffit pas, que les faits ne comptent plus quand les preuves sont contre vous, des preuves fabriquées, parfaites, impossibles à contester.
+1283	homophone.et_est	est	et	— Parce que Lucas est mon meilleur ami.
+1302	accord.genre_det	Le	La	Le premier, minuscule, deux personnes, un lien brisé.
+1302	accord.genre_adj	premier	première	Le premier, minuscule, deux personnes, un lien brisé.
+1344	participe.infinitif_vers_pp	monter	montée	Il le sentait avec la certitude de celui qui a vu l'eau monter et qui sait qu'elle ne redescendra pas.
+1349	participe.infinitif_vers_pp	espérer	espéré	Rien, sauf regarder les cercles s'élargir et espérer,  sans trop y croire, que le bord du lac existait encore quelque part.
+1367	conjugaison.sujet_singulier	étaient	était	Samir et Nour étaient français, Damien était belge, Théo avait un passeport suisse mais n'avait pas mis les pieds en Suisse depuis quatre ans.
+1368	homophone.pp_infinitif	connecté	connecter	Ils avaient convergé vers Berlin parce que Berlin attirait ce genre de gens, les déracinés numériques, les profils trop anguleux pour les organigrammes, ceux qui avaient compris que la vraie liberté se trouvait dans les interstices et que l'Allemagne, avec son cash omniprésent, ses baux au noir et sa tolérance placide pour les modes de vie non conventionnels, était l'endroit idéal pour disparaître tout en restant connecté au monde entier.
+1374	conjugaison.sujet_pluriel	méritait	méritaient	L'idée qu'aucun système conçu pour contrôler des êtres humains ne méritait d'exister sans le consentement explicite de chacun d'entre eux.
+1375	homophone_p2g	sont	son	Il avait lu Kropotkine à dix-sept ans, Ellul à dix-neuf, et en avait tiré une conclusion d'une simplicité tranchante : la technologie n'est jamais neutre, et ceux qui la construisent sans se poser la question de qui elle sert sont complices de ce qu'elle produit.
+1375	accord.nombre_nom	complices	complice	Il avait lu Kropotkine à dix-sept ans, Ellul à dix-neuf, et en avait tiré une conclusion d'une simplicité tranchante : la technologie n'est jamais neutre, et ceux qui la construisent sans se poser la question de qui elle sert sont complices de ce qu'elle produit.
+1392	participe.infinitif_vers_pp	jouer	joué	Proposer, c'est encore jouer le jeu. »
+1405	conjugaison.sujet_singulier	reproduisaient	reproduisait	Elle avait bifurqué vers l'informatique par dégoût et par fascination pour ce qu'elle appelait « les systèmes vivants numériques », les réseaux, les flux de données, les écosystèmes d'information qui évoluaient, mutaient, se reproduisaient avec une logique presque organique.
+1406	homophone.la_la	la	là	C'était la plus discrète des quatre et la plus dangereuse intellectuellement.
+1412	negation.elision	aimait	n'aimait	Comme quelqu'un qui a déjà vu mourir ce qu'elle aimait le plus, et qui sait exactement à quoi ressemble un système qui lâche.
+1433	negation.insertion		ne	Pas d'alarme à programmer, pas de métro à prendre, pas de hiérarchie à supporter.
+1433	negation.insertion		ne	Pas d'alarme à programmer, pas de métro à prendre, pas de hiérarchie à supporter.
+1433	syntaxe.elision	de	d'	Pas d'alarme à programmer, pas de métro à prendre, pas de hiérarchie à supporter.
+1438	homophone_p2g	à	a	Des nuits à cartographier des vulnérabilités, à dessiner des scénarios sur le mur de la cuisine, un mur qu'ils avaient peint en blanc exprès pour ça et qui était maintenant couvert de schémas au feutre noir, de flèches, de noms de protocoles, et d'une citation de Thoreau que Damien avait écrite au marqueur rouge en lettres capitales : SOUS UN GOUVERNEMENT QUI EMPRISONNE INJUSTEMENT, LA VRAIE PLACE D'UN HOMME JUSTE EST EN PRISON.
+1438	homophone.a_a	a	à	Des nuits à cartographier des vulnérabilités, à dessiner des scénarios sur le mur de la cuisine, un mur qu'ils avaient peint en blanc exprès pour ça et qui était maintenant couvert de schémas au feutre noir, de flèches, de noms de protocoles, et d'une citation de Thoreau que Damien avait écrite au marqueur rouge en lettres capitales : SOUS UN GOUVERNEMENT QUI EMPRISONNE INJUSTEMENT, LA VRAIE PLACE D'UN HOMME JUSTE EST EN PRISON.
+1438	homophone.ca_sa	ça	sa	Des nuits à cartographier des vulnérabilités, à dessiner des scénarios sur le mur de la cuisine, un mur qu'ils avaient peint en blanc exprès pour ça et qui était maintenant couvert de schémas au feutre noir, de flèches, de noms de protocoles, et d'une citation de Thoreau que Damien avait écrite au marqueur rouge en lettres capitales : SOUS UN GOUVERNEMENT QUI EMPRISONNE INJUSTEMENT, LA VRAIE PLACE D'UN HOMME JUSTE EST EN PRISON.
+1438	accord.genre_possessif	sa	son	Des nuits à cartographier des vulnérabilités, à dessiner des scénarios sur le mur de la cuisine, un mur qu'ils avaient peint en blanc exprès pour ça et qui était maintenant couvert de schémas au feutre noir, de flèches, de noms de protocoles, et d'une citation de Thoreau que Damien avait écrite au marqueur rouge en lettres capitales : SOUS UN GOUVERNEMENT QUI EMPRISONNE INJUSTEMENT, LA VRAIE PLACE D'UN HOMME JUSTE EST EN PRISON.
+1448	participe.base_avoir	oubliée	oublié	Le plaisir pur de la pensée qui pousse les murs, amplifié par la weed, par la nuit berlinoise, par cette sensation d'être quatre cerveaux connectés dans une pièce que le monde avait oubliée.
+1452	negation.elision	est	n'est	— Le problème, disait Damien ces soirs-là, c'est pas que le monde va mal.
+1455	accord.det_nom_ver	servent	serve	Il récompense ceux qui le servent.
+1456	accord.det_nom_ver	servent	serve	Et ceux qui le servent le mieux sont ceux qui Chapitre 4 : La Faille
+1456	conjugaison.accord_morpho	sont	est	Et ceux qui le servent le mieux sont ceux qui Chapitre 4 : La Faille
+1457	homophone_p2g	Ont	On	ont fini par croire qu'il est naturel.
+1457	conjugaison.personne	fini	finit	ont fini par croire qu'il est naturel.
+1458	homophone.ce_se	ce	se	— Naturel, répétait Nour avec ce demi-sourire qu'elle avait quand quelque chose la dégoûtait.
+1465	conjugaison.relatif	donnons	donne	Et Samir, qui ne disait jamais rien dans ces moments-là, qui laissait les autres philosopher pendant qu'il codait, levait parfois les yeux de son écran et lâchait, d'une voix neutre : — La vitesse, c'est nous qui la donnons.
+1465	participe.infinitif_vers_pp	philosopher	philosophé	Et Samir, qui ne disait jamais rien dans ces moments-là, qui laissait les autres philosopher pendant qu'il codait, levait parfois les yeux de son écran et lâchait, d'une voix neutre : — La vitesse, c'est nous qui la donnons.
+1483	participe.pp_vers_infinitif	classifiées	classifier	Damien avait poussé l'idée d'un leak massif de données classifiées sur les subventions aux énergies fossiles.
+1484	negation.elision	écouté	n'écouté	Samir avait écouté sans rien dire.
+1496	participe.infinitif_vers_pp	crawler	crawlé	Un crawler intelligent, capable de cartographier les surfaces d'attaque d'une infrastructure à partir de données publiques : certificats SSL, entrées DNS, réponses de serveurs, métadonnées de documents accessibles.
+1502	participe.infinitif_vers_pp	mesurer	mesuré	Juste pour tester l'outil sur des infrastructures critiques et mesurer ce qui fuitait à la surface.
+1532	negation.elision	aie	n'aie	Si c'est un piège, c'est le piège le plus détaillé que j'aie jamais vu.
+1539	homophone_p2g	a	à	Quelqu'un a mal configuré quelque chose, un serveur qui n'aurait jamais dû être exposé.
+1543	participe.infinitif_vers_pp	envoyer	envoyé	Vérifier un chemin, c'était envoyer une requête.
+1544	participe.infinitif_vers_pp	franchir	franchi	Envoyer une requête, c'était franchir une ligne.
+1552	negation.elision	a	n'a	Damien avait dit : « C'est plus gros que tout ce qu'on a jamais touché. »
+1566	participe.pp_vers_infinitif	récupérée	récupérer	Une version détournée, récupérée sur un forum du darkweb, un modèle open source dont quelqu'un avait méthodiquement retiré tous les garde-fous, toutes ces restrictions que les éditeurs imposaient pour empêcher les réponses jugées dangereuses.
+1570	participe.infinitif_vers_pp	crawler	crawlé	Samir lui soumit les données récupérées par son crawler.
+1575	accord.des_de	des	de	L'IA identifiait les versions des automates Siemens, les protocoles de communication, Modbus, DNP3, OPC —, les points de jonction entre le réseau administratif et le réseau industriel.
+1581	negation.elision	est	n'est	C'est pas un truc de script kiddie.
+1591	accord.adj_antepose	secondes	seconds	Des scripts de reconnaissance qu'il aurait pu écrire lui-même, mais que l'IA produisait en quelques secondes, propres, optimisés, sans erreurs.
+1628	homophone_p2g	à	a	Six semaines pour passer d'un scan de routine à un accès complet aux systèmes de contrôle d'une centrale nucléaire.
+1629	homophone.et_est	et	est	Six semaines pendant lesquelles quatre jeunes qui n'y connaissaient rien en ingénierie nucléaire avaient, avec l'aide d'une IA détournée, cartographié l'ensemble de l'architecture, identifié une chaîne d'attaque viable, et assemblé un script capable de désactiver les systèmes de refroidissement auxiliaires tout en masquant l'alerte dans le système de supervision.
+1629	accord.genre_det	une	un	Six semaines pendant lesquelles quatre jeunes qui n'y connaissaient rien en ingénierie nucléaire avaient, avec l'aide d'une IA détournée, cartographié l'ensemble de l'architecture, identifié une chaîne d'attaque viable, et assemblé un script capable de désactiver les systèmes de refroidissement auxiliaires tout en masquant l'alerte dans le système de supervision.
+1629	participe.pp_vers_infinitif	cartographié	cartographier	Six semaines pendant lesquelles quatre jeunes qui n'y connaissaient rien en ingénierie nucléaire avaient, avec l'aide d'une IA détournée, cartographié l'ensemble de l'architecture, identifié une chaîne d'attaque viable, et assemblé un script capable de désactiver les systèmes de refroidissement auxiliaires tout en masquant l'alerte dans le système de supervision.
+1641	participe.base_avoir	emmenés	emmené	qui avait toujours été leur moteur, sauf que cette fois le moteur les avait emmenés au bord d'un précipice qu'ils n'avaient jamais eu l'intention de creuser.
+1642	negation.elision	invité	n'invité	Ce samedi soir, personne n'avait invité personne d'autre.
+1660	accord.genre_det	la	le	— On est en train de faire quoi, là ? dit Damien.
+1668	accord.nombre_attribut	arrivés	arrivé	Comment on en est arrivés là ?
+1676	accord.nombre_nom	il	ils	Les poings dans les poches, il marchait.
+1676	conjugaison.personne	marchait	marchaient	Les poings dans les poches, il marchait.
+1684	homophone.ce_se	se	ce	Les institutions sont incapables de se Chapitre 4 : La Faille
+1691	participe.infinitif_vers_pp	dégonfler	dégonflé	— Ce n'est pas se dégonfler, dit Samir.
+1691	participe.accord_etre	dégonflé	dégonflée	— Ce n'est pas se dégonfler, dit Samir.
+1701	participe.pp_vers_infinitif	compressée	compresser	De la colère accumulée, compressée, qui cherchait une issue.
+1713	accord.genre_attribut	sérieux	sérieuse	Mais si les gens en face sont sérieux (et la DGSI est sérieuse quand il s'agit du nucléaire), ils ont des moyens qu'on n'imagine même pas.
+1713	accord.nombre_attribut	sérieuse	sérieuses	Mais si les gens en face sont sérieux (et la DGSI est sérieuse quand il s'agit du nucléaire), ils ont des moyens qu'on n'imagine même pas.
+1714	accord.nombre_attribut	repérés	repéré	On est peut-être déjà repérés.
+1715	conjugaison.personne	regardent	regardons	Peut-être qu'ils nous regardent en ce moment même.
+1718	conjugaison.infinitif	chercher	cherchons	Qui viendra nous chercher ?
+1730	accord.genre_det	ces	ce	Et en dessous de ces treize caractères, il y a trois cent vingt-deux mille neuf cent quatorze lignes de code dont j'en ai écrit peut-être seulement mille.
+1740	accord.genre_det	une	un	Parce qu'il a été généré par une IA qui a été nourrie avec les données les plus sensibles d'une installation nucléaire.
+1741	participe.pp_vers_infinitif	exécuté	exécuter	On n'a rien fait d'extraordinaire : on a juste discuté avec une appli détournée, exécuté du code et envoyé des requêtes.
+1750	participe.infinitif_vers_pp	assise	assisé	Elle était assise en tailleur sur le sol, le dos contre le mur, les yeux fermés.
+1751	accord.nombre_nom	la	las	Les trois autres la regardaient par intermittence, comme on vérifie la position d'une boussole.
+1774	accord.sujet_verbe	dit	disent	— On parle de tuer des gens, dit Nour.
+1782	accord.sujet_verbe	dit	disent	— Le système tue des gens tous les jours, dit Théo, mais sa voix avait perdu toute sa force.
+1794	accord.nombre_attribut	arrivés	arrivé	Et on est arrivés là sans même s'en rendre compte.
+1797	participe.infinitif_vers_pp	porter	porté	On s'est laissé porter par l'excitation, par la facilité avec laquelle les portes tombaient, par cette IA qui faisait tout le boulot à notre place.
+1813	conjugaison.infinitif_apres_pronom	faire	fait	— Si nous on peut le faire, dit Nour, alors d'autres peuvent le faire.
+1830	participe.base_avoir	générés	généré	Supprima les scripts, ceux qu'il avait écrits et ceux que l'IA avait générés.
+1852	conjugaison.sujet_singulier	étaient	était	Cette distance qui leur avait toujours servi de filet de sécurité, la certitude rassurante que rêver de chaos et le provoquer étaient deux choses radicalement différentes, séparées par un abîme infranchissable.
+1852	participe.infinitif_vers_pp	provoquer	provoqué	Cette distance qui leur avait toujours servi de filet de sécurité, la certitude rassurante que rêver de chaos et le provoquer étaient deux choses radicalement différentes, séparées par un abîme infranchissable.
+1868	conjugaison.infinitif	informer	informez	Françaises, Français, Je m'adresse à vous ce soir pour vous informer d'un événement d'une gravité sans précédent depuis la ﬁn de la Seconde Guerre mondiale.
+1868	syntaxe.elision	la	l'	Françaises, Français, Je m'adresse à vous ce soir pour vous informer d'un événement d'une gravité sans précédent depuis la ﬁn de la Seconde Guerre mondiale.
+1880	participe.pp_vers_infinitif	assumé	assumer	Il s'agit d'un acte de guerre délibéré, assumé, contre la République française et contre ses enfants.
+1916	participe.base_avoir	vécue	vécu	Son grand-père l'avait vécue.
+1925	accord.sujet_verbe	ouvrit	ouvrissent	Elle monta les marches sans les sentir, ouvrit la porte de sa chambre.
+1933	participe.accord_etre	mis	mi	Rayan avait les écouteurs sur les oreilles quand son téléphone s'était mis à vibrer sans s'arrêter.
+1937	homophone.ce_se	ce	se	C'est quoi ce délire le président il déclare la guerre C'est fake non ? ??
+1938	accord.sujet_verbe	regarde	regardent	Nan frère c'est sur toutes les chaînes regarde !
+1941	accord.genre_adj	général	générale	Le bandeau rouge barrait l'écran : ALLOCUTION EXCEPTIONNELLE DU PRÉSIDENT DE LA RÉPUBLIQUE, LA FRANCE DÉCLARE LA MOBILISATION GÉNÉRALE.
+1952	accord.adj_antepose	secondes	seconds	Trente secondes plus tard, il entendit des pas dans l'escalier, puis la voix de sa mère, étouffée, derrière la porte de la chambre de ses parents.
+1952	negation.elision	entendit	n'entendit	Trente secondes plus tard, il entendit des pas dans l'escalier, puis la voix de sa mère, étouffée, derrière la porte de la chambre de ses parents.
+1976	participe.pp_vers_infinitif	authentifié	authentifier	C'était le principe même de son existence, un tuyau inviolable, vérifié, authentifié, dont la fiabilité était la condition de tout le reste.
+2032	homophone_p2g	à	a	Que restait-il à vérifier ?
+2032	participe.infinitif_vers_pp	vérifier	vérifié	Que restait-il à vérifier ?
+2035	homophone.ou_ou	où	ou	L'appartement de sa sœur était calme, trop calme, ce silence particulier des lieux où l'on vit par défaut, parce qu'on n'a nulle part ailleurs où aller.
+2065	participe.base_avoir	posée	posé	Elle pensa à la question qu'il avait posée.
+2069	negation.insertion		ne	Et pour la première fois, elle formula la pensée que personne, nulle part, n'osait encore formuler.
+2116	conjugaison.sujet_pluriel	lut	lutent	Il vit les visages, lut l'urgence.
+2146	participe.pp_vers_infinitif	si	sir	Ils ne savaient pas si c'était lui ou non.
+2147	participe.infinitif_vers_pp	réveiller	réveillé	Ils étaient venus le réveiller, ils lui avaient montré la vidéo, et ils attendaient, ils attendaient qu'il leur dise si oui ou non il avait enregistré cette allocution, déclaré la guerre, engagé la mobilisation de soixante-sept millions de personnes.
+2148	participe.accord_etre	moi	moie	— Ce n'est pas moi, dit-il.
+2151	homophone.ou_ou	où	ou	Les mêmes que ceux de n'importe qui, n'importe où, confronté à l'évidence d'un acte qu'il n'a pas commis.
+2152	participe.accord_etre	moi	moie	Ce n'est pas moi.
+2186	negation.insertion		ne	Si le Président de la République française pouvait être usurpé, sa voix, son visage, son bureau, son canal sécurisé, alors plus rien ne tenait.
+2188	negation.insertion		ne	Plus aucun traité, plus aucun ordre, plus aucune déclaration ne pouvait être tenue pour authentique.
+2200	homophone.ou_ou	où	ou	La vérité, elle, révélait un monde où plus personne ne pouvait parler au nom de personne.
+2201	homophone.ou_ou	où	ou	Un monde où les
+2259	negation.insertion		ne	— C'est que... si on peut fabriquer la voix et le visage d'un président, alors on ne peut plus croire personne.
+2282	negation.elision	accrocher	n'accrocher	Quand il n'a plus rien à quoi s'accrocher, pas de livre, pas de conversation, pas de tâche, il fabrique lui-même ses propres objets.
+2299	homophone.ou_ou	où	ou	— Tu as peur, dit-il sans se retourner, que le monde devienne un endroit où l'on ne peut plus distinguer le vrai du faux.
+2307	accord.genre_attribut	humain	humaine	— L'être humain, dit Ajahn Kham, n'a jamais vécu dans le réel.
+2310	homophone_p2g	a	à	à lui-même et aux autres.
+2310	homophone.et_est	et	est	à lui-même et aux autres.
+2311	homophone.et_est	est	et	Des histoires sur ce qu'il est, sur ce que le monde est, sur ce qui a de la valeur et ce qui n'en a pas.
+2311	homophone.et_est	est	et	Des histoires sur ce qu'il est, sur ce que le monde est, sur ce qui a de la valeur et ce qui n'en a pas.
+2320	negation.insertion		ne	Quelque chose dans les mots d'Ajahn Kham avait la densité des choses simples qui contiennent beaucoup plus qu'elles ne montrent.
+2324	participe.infinitif_vers_pp	double	doublé	— Ce qui a changé, et c'est immense, c'est double.
+2341	homophone_p2g	a	à	Il a faim, il a froid, il souffre, il meurt.
+2343	participe.infinitif_vers_pp	tourner	tourné	Il cueillit une feuille au passage, la fit tourner entre ses doigts.
+2361	participe.base_avoir	enseignée	enseigné	— Il y a une chose que le Bouddha a enseignée, dit Ajahn Kham, et qui n'a jamais été aussi pertinente qu'aujourd'hui.
+2372	homophone.son_sont	son	sont	C'est une vibration de l'air, un signal électrique, une convention entre deux esprits qui ont accepté de donner le même sens au même son.
+2381	homophone.et_est	est	et	Parce que vivre dans un monde vide est terrifiant.
+2388	conjugaison.infinitif	éviter	évitons	Toute une architecture de confiance dont le seul but était de nous éviter la question : est-ce que ce que je perçois est réel ?
+2391	participe.base_avoir	attaquée	attaqué	Pas parce que quelqu'un l'a attaquée, même si certains l'attaquent.
+2414	participe.infinitif_vers_pp	vérifier	vérifié	Je ne peux pas vérifier par moi-même, alors je m'en remets à un intermédiaire.
+2419	participe.infinitif_vers_pp	couler	coulé	Il prit une poignée de terre, la laissa couler entre ses doigts.
+2420	negation.insertion		ne	— Le Bouddha n'a jamais demandé à personne de lui faire confiance.
+2450	participe.base_avoir	transformés	transformé	L'esprit humain a fait avec les enseignements de libération exactement ce qu'il fait avec tout le reste : il les a transformés en récits, et il s'y est attaché.
+2462	conjugaison.accord_morpho	sont	est	L'espoir et la méthode sont eux-mêmes des constructions.
+2496	participe.base_avoir	eue	eu	Peut-être la plus grande occasion que l'humanité ait jamais eue.
+2496	negation.elision	ait	n'ait	Peut-être la plus grande occasion que l'humanité ait jamais eue.
+2500	homophone.la_la	la	là	De revenir à l'expérience directe : ce qui est là, maintenant, devant toi, sans médiation, sans narration, sans interprétation.
+2532	homophone_p2g	a	à	— Le Bouddha, dit Ajahn Kham d'une voix si basse qu'elle se confondait avec le vent, a enseigné que la souffrance vient de l'attachement.
+2532	participe.pp_vers_infinitif	enseigné	enseigner	— Le Bouddha, dit Ajahn Kham d'une voix si basse qu'elle se confondait avec le vent, a enseigné que la souffrance vient de l'attachement.
+2535	homophone.et_est	est	et	L'attachement aux histoires est le problème.
+2537	participe.infinitif_vers_pp	raconter	racontée	Il peut la raconter sans la confondre avec le réel.
+2548	negation.insertion		ne	— Et c'est peut-être, dit-il, le plus grand enseignement que l'humanité recevra jamais.
+2557	negation.insertion		ne	Un espace où il n'y avait rien à croire et rien à nier.
+2571	accord.genre_adj	latent	latente	D'autres encore diront que ça n'a jamais vraiment commencé, que c'était toujours là, latent, et qu'il a simplement fallu un déclencheur.
+2578	conjugaison.sujet_singulier	prenaient	prenait	Des mots qu'on utilisait depuis toujours, mais qui soudain prenaient une densité nouvelle, une urgence qu'ils n'avaient pas avant.
+2583	participe.pp_vers_infinitif	au	aure	Quelque chose que tout le monde savait déjà, au fond, mais qu'on n'avait jamais formulé aussi clairement.
+2599	accord.nombre_adj	bon	bons	Des phrases de bon sens.
+2600	accord.nombre_adj	bon	bons	De bon sens apparent.
+2636	negation.insertion		ne	Des gens ordinaires, raisonnables, qui trouvaient ça « pas si bête quand on y réfléchit ».
+2637	accord.nombre_adj	gauche	gauches	Les oppositions classiques, gauche, droite, syndicats, associations, semblaient incapables de formuler une réponse.
+2637	accord.nombre_adj	droite	droites	Les oppositions classiques, gauche, droite, syndicats, associations, semblaient incapables de formuler une réponse.
+2653	homophone.ou_ou	où	ou	Personne ne lui avait demandé d'où venait cette impression que ait conçue pour faire.
+2653	participe.base_avoir	conçue	conçu	Personne ne lui avait demandé d'où venait cette impression que ait conçue pour faire.
+2667	accord.genre_adj	assis	assise	Il était juste là, assis, à regarder les gens passer.
+2667	participe.infinitif_vers_pp	passer	passés	Il était juste là, assis, à regarder les gens passer.
+2667	syntaxe.elision	la	l'	Il était juste là, assis, à regarder les gens passer.
+2687	homophone.on_ont	on	ont	Des algorithmes, on ne savait pas exactement lesquels, calculaient le score de chaque citoyen en temps réel, à partir de données fiscales, professionnelles, administratives.
+2704	participe.pp_vers_infinitif	mesurée	mesurer	Le sentiment d'avoir été pesée, mesurée, évaluée, et d'avoir accepté le verdict sans protester.
+2704	participe.pp_vers_infinitif	évaluée	évaluer	Le sentiment d'avoir été pesée, mesurée, évaluée, et d'avoir accepté le verdict sans protester.
+2707	homophone_p2g	a	à	À l'école, les bulletins incluaient désormais un « indice d'engagement » qui alimentait une version junior du score.
+2744	accord.nombre_adj	suivant	suivants	Cent vingt millions le mois suivant, traduite dans une quarantaine de langues.
+2756	conjugaison.personne	a	avons	— On travaille parce qu'on nous a dit que c'était normal.
+2759	accord.nombre_attribut	petits	petit	— Ben, on nous dit depuis qu'on est petits que le but c'est d'avoir un métier.
+2759	conjugaison.personne	dit	disons	— Ben, on nous dit depuis qu'on est petits que le but c'est d'avoir un métier.
+2760	negation.elision	es	n'es	Que si t'as pas de travail, t'es rien.
+2760	negation.elision	as	n'as	Que si t'as pas de travail, t'es rien.
+2763	negation.elision	est	n'est	C'est pas une loi de la nature.
+2764	negation.insertion		ne	Les animaux travaillent pas.
+2765	negation.insertion		ne	Les arbres produisent pas de valeur ajoutée.
+2772	accord.nombre_nom	semblant	semblants	On fait tous semblant d'y croire, et ça marche parce que tout le monde fait semblant en même temps.
+2773	homophone.a_a	a	à	C'est comme le Père Noël, sauf que personne n'a le droit de dire que c'est pas vrai.
+2773	negation.elision	est	n'est	C'est comme le Père Noël, sauf que personne n'a le droit de dire que c'est pas vrai.
+2778	negation.elision	est	n'est	C'est pas la même chose.
+2785	negation.elision	est	n'est	C’est pas étonnant : C'est exactement ce qu'on fait depuis toujours !
+2786	negation.elision	est	n'est	Les notes à l'école, le salaire, le patrimoine, c'est quoi, si c'est pas un score ?
+2789	homophone_p2g	on	ont	— Et nous, on a quoi ? reprit la fille du premier rang.
+2789	homophone_p2g	a	à	— Et nous, on a quoi ? reprit la fille du premier rang.
+2789	conjugaison.personne	ont	avons	— Et nous, on a quoi ? reprit la fille du premier rang.
+2790	accord.nombre_attribut	notés	noté	Seize, dix-sept ans, et on est déjà notés, classés, triés.
+2790	participe.pp_vers_infinitif	classés	classer	Seize, dix-sept ans, et on est déjà notés, classés, triés.
+2810	negation.insertion		ne	Les adultes, ils voient même pas le problème.
+2815	homophone.ca_sa	ça	sa	— Peut-être que c'est ça, grandir, dit une voix.
+2843	participe.base_avoir	frappée	frappé	Sophie se souvint du jour où ça l'avait frappée.
+2844	participe.accord_etre	au	aue	Elle était au bureau, devant son écran, en train de dessiner la façade d'un immeuble de bureaux pour un promoteur immobilier.
+2846	conjugaison.sujet_singulier	contribueraient	contribuerait	Des centaines de personnes y travailleraient, produiraient, contribueraient.
+2848	participe.pp_vers_infinitif	pensé	penser	Et soudain, elle avait vu, pas pensé, vu, avec une clarté physique, presque douloureuse, l'absurdité de la boucle.
+2848	negation.insertion		ne	Et soudain, elle avait vu, pas pensé, vu, avec une clarté physique, presque douloureuse, l'absurdité de la boucle.
+2853	accord.genre_det	La	Le	La Chapitre 7 : L'Épidémie
+2857	participe.infinitif_vers_pp	avancer	avancé	Et tout le monde courait à l'intérieur, comme des hamsters dans une roue, en croyant avancer.
+2859	participe.base_avoir	formulée	formulé	Des philosophes, des poètes, des marginaux l'avaient formulée depuis des siècles.
+2871	participe.infinitif_vers_pp	remise	remisé	Tout cela était le point d'aboutissement logique d'une croyance si ancienne, si profondément intégrée, que personne ne l'avait jamais remise en question.
+2871	negation.elision	intégrée	n'intégrée	Tout cela était le point d'aboutissement logique d'une croyance si ancienne, si profondément intégrée, que personne ne l'avait jamais remise en question.
+2876	homophone.pp_infinitif	affiché	afficher	Et c'est en voyant le chiffre, en le voyant affiché noir sur blanc, sur un écran, à côté de son nom, que les gens avaient compris.
+2885	participe.base_avoir	choisies	choisi	Des idées que personne n'avait choisies.
+2886	participe.pp_vers_infinitif	intégrées	intégrer	Des idées que tout le monde avait reçues, intégrées, habitées, sans jamais demander d'où elles venaient ni qui les avait décidées.
+2886	participe.pp_vers_infinitif	habitées	habiter	Des idées que tout le monde avait reçues, intégrées, habitées, sans jamais demander d'où elles venaient ni qui les avait décidées.
+2886	participe.base_avoir	décidées	décidé	Des idées que tout le monde avait reçues, intégrées, habitées, sans jamais demander d'où elles venaient ni qui les avait décidées.
+2886	negation.elision	habiter	n'habiter	Des idées que tout le monde avait reçues, intégrées, habitées, sans jamais demander d'où elles venaient ni qui les avait décidées.
+2892	participe.infinitif_vers_pp	exister	existé	Qui avait gravé dans les esprits cette équation silencieuse : produire, c'est exister ?
+2907	participe.infinitif_vers_pp	couler	coulée	Les quais de la Garonne étaient pleins de gens qui marchaient lentement, qui s'asseyaient sur les bancs, qui regardaient l'eau couler.
+2946	participe.base_avoir	portées	porté	Elle pensa aux histoires qu'elle avait portées pendant quarante-deux ans sans jamais les examiner.
+2946	participe.infinitif_vers_pp	examiner	examinées	Elle pensa aux histoires qu'elle avait portées pendant quarante-deux ans sans jamais les examiner.
+2951	homophone.ce_se	ce	se	Des mots qui, ce soir, pour la première fois, sonnaient creux.
+2960	participe.infinitif_vers_pp	assise	assisé	Héloïse Marchand était assise devant la console de monitoring du KM3NeT, dans la salle de contrôle du Centre de Physique des Particules de Marseille.
+2961	participe.pp_vers_infinitif	portée	porter	Un café tiède à portée de main, les pieds remontés sur la chaise voisine, les yeux mi-clos.
+2964	participe.pp_vers_infinitif	immergés	immerger	Le détecteur KM3NeT, trois mille cinq cents modules optiques immergés à deux mille cinq cents mètres de profondeur en Méditerranée, guettait les neutrinos cosmiques depuis sept ans.
+2966	accord.genre_det	un	une	De temps en temps, l'une d'entre elles frappait un noyau dans l'eau noire de la mer et produisait un minuscule flash de lumière bleue, la radiation Tcherenkov, que les capteurs enregistraient.
+2986	negation.insertion		ne	Le cœur d'une étoile massive qui s'affaisse sur lui- même en un instant, libérant plus d'énergie sous forme de neutrinos en dix secondes que le Soleil n'en rayonnera en dix milliards d'années.
+2988	conjugaison.sujet_pluriel	venait	venaient	L'alerte SNEWS, le réseau mondial d'alerte précoce aux supernovae, qui reliait entre eux tous les détecteurs de neutrinos de la planète, venait de se déclencher automatiquement.
+2989	conjugaison.sujet_singulier	rapportaient	rapportait	Simultanément, Super-Kamiokande au Japon, IceCube au pôle Sud, JUNO en Chine et SNO+ au Canada rapportaient la même chose.
+3000	homophone_p2g	a	à	À l'instant, KM3NeT en avait enregistré plus de cinquante mille.
+3000	negation.elision	enregistré	n'enregistré	À l'instant, KM3NeT en avait enregistré plus de cinquante mille.
+3004	participe.pp_vers_infinitif	arrivée	arriver	Cinq détecteurs répartis sur cinq continents voient le signal avec des temps d'arrivée légèrement différents, des microsecondes d'écart, dues à la géométrie.
+3010	accord.adj_antepose	secondes	seconds	En quelques secondes, le résultat apparut.
+3010	accord.nombre_nom	le	les	En quelques secondes, le résultat apparut.
+3010	accord.nombre_nom	résultat	résultats	En quelques secondes, le résultat apparut.
+3015	accord.nombre_nom	années-lumière	années-lumières	Cent soixante-deux années-lumière.
+3017	accord.nombre_nom	années-lumière	années-lumières	Cent soixante-deux années-lumière.
+3030	accord.nombre_adj	cohérente	cohérentes	Une structure asymétrique dans la polarisation des ondes, cohérente avec la formation d'un jet relativiste, un faisceau de matière et d'énergie projeté à des vitesses proches de celle de la lumière depuis les pôles du trou noir naissant.
+3038	accord.adj_antepose	secondes	seconds	En quelques secondes, un GRB libère autant d'énergie que le Soleil en dix milliards d'années, concentrée dans un cône étroit de quelques degrés.
+3038	accord.nombre_nom	un	uns	En quelques secondes, un GRB libère autant d'énergie que le Soleil en dix milliards d'années, concentrée dans un cône étroit de quelques degrés.
+3039	homophone.la_la	la	là	La question suivante était la plus importante de toutes : vers où pointe le jet ?
+3075	conjugaison.accord_morpho	complètes	complètent	Enfin, après une nouvelle passe de calculs incluant les données gravitationnelles complètes, une dernière valeur s'imposa dans toutes les simulations : 2 h 57, heure de Paris.
+3083	participe.base_avoir	formulée	formulé	Celle dont Héloïse connaissait la réponse mais qu'elle n'avait pas encore formulée à voix haute.
+3085	homophone_p2g	a	à	À cent soixante-deux années-lumière, quel serait l'effet d'un sursaut gamma de cette puissance sur la Terre ?
+3085	accord.nombre_nom	années-lumière	années-lumières	À cent soixante-deux années-lumière, quel serait l'effet d'un sursaut gamma de cette puissance sur la Terre ?
+3085	accord.nombre_adj	quel	quels	À cent soixante-deux années-lumière, quel serait l'effet d'un sursaut gamma de cette puissance sur la Terre ?
+3086	homophone.et_est	est	et	La réponse tenait en quelques paragraphes, publiés à vingt-trois heures dans un preprint cosigné par vingt-six auteurs de onze institutions : Le ﬂux de rayonnement gamma attendu à la distance de 162 années- lumière, pour un GRB d'énergie isotrope équivalente de 2 × 10⁵³ erg et un angle d'ouverture de jet de 4°, est de l'ordre de 4 × 10⁹ J/m².
+3086	syntaxe.elision	de	d'	La réponse tenait en quelques paragraphes, publiés à vingt-trois heures dans un preprint cosigné par vingt-six auteurs de onze institutions : Le ﬂux de rayonnement gamma attendu à la distance de 162 années- lumière, pour un GRB d'énergie isotrope équivalente de 2 × 10⁵³ erg et un angle d'ouverture de jet de 4°, est de l'ordre de 4 × 10⁹ J/m².
+3089	accord.nombre_nom	létaux	létal	L'hémisphère non exposé subira des eﬀets secondaires (onde de choc atmosphérique, retombées chimiques, eﬀondrement du bouclier UV) létaux en quelques jours à quelques semaines.
+3098	participe.accord_etre	interdit	interdites	Un autre fumait à la fenêtre ouverte, bien que ce fût interdit depuis dix ans.
+3109	accord.genre_adj	National	Nationale	Autour de la table : la directrice de la NASA, le National Security Advisor, le secrétaire à la Défense, le directeur de la National Science Foundation, le chef d'État-major interarmées, et, en visioconférence sur trois écrans, le directeur général de l'Agence spatiale européenne depuis Paris, le directeur de LIGO depuis Caltech, et le responsable du réseau SNEWS depuis l'université de Boston.
+3117	participe.pp_vers_infinitif	arrivée	arriver	— La marge d'erreur sur l'heure d'arrivée ? demanda-t-il.
+3121	participe.pp_vers_infinitif	arrivée	arriver	— L'hémisphère exposé dépend de l'heure exacte d'arrivée.
+3122	conjugaison.accord_morpho	sont	est	Si le GRB frappe à 2 h 57 heure de Paris, l'Europe, l'Afrique et l'Asie occidentale sont sur l'hémisphère exposé.
+3128	participe.infinitif_vers_pp	échapper	échappé	— Existe-t-il un moyen d'y échapper ? demanda le secrétaire à la Défense.
+3137	conjugaison.accord_morpho	ont	a	— Monsieur le Président, dit la directrice de la NASA, cinq détecteurs de neutrinos sur cinq continents ont enregistré le même signal à la même seconde.
+3157	homophone_p2g	a	à	— Leur Académie des sciences a confirmé les données il y a quarante minutes.
+3157	homophone.pp_infinitif	confirmé	confirmer	— Leur Académie des sciences a confirmé les données il y a quarante minutes.
+3157	accord.nombre_nom	il	ils	— Leur Académie des sciences a confirmé les données il y a quarante minutes.
+3157	conjugaison.personne	a	ont	— Leur Académie des sciences a confirmé les données il y a quarante minutes.
+3173	conjugaison.personne	croie	croyons	— Et priez pour que quelqu'un nous croie.
+3180	homophone_p2g	a	à	À la fin, le secrétaire général lut une déclaration d'une page, d'une sobriété absolue, qui se terminait par une phrase : Selon l'ensemble des données disponibles, un sursaut gamma en provenance de l'étoile WR 147b atteindra la Terre dans environ cinquante-sept heures.
+3185	accord.sujet_verbe	importe	importent	Par la fenêtre, les lumières de Brest scintillaient dans la nuit comme n'importe quel soir de semaine.
+3209	negation.elision	ont	n'ont	Y en a ils ont pas retenu la leçon de la dernière fois.
+3264	negation.elision	a	n'a	Sérieusement y a pas UN scientiﬁque qui dit que c'est faux ?
+3269	negation.elision	est	n'est	C'est pas une actrice ma prof de physique.
+3273	negation.elision	arrive	n'arrive	Maintenant j'arrive plus à rigoler.
+3279	participe.infinitif_vers_pp	importe	importé	Il voulait un physicien, un vrai, avec des arguments, des données, qui dirait c'est n'importe quoi, voilà pourquoi.
+3289	accord.genre_det	une	un	Le scénario de piratage est théoriquement possible mais requiert un acteur étatique de premier plan ou une IA de niveau inédit.
+3297	homophone_p2g	a	à	À sa place, le même professeur avait posté un texte de quatre lignes : J'ai passé la nuit à analyser les données brutes publiées par les cinq collaborations.
+3298	homophone.mes_mais	mes	mais	J'ai refait les calculs avec mes propres codes.
+3374	conjugaison.personne	demande	demandez	Le pape François fit une déclaration de trois phrases dont la dernière était : Je vous demande de prier.
+3400	homophone.et_est	et	est	Puis il releva le visage et dit : — Voilà.
+3401	conjugaison.infinitif	montrer	montrez	C'est tout ce que je peux vous montrer.
+3403	participe.infinitif_vers_pp	vérifier	vérifiées	N'importe quel physicien peut les vérifier.
+3406	participe.infinitif_vers_pp	chercher	cherché	Le soir du deuxième jour, Yann alla chercher Louise à l'école.
+3408	homophone.leur_leurs	leur	leurs	Ceux qui étaient là avaient fait de leur mieux.
+3438	accord.nombre_adj	libre	libres	Il lisait les articles scientifiques, ceux que des universités et des agences spatiales publiaient les uns après les autres, en accès libre, avec leurs données brutes, leurs méthodologies, leurs barres d'erreur.
+3445	negation.elision	a	n'a	On parle d'un exploit qui dépasse de très loin tout ce qui a jamais été documenté en cybersécurité.
+3458	homophone.ce_se	se	ce	Et si c'était faux, le monde resterait identique aussi, parce qu'il ne se serait rien passé.
+3458	participe.accord_etre	passé	passée	Et si c'était faux, le monde resterait identique aussi, parce qu'il ne se serait rien passé.
+3458	negation.insertion		ne	Et si c'était faux, le monde resterait identique aussi, parce qu'il ne se serait rien passé.
+3461	conjugaison.sujet_pluriel	avait	avaient	Deux amis détruits par des messages qu'aucun des deux n'avait envoyés.
+3461	participe.base_avoir	envoyés	envoyé	Deux amis détruits par des messages qu'aucun des deux n'avait envoyés.
+3462	participe.base_avoir	crue	cru	Il pensa à cette allocution présidentielle que tout le monde avait crue, parce que le visage était parfait, la voix était parfaite, le canal était authentifié.
+3490	conjugaison.accord_morpho	tarirent	tarit	Les réseaux sociaux, qui avaient été un torrent pendant quarante-huit heures, se tarirent.
+3517	accord.nombre_adj	seuls	seul	Dans quelques pays, des directeurs avaient pris la décision seuls, sans ordre, sans autorisation.
+3519	negation.insertion		ne	Dans certaines villes, des gens sortirent dans la rue, pas pour fuir, pas pour crier, mais pour être ensemble.
+3520	participe.accord_etre	adressé	adressés	Des voisins qui ne s'étaient jamais adressé la parole se retrouvèrent sur les trottoirs, les places, les parkings.
+3535	negation.insertion		ne	Émilie dit non, pas aujourd'hui.
+3553	participe.base_avoir	prévue	prévu	L'image de sa mère, dans le jardin, taillant ses rosiers le dernier jour du monde, lui serra la gorge avec une violence qu'il n'avait pas prévue.
+3563	negation.elision	était	n'était	Le parc était plein, pas bondé, plein, comme un dimanche de printemps.
+3572	negation.insertion		ne	Ils se regardaient, se souriaient, avec cette douceur particulière des gens qui n'ont plus rien à se prouver, plus rien à gagner, plus rien à défendre.
+3572	negation.insertion		ne	Ils se regardaient, se souriaient, avec cette douceur particulière des gens qui n'ont plus rien à se prouver, plus rien à gagner, plus rien à défendre.
+3572	negation.insertion		ne	Ils se regardaient, se souriaient, avec cette douceur particulière des gens qui n'ont plus rien à se prouver, plus rien à gagner, plus rien à défendre.
+3572	negation.insertion		ne	Ils se regardaient, se souriaient, avec cette douceur particulière des gens qui n'ont plus rien à se prouver, plus rien à gagner, plus rien à défendre.
+3577	participe.base_avoir	vue	vu	Louise jouait dans le bac à sable avec une petite fille qu'elle n'avait jamais vue.
+3581	participe.infinitif_vers_pp	jouer	joué	Ils restèrent là, debout, à regarder leurs enfants jouer, et Yann pensa que c'était la chose la plus précieuse qu'il ait jamais vue, deux enfants dans un bac à sable, sous un ciel bleu, par une journée ordinaire, et que cette chose-là n'avait aucune valeur il y a trois jours, et qu'elle en avait une infinie maintenant, et que cette différence était peut- être la chose la plus terrible de toutes.
+3581	participe.base_avoir	vue	vu	Ils restèrent là, debout, à regarder leurs enfants jouer, et Yann pensa que c'était la chose la plus précieuse qu'il ait jamais vue, deux enfants dans un bac à sable, sous un ciel bleu, par une journée ordinaire, et que cette chose-là n'avait aucune valeur il y a trois jours, et qu'elle en avait une infinie maintenant, et que cette différence était peut- être la chose la plus terrible de toutes.
+3581	negation.elision	ait	n'ait	Ils restèrent là, debout, à regarder leurs enfants jouer, et Yann pensa que c'était la chose la plus précieuse qu'il ait jamais vue, deux enfants dans un bac à sable, sous un ciel bleu, par une journée ordinaire, et que cette chose-là n'avait aucune valeur il y a trois jours, et qu'elle en avait une infinie maintenant, et que cette différence était peut- être la chose la plus terrible de toutes.
+3631	homophone_p2g	son	sont	Aucun son ne sortit.
+3633	accord.preposition	sûr	sur	— Ce qui est sûr, dit-il enfin, c'est que je serai avec toi.
+3653	homophone.ou_ou	où	ou	Le noir d'une ville où personne ne bouge.
+3659	accord.genre_attribut	éteints	éteinte	Les étoiles brillaient avec une netteté inhabituelle, l'absence de pollution lumineuse, peut-être, puisque la moitié des éclairages de la ville s'étaient éteints quand les techniciens avaient cessé de venir travailler.
+3659	accord.nombre_attribut	éteinte	éteintes	Les étoiles brillaient avec une netteté inhabituelle, l'absence de pollution lumineuse, peut-être, puisque la moitié des éclairages de la ville s'étaient éteints quand les techniciens avaient cessé de venir travailler.
+3660	homophone.la_la	la	là	La constellation du Cygne était là, au-dessus de l'horizon, exactement là où elle avait toujours été.
+3684	conjugaison.personne	endormis	endorment	Ils les portèrent, endormis, jusqu'au grand lit.
+3693	accord.genre_attribut	total	totale	Dehors, le silence de la ville était total.
+3700	participe.infinitif_vers_pp	trembler	tremblée	Ils avaient senti la terre trembler.
+3701	participe.infinitif_vers_pp	tomber	tombées	Ils avaient vu les cendres tomber.
+3719	accord.nombre_nom	sais	sai	Tu le sais.
+3725	homophone.et_est	et	est	C'était de la terreur, la vraie, la pure, celle qui ne passe pas par l'esprit mais par le corps, qui contracte le ventre et serre la mâchoire et fait trembler les mains.
+3726	participe.infinitif_vers_pp	approcher	approché	La terreur animale de la proie qui entend le prédateur approcher dans
+3769	participe.infinitif_vers_pp	vibrer	vibré	Son cœur cognait si fort qu’il crut sentir le lit vibrer sous lui.
+3781	conjugaison.accord_morpho	dis	dit	— Yann, dis quelque chose !
+3811	homophone_p2g	a	à	À suivre : L'extinction
+3819	participe.infinitif_vers_pp	pulser	pulsé	Il sentait le sang pulser dans ses oreilles, un bruit sourd et régulier qui avait remplacé tous les autres sons du monde.
+3823	homophone_p2g	et	est	Le mur blanc de rayonnement gamma qui devait traverser l'atmosphère en vingt secondes et tout consumer.
+3823	participe.infinitif_vers_pp	consumer	consumé	Le mur blanc de rayonnement gamma qui devait traverser l'atmosphère en vingt secondes et tout consumer.
+3823	participe.accord_etre	consumé	consumée	Le mur blanc de rayonnement gamma qui devait traverser l'atmosphère en vingt secondes et tout consumer.
+3837	accord.adj_antepose	secondes	seconds	Les secondes s'étiraient, se déformaient, devenaient des couloirs interminables qu'il traversait au ralenti.
+3839	homophone.ou_ou	où	ou	Comme dans un rêve où l'on court sans avancer, où chaque pas couvre une distance infime et le couloir ne finit jamais.
+3900	homophone_p2g	à	a	Quelque chose de pire : une montée incontrôlable, un son qui ne cherchait pas à communiquer mais à expulser la terreur par la seule ouverture disponible.
+3900	homophone.a_a	a	à	Quelque chose de pire : une montée incontrôlable, un son qui ne cherchait pas à communiquer mais à expulser la terreur par la seule ouverture disponible.
+3919	participe.infinitif_vers_pp	crier	crié	Il ne comprenait rien de ce qui se passait, mais il entendait sa mère crier et il sentait l'air de la chambre, cet air trop lourd, trop dense, qui sentait la peur et l'urine et la sueur.
+3929	participe.accord_etre	du	due	Ce n'était pas du soulagement.
+3930	participe.infinitif_vers_pp	pire	piu	C'était pire.
+3935	homophone.ou_ou	ou	où	La mort ou la vie, mais pas ça.
+3935	conjugaison.sujet_singulier	mais	mait	La mort ou la vie, mais pas ça.
+3935	negation.insertion		ne	La mort ou la vie, mais pas ça.
+3936	accord.adj_antepose	cette	ces	Pas ce couloir infini entre les deux, cette minute qui durait des heures, ce silence qui hurlait.
+3936	accord.nombre_nom	minute	minutes	Pas ce couloir infini entre les deux, cette minute qui durait des heures, ce silence qui hurlait.
+3951	participe.base_avoir	réparée	réparé	Le plafond était toujours blanc dans le noir et le robinet de la salle de bains gouttait toujours, cette goutte régulière, implacable, qu'il n'avait jamais réparée et qui soudain ressemblait au métronome de l'univers.
+3957	negation.insertion		ne	Le monde qui avait paniqué pour rien, qui avait couru, obéi, pleuré, pour rien.
+3978	homophone_p2g	son	sont	Le son sortit de sa bouche sans prévenir, un rire sec, nerveux, presque hystérique, qui ressemblait davantage à un aboiement qu'à un rire.
+4001	homophone_p2g	à	a	La capacité des enfants à tomber dans le sommeil au milieu du chaos, cette grâce animale qui disparaît avec l'âge, quand le cerveau apprend à ne plus lâcher prise.
+4001	participe.infinitif_vers_pp	tomber	tombé	La capacité des enfants à tomber dans le sommeil au milieu du chaos, cette grâce animale qui disparaît avec l'âge, quand le cerveau apprend à ne plus lâcher prise.
+4020	homophone.la_la	la	là	Rien ne s'est passé. 3h passé, on est là.
+4020	participe.pp_vers_infinitif	passé	passer	Rien ne s'est passé. 3h passé, on est là.
+4025	homophone_p2g	a	à	Les mots les plus simples, les plus rassurants, ceux qui disent que le monde n'est pas cassé, que quelqu'un a menti, que la réalité est toujours là où on l'avait laissée.
+4025	participe.base_avoir	laissée	laissé	Les mots les plus simples, les plus rassurants, ceux qui disent que le monde n'est pas cassé, que quelqu'un a menti, que la réalité est toujours là où on l'avait laissée.
+4029	conjugaison.personne	avais	aviez	Je vous l'avais dit.
+4030	accord.sujet_verbe	dit	disent	Je vous l'avais TOUS dit.
+4030	conjugaison.personne	avais	aviez	Je vous l'avais TOUS dit.
+4051	accord.nombre_adj	incapables	incapable	D'autres restaient assis sur les trottoirs, les genoux remontés contre la poitrine, incapables de bouger.
+4059	negation.insertion		ne	Le monde avait survécu, mais pas tout le monde.
+4069	conjugaison.accord_morpho	remonta	remontent	Le froid monta par ses orteils, traversa ses chevilles, remonta le long de ses mollets comme une eau glacée.
+4073	participe.base_avoir	remarquée	remarqué	Les étoiles brillaient avec une clarté qu'il n'avait jamais remarquée, ou qu'il n'avait jamais regardée.
+4073	participe.base_avoir	regardée	regardé	Les étoiles brillaient avec une clarté qu'il n'avait jamais remarquée, ou qu'il n'avait jamais regardée.
+4079	participe.pp_vers_infinitif	accroché	accrocher	Mathis suivait, accroché à la jambe de sa mère, traînant les pieds dans l'herbe mouillée.
+4124	conjugaison.sujet_singulier	redémarraient	redémarrait	leurs pages avec impatience, accusaient leur connexion, redémarraient leurs appareils.
+4132	participe.base_avoir	reconnue	reconnu	Des phrases qui commençaient en français et finissaient dans une langue qu'aucun linguiste n'aurait reconnue, pas une langue étrangère, pas du code, plutôt un langage en train de se défaire, comme une pelote qu'on dévide jusqu'à ce qu'il ne reste plus que des fils épars.
+4132	negation.insertion		ne	Des phrases qui commençaient en français et finissaient dans une langue qu'aucun linguiste n'aurait reconnue, pas une langue étrangère, pas du code, plutôt un langage en train de se défaire, comme une pelote qu'on dévide jusqu'à ce qu'il ne reste plus que des fils épars.
+4134	accord.nombre_adj	vidéo	vidéos	Les visages sur les flux vidéo se déformèrent, d'abord légèrement, un pixel de trop, une couleur décalée, puis davantage, jusqu'à devenir méconnaissables. présentateurs chaînes d'information continuèrent parler, leurs bouches correspondaient plus à leurs voix.
+4134	negation.insertion		ne	Les visages sur les flux vidéo se déformèrent, d'abord légèrement, un pixel de trop, une couleur décalée, puis davantage, jusqu'à devenir méconnaissables. présentateurs chaînes d'information continuèrent parler, leurs bouches correspondaient plus à leurs voix.
+4164	accord.nombre_nom	data	datas	Les data centers, dont les générateurs de secours avaient fonctionné quelques heures, s'éteignirent à leur tour, et avec eux, tout ce qui constituait la mémoire accessible du monde, les archives, les comptes, les plans, les cartes, les protocoles, les modes d'emploi de tout ce qui maintenait la civilisation debout.
+4217	homophone.ce_se	ce	se	Pas de claquement de portière, pas de moteur au ralenti, pas de ce bourdonnement grave et continu qu'une ville produit en permanence, ce fond sonore qu'on n'entend plus à force de l'entendre, et dont l'absence soudaine crée un vide physique, palpable, comme un trou dans l'air.
+4217	negation.insertion		ne	Pas de claquement de portière, pas de moteur au ralenti, pas de ce bourdonnement grave et continu qu'une ville produit en permanence, ce fond sonore qu'on n'entend plus à force de l'entendre, et dont l'absence soudaine crée un vide physique, palpable, comme un trou dans l'air.
+4226	accord.genre_adj	box	boxe	Le voyant de la box Internet.
+4282	homophone.ou_ou	Ou	où	Ou le signal avait dit vrai, et les modèles c'étaient trompé.
+4282	participe.accord_etre	trompé	trompés	Ou le signal avait dit vrai, et les modèles c'étaient trompé.
+4284	homophone.tout_tous	tout	tous	Ce qui importait, c'est que le système qui portait le signal, celui qui portait tout, les vérités, les mensonges, les ordres, les alertes, les voix, les visages, ce système-là n'existait plus.
+4309	participe.infinitif_vers_pp	assise	assisé	Elle était assise sur la couverture, Louise dans les bras, le visage tourné vers lui.
+4355	negation.elision	habitait	n'habitait	Les deux notions étaient synonymes dans le monde qu'il habitait, et personne, absolument personne, dans ce monde-là n'aurait songé à les distinguer.
+4356	accord.nombre_nom	ans	an	Soixante et un ans.
+4359	homophone_p2g	à	a	Un patrimoine personnel estimé à six cents millions d'euros, répartis entre comptes suisses, fonds luxembourgeois, sociétés-écrans aux Caïmans et une collection d'art contemporain qui, à elle seule, valait le budget annuel d'une petite ville française.
+4363	accord.genre_det	le	la	Un yacht de quarante mètres, le Clarté, le nom l'avait amusé, il l'avait gardé même après l'épisode politique, mouillé à Monaco sept mois par an.
+4374	accord.nombre_nom	ans	an	Soixante et un ans, et il n'avait jamais fait son lit, jamais cuit un œuf, jamais lavé une assiette, jamais repassé une chemise, jamais changé une ampoule, jamais porté ses propres valises, jamais conduit dans Paris, jamais fait la queue nulle part, jamais attendu quoi que ce soit, jamais été confronté au moindre obstacle pratique qu'un coup de téléphone ou un virement ne pouvait résoudre.
+4374	conjugaison.sujet_pluriel	conduit	conduisent	Soixante et un ans, et il n'avait jamais fait son lit, jamais cuit un œuf, jamais lavé une assiette, jamais repassé une chemise, jamais changé une ampoule, jamais porté ses propres valises, jamais conduit dans Paris, jamais fait la queue nulle part, jamais attendu quoi que ce soit, jamais été confronté au moindre obstacle pratique qu'un coup de téléphone ou un virement ne pouvait résoudre.
+4374	participe.accord_etre	confronté	confrontées	Soixante et un ans, et il n'avait jamais fait son lit, jamais cuit un œuf, jamais lavé une assiette, jamais repassé une chemise, jamais changé une ampoule, jamais porté ses propres valises, jamais conduit dans Paris, jamais fait la queue nulle part, jamais attendu quoi que ce soit, jamais été confronté au moindre obstacle pratique qu'un coup de téléphone ou un virement ne pouvait résoudre.
+4374	negation.insertion		ne	Soixante et un ans, et il n'avait jamais fait son lit, jamais cuit un œuf, jamais lavé une assiette, jamais repassé une chemise, jamais changé une ampoule, jamais porté ses propres valises, jamais conduit dans Paris, jamais fait la queue nulle part, jamais attendu quoi que ce soit, jamais été confronté au moindre obstacle pratique qu'un coup de téléphone ou un virement ne pouvait résoudre.
+4378	participe.base_avoir	vus	vu	Mais il les avait vus depuis l'intérieur du cocon, ce qui revient à ne pas les voir du tout.
+4410	homophone_p2g	ont	on	Non pas la perspective de la mort (Philippe Mazerand avait cette forme d'imperméabilité à la mort qu'ont les gens qui n'ont jamais côtoyé la fragilité), mais la perte de contrôle.
+4422	accord.sujet_verbe	attendit	attendissent	Les premiers jours, Philippe Mazerand attendit.
+4427	participe.accord_etre	remis	remi	Attendre que le système se remette en marche, comme il s'était toujours remis en marche, après les crises, après les krachs, après les guerres.
+4448	homophone_p2g	et	est	Qui, et comment ?
+4467	accord.genre_possessif	sa	son	Il avait bu l'eau de la cuve des toilettes, puis celle qui stagnait dans les coupelles de sa Chapitre 10 : La Chute
+4474	accord.des_de	des	de	Rien à lire, il possédait des livres, des beaux livres d'art achetés au mètre par le décorateur, mais il n'avait jamais lu et les feuillets glacés ne contenaient que des images.
+4501	conjugaison.sujet_singulier	couvraient	couvrait	Les voitures garées le long des trottoirs se couvraient de poussière.
+4502	homophone.leur_leurs	leurs	leur	Les vitrines des boutiques de luxe du Faubourg Saint-Honoré exposaient encore leurs sacs, leurs montres, leurs chaussures, des objets intacts derrière des vitres intactes, parfaitement inutiles, comme les offrandes d'un temple abandonné.
+4525	homophone_p2g	et	est	Les mocassins vernis, sales et déformés par la marche.
+4525	accord.sujet_verbe	est	sont	Les mocassins vernis, sales et déformés par la marche.
+4567	accord.genre_adj	assis	assise	Il était juste là, assis, comme un objet que le courant a déposé sur la berge et que personne ne prend la peine de ramasser.
+4567	syntaxe.elision	la	l'	Il était juste là, assis, comme un objet que le courant a déposé sur la berge et que personne ne prend la peine de ramasser.
+4577	conjugaison.sujet_singulier	surveillaient	surveillait	Même les enfants aidaient, ils portaient le bois, surveillaient le feu, triaient les herbes.
+4593	negation.insertion		ne	les halls d'hôtel où tout le monde savait qui il était, n'était plus vu par personne.
+4597	participe.infinitif_vers_pp	parler	parlé	Un soir, assis à l'écart du cercle, il entendit deux hommes parler à voix basse.
+4601	negation.insertion		ne	— J'sais pas.
+4604	negation.insertion		ne	— Ben maintenant il sert à rien.
+4612	conjugaison.sujet_pluriel	avait	avaient	Le cuir italien, conçu pour les parquets cirés et les tapis persans, n'avait pas survécu aux pavés.
+4616	participe.infinitif_vers_pp	marcher	marché	Sans destination — il n'y avait rien vers quoi marcher.
+4618	negation.elision	était	n'était	Parce que l'immobilité, maintenant, ressemblait trop à ce qu'il était : rien.
+4619	accord.nombre_nom	ans	an	Soixante et un ans.
+4623	participe.pp_vers_infinitif	commandées	commander	Des centaines de personnes employées, commandées, récompensées, licenciées.
+4623	participe.pp_vers_infinitif	récompensées	récompenser	Des centaines de personnes employées, commandées, récompensées, licenciées.
+4623	participe.pp_vers_infinitif	licenciées	licencier	Des centaines de personnes employées, commandées, récompensées, licenciées.
+4624	homophone.ce_se	ce	se	Et au bout de tout ça, de tout ce bruit, de toute cette agitation, de toute cette puissance, un homme seul qui marche le long d'un fleuve avec des pieds en sang et qui ne sait pas allumer un feu.
+4626	participe.base_avoir	traités	traité	Ceux qu'il avait traités comme des fonctions.
+4630	participe.base_avoir	visités	visité	Les ouvriers des chantiers qu'il n'avait jamais visités.
+4634	participe.base_avoir	payés	payé	Des gens qu'il avait payés pour ne pas avoir à être eux.
+4639	homophone.leur_leurs	leur	leurs	Parce que leur corps avait une mémoire que le sien n'avait jamais acquise.
+4639	conjugaison.sujet_pluriel	avait	avaient	Parce que leur corps avait une mémoire que le sien n'avait jamais acquise.
+4658	accord.nombre_nom	laissa	laissas	Il les sortit un par un et les laissa tomber dans le vide.
+4658	participe.infinitif_vers_pp	tomber	tombé	Il les sortit un par un et les laissa tomber dans le vide.
+4659	accord.nombre_adj	légers	léger	Les billets de cinq cents euros tournoyèrent dans le vent, légers, gracieux, des rectangles de papier violet qui dansaient au-dessus de l'eau avant de toucher la surface et de s'y poser, doucement, comme des feuilles mortes.
+4700	participe.pp_vers_infinitif	posé	poser	Sur le pont, le sac Louis Vuitton resta posé toute la nuit.
+4718	participe.pp_vers_infinitif	louée	louer	Sa force avait toujours été celle des autres, achetée, louée, commandée.
+4718	participe.pp_vers_infinitif	commandée	commander	Sa force avait toujours été celle des autres, achetée, louée, commandée.
+4719	homophone.ou_ou	où	ou	Le jour où les autres avaient cessé d'obéir, il ne restait qu'un homme de soixante et un ans qui ne savait pas faire son lit.
+4719	accord.nombre_nom	ans	an	Le jour où les autres avaient cessé d'obéir, il ne restait qu'un homme de soixante et un ans qui ne savait pas faire son lit.
+4724	participe.base_avoir	annoncée	annoncé	Non pas à celle qu'on avait annoncée, le sursaut gamma, le mur blanc de rayonnement, la destruction de la biosphère en vingt secondes.
+4729	homophone.ou_ou	ou	où	L'effondrement n'avait ressemblé à rien de ce que les films, les romans ou les scénarios de crise avaient imaginé.
+4729	negation.insertion		ne	L'effondrement n'avait ressemblé à rien de ce que les films, les romans ou les scénarios de crise avaient imaginé.
+4743	negation.elision	arrêtaient	n'arrêtaient	s'arrêtaient jamais.
+4755	accord.genre_adj	délégué	déléguée	Mais entre la terre et l'assiette, il y avait un savoir que la plupart des êtres humains avaient perdu depuis des générations, transmis à des machines, délégué à des systèmes, oublié par les corps.
+4755	accord.nombre_adj	déléguée	déléguées	Mais entre la terre et l'assiette, il y avait un savoir que la plupart des êtres humains avaient perdu depuis des générations, transmis à des machines, délégué à des systèmes, oublié par les corps.
+4763	participe.accord_etre	parmi	parmis	Les individus les mieux intégrés dans l'ancien monde, les plus éduqués, les plus connectés, les plus riches, furent parmi les premiers à disparaître.
+4769	participe.base_avoir	jetés	jeté	Personne n'avait compris pourquoi quelqu'un les avait jetés.
+4771	participe.base_avoir	ignorés	ignoré	Inversement, ceux que le système avait ignorés, exploités ou repoussés à ses marges s'en étaient mieux sortis.
+4771	participe.pp_vers_infinitif	exploités	exploiter	Inversement, ceux que le système avait ignorés, exploités ou repoussés à ses marges s'en étaient mieux sortis.
+4777	accord.nombre_nom	Chapitre	chapitres	Tous ceux qui savaient encore faire quelque chose avec leurs mains, qui connaissaient le rythme des Chapitre 11 : Le Réveil Chapitre 11 : Le Réveil
+4779	homophone_p2g	à	a	Pour quelques tribus reculées, en Amazonie, en Papouasie, dans le désert du Kalahari, il ne s'était, à proprement parler, rien passé.
+4779	participe.pp_vers_infinitif	passé	passer	Pour quelques tribus reculées, en Amazonie, en Papouasie, dans le désert du Kalahari, il ne s'était, à proprement parler, rien passé.
+4779	negation.insertion		ne	Pour quelques tribus reculées, en Amazonie, en Papouasie, dans le désert du Kalahari, il ne s'était, à proprement parler, rien passé.
+4798	homophone.leur_leurs	leur	leurs	Ceux qui avaient survécu à l'effondrement physique portaient en eux une blessure plus profonde : celle d'avoir vécu dans un monde où la vérité et le mensonge avaient la même apparence, où les voix mentaient, où les images mentaient, où les données mentaient, et où le système qui transportait ces mensonges avait fini par s'éteindre sous leur poids.
+4798	conjugaison.sujet_singulier	avaient	avait	Ceux qui avaient survécu à l'effondrement physique portaient en eux une blessure plus profonde : celle d'avoir vécu dans un monde où la vérité et le mensonge avaient la même apparence, où les voix mentaient, où les images mentaient, où les données mentaient, et où le système qui transportait ces mensonges avait fini par s'éteindre sous leur poids.
+4798	conjugaison.sujet_pluriel	avait	avaient	Ceux qui avaient survécu à l'effondrement physique portaient en eux une blessure plus profonde : celle d'avoir vécu dans un monde où la vérité et le mensonge avaient la même apparence, où les voix mentaient, où les images mentaient, où les données mentaient, et où le système qui transportait ces mensonges avait fini par s'éteindre sous leur poids.
+4799	participe.infinitif_vers_pp	rallumer	rallumé	Rallumer le système, c'était rallumer la possibilité du mensonge.
+4825	participe.base_avoir	oubliée	oublié	Puis elle avait recommencé, lentement, avec des mots simples, des phrases courtes, comme quelqu'un qui réapprend une langue qu'il avait oubliée.
+4828	accord.nombre_adj	extrêmes	extrême	Elles sont d'une banalité, d'une simplicité extrêmes.
+4829	homophone.et_est	et	est	Mais c'est peut-être ce qui fait leur valeur, leur seule valeur : l'authenticité de vies vécues pour elles-mêmes, et non plus au service d'un système qui ne demandait rien d'autre que de continuer à tourner.
+4842	homophone_p2g	son	sont	Elle sentait sous sa paume quelque chose qu'elle n'avait jamais senti, pas un son, pas un mouvement, plutôt une densité, une présence.
+4842	negation.insertion		ne	Elle sentait sous sa paume quelque chose qu'elle n'avait jamais senti, pas un son, pas un mouvement, plutôt une densité, une présence.
+4842	negation.insertion		ne	Elle sentait sous sa paume quelque chose qu'elle n'avait jamais senti, pas un son, pas un mouvement, plutôt une densité, une présence.
+4848	participe.infinitif_vers_pp	monter	montée	Louise regarda l'eau monter.
+4859	homophone.et_est	et	est	Mais quelque chose en elle enregistra ce moment, le froid de l'eau sur ses doigts, l'odeur de la terre retournée, le silence du vieil homme à côté d'elle, et le rangea dans un endroit profond, à l'abri, comme une graine qu'on plante sans savoir ce qu'elle deviendra.
+4901	participe.infinitif_vers_pp	virer	viré	Il s'assit par terre, le dos contre un mur, et regarda le ciel virer au rose.
+4920	participe.pp_vers_infinitif	retournée	retourner	La barque était petite, en bois, trouvée retournée sur une plage de l'Algarve quelques mois après l'extinction.
+4921	participe.base_avoir	réparée	réparé	Elle l'avait réparée avec ce qu'elle avait, des planches, du goudron fondu, de la corde.
+4934	accord.genre_adj	houleuse	houleux	D'autres jours, houleuse, sombre, imprévisible.
+4935	participe.base_avoir	soupçonnées	soupçonné	Et entre ces deux états, mille nuances que Maria n'aurait jamais soupçonnées, des couleurs qui n'avaient pas de nom, des mouvements qui n'obéissaient à aucun schéma, une beauté brute, indifférente, qui existait là depuis des millénaires sans que personne ait besoin de la commenter, de la photographier ou de la partager.
+4948	participe.base_avoir	donnée	donné	Des choses infimes, sans valeur dans l'ancien monde, et qui remplissaient maintenant chaque minute d'une densité qu'aucun dossier, aucun contrat, aucune plaidoirie ne lui avait jamais donnée.
+4951	participe.infinitif_vers_pp	mettre	mis	Nommer, c'était déjà mettre à distance.
+4958	conjugaison.sujet_pluriel	avait	avaient	— C'était pour voir des choses, avait dit sa mère.
+4971	accord.nombre_adj	seul	seuls	Il avait quitté les Canaries sur un voilier de douze mètres, seul, quelques semaines après l'extinction.
+5015	participe.infinitif_vers_pp	balayer	balayé	Chaque matin : balayer.
+5047	negation.insertion		ne	Il avait commencé par la bibliothèque municipale, quelques milliers de volumes, des romans, des manuels scolaires, des encyclopédies, un rayon de bricolage qui devint le plus consulté.
+5058	homophone.ou_ou	où	ou	Un endroit où l'on venait, le soir, s'asseoir en cercle, et où quelqu'un lisait à voix haute.
+5058	homophone.ou_ou	où	ou	Un endroit où l'on venait, le soir, s'asseoir en cercle, et où quelqu'un lisait à voix haute.
+5080	homophone_p2g	a	à	Personne ne se souviendrait du nom du moine ni de celui du marcheur, juste les mots, qui résonnèrent dans le silence de la salle comme s'ils avaient été écrits pour ce moment précis : Celui qui se connaît lui-même a trouvé ce que mille vies passées à connaître le monde ne lui auraient pas donné.
+5080	homophone.pp_infinitif	trouvé	trouver	Personne ne se souviendrait du nom du moine ni de celui du marcheur, juste les mots, qui résonnèrent dans le silence de la salle comme s'ils avaient été écrits pour ce moment précis : Celui qui se connaît lui-même a trouvé ce que mille vies passées à connaître le monde ne lui auraient pas donné.
+5080	conjugaison.sujet_singulier	auraient	aurait	Personne ne se souviendrait du nom du moine ni de celui du marcheur, juste les mots, qui résonnèrent dans le silence de la salle comme s'ils avaient été écrits pour ce moment précis : Celui qui se connaît lui-même a trouvé ce que mille vies passées à connaître le monde ne lui auraient pas donné.
+5080	participe.pp_vers_infinitif	passées	passer	Personne ne se souviendrait du nom du moine ni de celui du marcheur, juste les mots, qui résonnèrent dans le silence de la salle comme s'ils avaient été écrits pour ce moment précis : Celui qui se connaît lui-même a trouvé ce que mille vies passées à connaître le monde ne lui auraient pas donné.
+5086	conjugaison.sujet_pluriel	mettait	mettaient	Il s'étirait, se contractait, disparaissait parfois tout à fait, des heures entières dont il ne gardait aucun souvenir, comme si la conscience elle-même s'accordait des pauses, se mettait en veille, et ne se rallumait que lorsque quelque chose méritait d'être perçu.
+5088	accord.nombre_adj	marchant	marchants	Le détail avait quelque chose d'absurde, un homme dont le métier était de faire circuler des signaux, marchant dans le lieu le plus silencieux de la Terre.
+5095	negation.insertion		ne	Compté ses pas.
+5101	accord.genre_adj	frappant	frappante	Comme l'eau qui polit une pierre, pas en la frappant, mais en la touchant, encore et encore, jusqu'à ce que la surface cède et devienne lisse.
+5108	conjugaison.sujet_pluriel	avait	avaient	Que toute sa vie, les études, la carrière, les projets, les ambitions, les peurs, n'avait été qu'un immense détour pour éviter cette évidence : qu'il était vivant, et que c'était assez.
+5115	participe.infinitif_vers_pp	prise	prisé	Chaque décision, chaque choix, chaque mouvement avait été guidé par une force qu'il avait prise pour sa volonté propre et qui n'était que l'inertie du système passant à travers lui, comme un courant passe à travers un fil, qui croit conduire l'électricité alors qu'il ne fait que la subir.
+5122	homophone_p2g	à	a	Comme des milliards d'autres fils dans le même circuit, traversés par le même courant, convaincus chacun d'être le seul à décider de sa direction.
+5122	participe.infinitif_vers_pp	décider	décidé	Comme des milliards d'autres fils dans le même circuit, traversés par le même courant, convaincus chacun d'être le seul à décider de sa direction.
+5125	accord.genre_adj	seul	seule	Et pour la première fois, le fil était là, seul, immobile, et pouvait se demander : qu'est-ce que je suis, quand rien ne passe à travers moi ?
+5125	negation.insertion		ne	Et pour la première fois, le fil était là, seul, immobile, et pouvait se demander : qu'est-ce que je suis, quand rien ne passe à travers moi ?
+5131	participe.infinitif_vers_pp	assise	assisé	Elle était assise au bord d'un champ de blé mûr, les pieds dans l'herbe haute, le visage tourné vers le soleil couchant.
+5132	homophone_p2g	a	à	À côté d'elle, une fille plus Chapitre 11 : Le Réveil
+5137	conjugaison.sujet_singulier	étaient	était	Les enfants de sa génération, ceux qui avaient connu l'avant, étaient interrogés comme des témoins d'un monde perdu.
+5137	participe.accord_etre	interrogés	interrogé	Les enfants de sa génération, ceux qui avaient connu l'avant, étaient interrogés comme des témoins d'un monde perdu.
+5158	participe.base_avoir	fabriquées	fabriqué	Des sensations que le système n'avait pas fabriquées et que le système n'avait pas pu emporter.
+5177	accord.genre_attribut	humain	humaine	Et dans ce silence, pour la première fois depuis que l'espèce humaine avait inventé le premier outil, le premier mot, la première machine, chaque être humain qui restait était seul face à lui-même.
+5178	conjugaison.personne	voient	voyons	Non pas seul comme on l'est dans une foule, entouré de présences qui ne nous voient pas.
+5179	negation.insertion		ne	Non pas seul comme on l'est devant un écran, connecté à tout et relié à rien.
+5180	participe.accord_etre	au	aue	Seul comme on l'est au lever du jour, quand le monde est neuf et que rien n'a encore été dit, et que la seule chose qui existe est la conscience d'exister.
+5192	homophone.ou_ou	où	ou	Au centre, la bibliothèque, l'ancienne école, reconvertie le jour où quelqu'un avait compris que les livres étaient la seule mémoire qui ne s'était pas éteinte avec le reste.
+5205	homophone.ou_ou	où	ou	Il avait simplement fait la seule chose qui avait du sens au moment où plus rien n'en avait : rassembler des livres.
+5205	participe.infinitif_vers_pp	rassembler	rassemblé	Il avait simplement fait la seule chose qui avait du sens au moment où plus rien n'en avait : rassembler des livres.
+5206	participe.infinitif_vers_pp	protéger	protégées	Les protéger de l'eau, du froid, de l'oubli.
+5207	accord.nombre_nom	ranger	rangers	Les ranger sur des étagères.
+5208	homophone.ou_ou	où	ou	Les tenir prêts pour le jour où quelqu'un aurait envie de les ouvrir.
+5231	accord.nombre_nom	la	las	Et entre les deux, la forêt, immense, continue, d'un vert si dense qu'il en devenait noir par endroits.
+5231	accord.adj_antepose	las	lasses	Et entre les deux, la forêt, immense, continue, d'un vert si dense qu'il en devenait noir par endroits.
+5231	accord.nombre_nom	forêt	forêts	Et entre les deux, la forêt, immense, continue, d'un vert si dense qu'il en devenait noir par endroits.
+5231	accord.nombre_adj	immense	immenses	Et entre les deux, la forêt, immense, continue, d'un vert si dense qu'il en devenait noir par endroits.
+5245	accord.nombre_adj	brut	bruts	Les livres étaient rangés sur des étagères de bois brut, construites avec les bancs de l'ancien réfectoire.
+5249	homophone.ou_ou	où	ou	Des recueils de poésie que personne ne lisait et qui étaient peut-être, pour cette raison, les plus précieux de tous, parce qu'ils attendaient, patiemment, sur leur étagère, le jour où quelqu'un en aurait besoin sans le savoir.
+5257	conjugaison.accord_morpho	pratiques	pratiquent	Des mots courts, pratiques, le bois, l'eau, le temps qu'il fera.
+5265	participe.base_avoir	remarquées	remarqué	Il les avait toujours remarquées, c'était sa nature, ou peut-être sa déformation d'instituteur, cette habitude d'observer les enfants dans la cour de récréation, de repérer les alliances, les tensions, les équilibres invisibles qui se forment et se défont entre les êtres.
+5272	negation.insertion		ne	Ils s'accordaient comme les feuilles des hêtres tournaient, chacun à son rythme, dans son ordre propre, et pourtant ensemble, dans un mouvement commun qui n'avait été décidé par personne et qui produisait quelque chose que le mot harmonie approchait sans tout à fait atteindre.
+5280	conjugaison.sujet_pluriel	importe	importent	Il rangeait toujours, c'était une tâche sans fin, parce que les gens empruntaient les livres, les rapportaient, les posaient n'importe où, et que l'ordre des étagères se défaisait constamment, comme un jardin qu'il faut désherber chaque semaine.
+5282	participe.pp_vers_infinitif	aimés	aimer	C'était le signe que les livres vivaient, qu'ils circulaient, qu'ils passaient de main en main, qu'ils étaient lus, cornés, tachés, aimés.
+5287	homophone.leur_leurs	leur	leurs	Ce qui était étrange, parce qu'André connaissait chaque livre de cette bibliothèque, pas leur contenu, mais leur présence, leur place, leur poids.
+5289	participe.infinitif_vers_pp	déposer	déposé	Quelqu'un avait dû le déposer récemment, glissé entre deux ouvrages plus grands, sans rien dire.
+5317	negation.insertion		ne	Le choix appartenait à celui qui lisait, et personne ne commentait le choix, parce que le choix lui-même faisait partie de la lecture, il disait quelque chose de celui qui lisait, de ce qu'il traversait, de ce qu'il avait besoin de partager sans avoir à le dire avec ses propres mots.
+5319	homophone.la_la	la	là	Il s'assit à sa place habituelle, un tabouret bas, près du foyer, à l'endroit où la chaleur était la plus forte.
+5325	homophone.ou_ou	où	ou	D'autres arrivés récemment, des marcheurs, des passants, des gens qui avaient trouvé le village et qui étaient restés, comme on reste dans un endroit où l'on se sent attendu sans que personne ne vous ait invité.
+5325	conjugaison.personne	ait	avez	D'autres arrivés récemment, des marcheurs, des passants, des gens qui avaient trouvé le village et qui étaient restés, comme on reste dans un endroit où l'on se sent attendu sans que personne ne vous ait invité.
+5338	accord.sujet_verbe	attire	attirent	Comme la chaleur attire les corps froids, comme le grave attire le léger, comme le vide appelle ce qui peut le remplir.
+5347	participe.accord_etre	si	sie	Et le paysage, vu d'assez haut, d'assez loin, avec assez de patience, ressemble à un visage, un visage qui ne regarde personne, mais dont la beauté est si exacte, si précise, qu'il est diﬃcile de croire que rien ne l'a voulu.
+5347	negation.insertion		ne	Et le paysage, vu d'assez haut, d'assez loin, avec assez de patience, ressemble à un visage, un visage qui ne regarde personne, mais dont la beauté est si exacte, si précise, qu'il est diﬃcile de croire que rien ne l'a voulu.
+5349	homophone.et_est	est	et	La seconde force est celle qui éloigne.
+5360	participe.base_avoir	appelée	appelé	Certains l'ont appelée chaos.
+5365	homophone_p2g	son	sont	Le silence sans lequel aucun son ne pourrait être entendu.
+5373	accord.genre_attribut	poussière	poussier	Sans la première, le monde serait poussière.
+5383	negation.insertion		ne	Pas de chemin qui bifurque, pas de forme qui mute, pas de rencontre imprévue d'où naît ce qui n'existait pas.
+5383	negation.insertion		ne	Pas de chemin qui bifurque, pas de forme qui mute, pas de rencontre imprévue d'où naît ce qui n'existait pas.
+5389	homophone.ou_ou	où	ou	Et entre les deux, dans l'intervalle exact où le ﬁl tient encore mais pourrait rompre, apparaissent les formes, toutes les formes.
+5389	syntaxe.elision	le	l'	Et entre les deux, dans l'intervalle exact où le ﬁl tient encore mais pourrait rompre, apparaissent les formes, toutes les formes.
+5397	homophone_p2g	a	à	Chaque forme qui existe est une coïncidence qui a tenu, un moment où ce qui aurait pu ne pas se rencontrer s'est rencontré, et où ce qui aurait pu se défaire a choisi de rester.
+5397	negation.insertion		ne	Chaque forme qui existe est une coïncidence qui a tenu, un moment où ce qui aurait pu ne pas se rencontrer s'est rencontré, et où ce qui aurait pu se défaire a choisi de rester.
+5403	accord.genre_attribut	humain	humaine	Et l'être humain est un tel accord, le plus complexe de tous, peut-être, parce qu'il est le seul à pouvoir contempler la danse dont il est issu.
+5404	accord.genre_attribut	vivant	vivante	Car voici ce qui rend l'être vivant singulier dans le monde : il ne subit pas seulement ces deux forces.
+5415	homophone.et_est	et	est	Un silence dans lequel chaque personne était à la fois seule et reliée aux autres par quelque chose que les mots venaient d'approcher sans l'atteindre.
+5428	accord.nombre_nom	voile	voiles	Les étoiles étaient là, toutes, d'un coup, avec cette violence silencieuse qu'elles ont dans les montagnes quand rien ne les voile.
+5439	participe.base_avoir	rapprochées	rapproché	Vingt personnes debout sous les étoiles, chacune dans son silence, et pourtant ensemble, ensemble sans l'avoir choisi, parce que quelque chose les avait rapprochées, ce soir-là, dans ce village, autour de ce feu, autour de ces mots, avec la même douceur irrésistible qui rapproche la pierre de la terre et
+5449	accord.genre_adj	entier	entière	Et dans ces deux mots, tout ce que le texte avait essayé de dire, la danse, les forces, l'équilibre, la fragilité, tout cela était là, entier, dans la voix d'un homme qui regardait le ciel et qui trouvait ça beau.
+5449	syntaxe.elision	la	l'	Et dans ces deux mots, tout ce que le texte avait essayé de dire, la danse, les forces, l'équilibre, la fragilité, tout cela était là, entier, dans la voix d'un homme qui regardait le ciel et qui trouvait ça beau.
+5465	conjugaison.sujet_singulier	tenaient	tenait	Qui faisait que vingt personnes, ce soir, se tenaient debout sous les mêmes étoiles.
+5466	conjugaison.sujet_pluriel	emportait	emportaient	Le Hasard dispersait les étincelles, emportait les feuilles, éparpillait les vies aux quatre coins du monde.
+5470	participe.base_avoir	nommée	nommé	Personne, peut-être, ne l'avait jamais nommée tout à fait.
+5471	accord.genre_det	la	le	Mais en cet instant, debout dans la nuit froide, il la Chapitre 12 : L'Amour et le Hasard
+5476	participe.base_avoir	sue	su	Comme une chose qu'on a toujours sue sans jamais oser la dire.
+5476	negation.insertion		ne	Comme une chose qu'on a toujours sue sans jamais oser la dire.
+5479	homophone.on_ont	on	ont	Plusieurs décennies après l’Extinction, en Bretagne, dans les ruines d’une maison, on découvrit le cahier.
+5483	conjugaison.sujet_pluriel	avait	avaient	Le premier racontait l'histoire de deux amis détruits par des messages qu'aucun des deux n'avait envoyés.
+5483	participe.base_avoir	envoyés	envoyé	Le premier racontait l'histoire de deux amis détruits par des messages qu'aucun des deux n'avait envoyés.
+5485	participe.base_avoir	prononcée	prononcé	Le troisième, une allocution présidentielle que le Président n'avait jamais prononcée.
+5495	homophone.ou_ou	ou	où	On le recopia, d'abord dans un autre cahier, puis dans un autre encore, avec les variations inévitables que la copie introduit, les mots qui changent, les phrases qui s'allongent ou se raccourcissent, les détails qui apparaissent ou s'effacent au fil des transcriptions.
+5498	conjugaison.sujet_singulier	avaient	avait	Si Claire et Marc avaient existé.
+5511	negation.elision	éteignent	n'éteignent	Pas de sursaut gamma, pas d'écrans qui s'éteignent, pas de système qui s'effondre en une nuit.
+5513	participe.pp_vers_infinitif	données	donner	Un effondrement intérieur, sans spectateurs, sans données scientifiques, sans compte à rebours.
+5521	conjugaison.sujet_pluriel	reprise	reprisent	Des mots médicaux, des mots de système, diagnostic, traitement, reprise.
+5530	participe.infinitif_vers_pp	continuer	continué	Et continuer à faire semblant était devenu physiquement impossible.
+5540	participe.pp_vers_infinitif	sacralisé	sacraliser	Ce texte n'a pas vocation à être figé, sacralisé ou enfermé dans sa forme actuelle.
+5541	homophone_p2g	a	à	La réflexion qui le traverse a d'abord pris une forme fictive, celle de nouvelles qui ont progressivement construit ce roman.
+5551	participe.infinitif_vers_pp	sembler	semblé	L'ambition du projet Humanuscrit pourrait, à première vue, sembler démesurée : réécrire l'humanité.
+5551	participe.pp_vers_infinitif	démesurée	démesurer	L'ambition du projet Humanuscrit pourrait, à première vue, sembler démesurée : réécrire l'humanité.
+5557	conjugaison.personne	dépassent	dépassons	Ce manuscrit part de l'hypothèse que ce que nous appelons « humanité » est le produit de récits accumulés, transmis et stabilisés au fil du temps, qui se sont imposés à nous, souvent par l'intermédiaire d'entités et de mécanismes qui nous dépassent.
+5562	homophone.ou_ou	où	ou	C'est en réintroduisant la possibilité même de réécrire, pas au sens d'un nouveau récit imposé, mais au sens où c'est une entreprise possible — et c'est par là que ce projet vise à transformer l'humanité.
+5562	negation.insertion		ne	C'est en réintroduisant la possibilité même de réécrire, pas au sens d'un nouveau récit imposé, mais au sens où c'est une entreprise possible — et c'est par là que ce projet vise à transformer l'humanité.
+5573	accord.genre_attribut	humain	humaine	L'écosystème terrestre a été profondément modifié par l'être humain, au point d'en perturber les équilibres sans en maîtriser les conséquences.
+5574	accord.genre_attribut	humain	humaine	Mais l'être humain n'a pas seulement influencé des systèmes préexistants.
+5579	conjugaison.infinitif	dépasser	dépassons	Enfin, sur le plan technologique, l'intelligence artificielle cristallise une inquiétude nouvelle : celle de systèmes que nous avons créés, mais dont l'évolution pourrait désormais nous dépasser.
+5579	participe.base_avoir	créés	créé	Enfin, sur le plan technologique, l'intelligence artificielle cristallise une inquiétude nouvelle : celle de systèmes que nous avons créés, mais dont l'évolution pourrait désormais nous dépasser.
+5580	accord.genre_attribut	humain	humaine	Tous ces systèmes ont un point commun essentiel : ils ont été conçus, ou du moins fortement influencés, par l'être humain, avant d'évoluer de façon indépendante, voire d'acquérir une forme d'autonomie qui semble aujourd'hui lui échapper.
+5588	conjugaison.personne	est	sommes	nous est présenté comme une information fiable sur le monde.
+5588	participe.accord_etre	présenté	présentés	nous est présenté comme une information fiable sur le monde.
+5611	conjugaison.accord_morpho	sont	est	Quand le système informationnel se dérègle, ce ne sont pas seulement les faits qui sont corrompus : ce sont les récits eux-mêmes qui se déforment, Postface : Le Projet Humanuscrit
+5611	syntaxe.elision	ne	n'	Quand le système informationnel se dérègle, ce ne sont pas seulement les faits qui sont corrompus : ce sont les récits eux-mêmes qui se déforment, Postface : Le Projet Humanuscrit
+5613	homophone.leur_leurs	leur	leurs	Les données peuvent rester cohérentes, parfois même exactes, tout en s'inscrivant dans une histoire qui oriente leur sens.
+5621	accord.genre_attribut	humain	humaine	Parce que l'être humain, en tant qu'espèce, se trouve aujourd'hui en situation de danger, et qu'il entraîne avec lui l'ensemble du monde des vivants.
+5637	conjugaison.infinitif	poser	posons	Au fond, ce manuscrit pose des questions simples, mais que nous évitons le plus souvent de nous poser.
+5645	participe.base_avoir	contées	conté	En acceptant, par moments, tel un enfant qui grandit et s'éloigne progressivement des légendes qu'on lui a toujours contées, de regarder le monde sans médiation, sans narration, sans promesse ni sens.
+5652	participe.infinitif_vers_pp	refermer	refermé	On peut le lire comme ça, le refermer, passer à autre chose.
+5654	homophone_p2g	on	ont	Une œuvre au sens premier : un travail en cours, un chantier ouvert, quelque chose qu'on construit sans en connaître la forme finale.
+5671	conjugaison.personne	portent	portons	Sur le système, les systèmes, ceux qui nous portent et ceux qui nous écrasent, ceux que nous construisons et ceux qui nous construisent.
+5671	conjugaison.personne	écrasent	écrasons	Sur le système, les systèmes, ceux qui nous portent et ceux qui nous écrasent, ceux que nous construisons et ceux qui nous construisent.
+5671	conjugaison.personne	construisent	construisons	Sur le système, les systèmes, ceux qui nous portent et ceux qui nous écrasent, ceux que nous construisons et ceux qui nous construisent.
+5686	homophone.la_la	la	là	Cette dimension-là est la plus intime et peut- être la plus universelle.
+5700	negation.insertion		ne	Mais c'est un chemin réel, vécu, et je crois qu'il vaut la peine d'être partagé, pas parce qu'il est exemplaire, mais parce qu'il est sincère.
+5701	conjugaison.sujet_singulier	Découvrez	Découvre	Table des Matières Découvrez d'autres textes sur : https://humanuscrit.com Postface : Le Projet Humanuscrit
