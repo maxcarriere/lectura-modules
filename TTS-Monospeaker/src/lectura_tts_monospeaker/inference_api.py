@@ -17,7 +17,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_API_URL = "https://api.lec-tu-ra.com"
+_DEFAULT_API_URL = "https://api.lectura.world"
 _TIMEOUT = 30
 
 
@@ -43,7 +43,7 @@ class ApiTTSEngine:
     Parameters
     ----------
     api_url : str | None
-        URL de base du serveur (defaut : LECTURA_API_URL ou https://api.lec-tu-ra.com)
+        URL de base du serveur (defaut : LECTURA_API_URL ou https://api.lectura.world)
     api_key : str | None
         Cle API (defaut : LECTURA_API_KEY ou vide pour le mode demo)
     """

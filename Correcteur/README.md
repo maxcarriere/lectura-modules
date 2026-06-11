@@ -102,4 +102,4 @@ Le correcteur fonctionne avec n'importe quelle base lexicale chargée via `lectu
 
 Ce module est distribué sous licence **AGPL-3.0** (non commerciale) — voir [LICENCE.txt](LICENCE.txt).
 
-Pour un usage commercial, contacter [contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com).
+Pour un usage commercial, contacter [admin@lectura.world](mailto:admin@lectura.world).

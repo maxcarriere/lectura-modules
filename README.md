@@ -74,8 +74,8 @@ Les modules Lectura sont distribues sous licence **[AGPL-3.0](LICENCE.txt)** (no
 Les modeles pre-entraines (.onnx) sont soumis a des conditions specifiques :
 voir [MODEL_LICENCE.md](MODEL_LICENCE.md).
 
-Pour un usage commercial, contacter **[contact@lec-tu-ra.com](mailto:contact@lec-tu-ra.com)**.
+Pour un usage commercial, contacter **[admin@lectura.world](mailto:admin@lectura.world)**.
 
 ## Auteur
 
-Max Carriere — [lec-tu-ra.com](https://www.lec-tu-ra.com)
+Max Carriere — [lectura.world](https://www.lectura.world)

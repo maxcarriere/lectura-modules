@@ -9,7 +9,7 @@ description = "Pipeline STT complet du francais — audio vers texte (CTC + P2G)
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["stt", "asr", "french", "speech-to-text", "pipeline", "ctc", "p2g"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -32,7 +32,7 @@ onnx = ["lectura-ctc[onnx]", "lectura-graphemiseur[onnx]"]
 micro = ["lectura-ctc[micro]"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/STT"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

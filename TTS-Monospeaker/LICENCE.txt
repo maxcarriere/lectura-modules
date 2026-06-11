@@ -6,4 +6,4 @@ Ce logiciel est distribue sous licence proprietaire Lectura.
 L'utilisation est reservee aux projets Lectura et aux licencies autorises.
 
 Pour les conditions d'utilisation commerciale, contacter :
-contact@lec-tu-ra.com
+admin@lectura.world

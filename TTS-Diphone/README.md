@@ -87,4 +87,4 @@ Fichier optionnel : `diphone_statistics.pkl`
 
 ## Licence
 
-Double licence : AGPL-3.0 (code) + [Licence Commerciale](mailto:contact@lec-tu-ra.com) (modeles).
+Double licence : AGPL-3.0 (code) + [Licence Commerciale](mailto:admin@lectura.world) (modeles).

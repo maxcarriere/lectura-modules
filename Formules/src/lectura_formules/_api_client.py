@@ -14,7 +14,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_API_URL = "https://api.lec-tu-ra.com"
+_DEFAULT_API_URL = "https://api.lectura.world"
 _TIMEOUT = 30
 
 

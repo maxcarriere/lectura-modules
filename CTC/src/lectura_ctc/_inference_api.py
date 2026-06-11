@@ -16,7 +16,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_API_URL = "https://api.lec-tu-ra.com"
+_DEFAULT_API_URL = "https://api.lectura.world"
 
 
 def _audio_vers_wav_base64(audio: np.ndarray, sr: int) -> str:
@@ -49,7 +49,7 @@ class ApiCTCEngine:
     Parameters
     ----------
     api_url : str
-        URL de base du serveur (ex: ``https://api.lec-tu-ra.com``).
+        URL de base du serveur (ex: ``https://api.lectura.world``).
     api_key : str | None
         Cle API optionnelle.
     """

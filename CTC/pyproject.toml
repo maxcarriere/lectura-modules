@@ -9,7 +9,7 @@ description = "Decodeur phonetique CTC du francais — audio vers phones IPA (CN
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["stt", "asr", "ctc", "french", "phonetic", "ipa"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -31,7 +31,7 @@ onnx = ["onnxruntime>=1.16"]
 micro = ["sounddevice>=0.4"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/CTC"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
