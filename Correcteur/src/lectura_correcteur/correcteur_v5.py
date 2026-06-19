@@ -276,6 +276,29 @@ class CorrecteurV5(Correcteur):
                     if analysis.pos not in cgrams and len(cgrams) == 1:
                         analysis.pos = next(iter(cgrams))
 
+        # 5b. Correction P2G ortho (roundtrip phonetique)
+        if self._v5_config.activer_p2g_ortho and p2g_result is not None:
+            from lectura_correcteur._passe_p2g_ortho import corriger_p2g_ortho
+            formes_post_ortho = [a.corrige.lower() for a in analyses]
+            formes_post_ortho, corr_p2g = corriger_p2g_ortho(
+                formes_post_ortho,
+                p2g_result.get("ortho", []),
+                p2g_result.get("confiance", []),
+                p2g_result.get("alternatives", []),
+                pos_list_p2g, self._lexique,
+                [a.corrige for a in analyses],
+                seuil_accent=self._v5_config.seuil_p2g_accent,
+                seuil_ortho=self._v5_config.seuil_p2g_ortho,
+            )
+            if corr_p2g:
+                all_corrections.extend(corr_p2g)
+                for c_p2g in corr_p2g:
+                    j = c_p2g.index
+                    if j < len(analyses):
+                        analyses[j].corrige = c_p2g.corrige
+                        if analyses[j].type_correction == TypeCorrection.AUCUNE:
+                            analyses[j].type_correction = TypeCorrection.HORS_LEXIQUE
+
         # 6-7. Pipeline regles V5 (re-tag adapte + grammaire V1)
         after_rules, corrs = self._pipeline_regles_v5(
             analyses, word_tokens, morpho_results, all_corrections,
@@ -619,6 +642,11 @@ class CorrecteurV5(Correcteur):
                 activer_negation=self._config.activer_negation,
                 pos_confiance=_pos_conf,
                 pm_guidance=_accord_guidance,
+                activer_homophones_gram=getattr(self._config, "activer_homophones_gram", True),
+                activer_accords=getattr(self._config, "activer_accords", True),
+                activer_conjugaisons=getattr(self._config, "activer_conjugaisons", True),
+                activer_participes=getattr(self._config, "activer_participes", True),
+                activer_pp_etre=getattr(self._config, "activer_pp_etre", True),
             )
             all_corrections.extend(corr_gram)
 

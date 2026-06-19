@@ -95,8 +95,11 @@ _MOTS_ETRANGERS = frozenset({
 
 # Paires sures pour le RETRAIT d'accent (mot_accentue, forme_sans_accent)
 # Bloque les retraits dangereux comme né→ne, classé→classe
+# Retrait d'accent : seul "ès→es" est sur.
+# "là→la" et "où→ou" sont des homophones grammaticaux :
+# leur desambiguation releve de la grammaire, pas de l'orthographe.
 _ACCENT_REMOVAL_SAFE = frozenset({
-    ("là", "la"), ("où", "ou"), ("ès", "es"),
+    ("ès", "es"),
 })
 
 
@@ -307,6 +310,19 @@ class VerificateurOrthographe:
                 continue
 
             dans_lexique = self._lexique.existe(mot)
+            # Forme canonique pour les lookups de frequence / info
+            # quand le lexique est case-sensitive (ex: "Ça" → "ça",
+            # "DÉCLARE" → "déclare").
+            _lookup_form = mot
+            if mot[0].isupper() and len(mot) > 1:
+                _low_form = mot.lower()
+                if not dans_lexique and self._lexique.existe(_low_form):
+                    dans_lexique = True
+                    _lookup_form = _low_form
+                elif dans_lexique and self._lexique.existe(_low_form):
+                    # Le lexique reconnait la forme majuscule mais les
+                    # lookups freq/info marchent mieux en minuscule.
+                    _lookup_form = _low_form
 
             # Entree fantome : freq=0, NP-only, en minuscule, mot long
             # → traiter comme OOV pour passer par le pipeline de suggestions
@@ -352,14 +368,14 @@ class VerificateurOrthographe:
             # and an accent variant is much more frequent
             if dans_lexique and not PUNCT_RE.match(mot):
                 freq_actuelle = (
-                    self._lexique.frequence(mot)
+                    self._lexique.frequence(_lookup_form)
                     if hasattr(self._lexique, "frequence") else 999.0
                 )
                 # Guard SIGLE / NOM PROPRE: skip accent disambiguation
                 _only_sigle = False
                 _only_np = False
                 if hasattr(self._lexique, "info"):
-                    _infos_acc = self._lexique.info(mot)
+                    _infos_acc = self._lexique.info(_lookup_form)
                     if _infos_acc:
                         _cgrams_acc = [(e.get("cgram") or "") for e in _infos_acc]
                         if all(c == "SIGLE" for c in _cgrams_acc):
@@ -448,7 +464,7 @@ class VerificateurOrthographe:
                 and not PUNCT_RE.match(mot)
             ):
                 freq_actuelle = (
-                    self._lexique.frequence(mot)
+                    self._lexique.frequence(_lookup_form)
                     if hasattr(self._lexique, "frequence") else 999.0
                 )
                 low = mot.lower()
@@ -475,7 +491,7 @@ class VerificateurOrthographe:
                     # Guard NOM PROPRE ou SIGLE: skip si toutes les entrees sont NP ou SIGLE
                     _only_np = False
                     if hasattr(self._lexique, "info"):
-                        _infos = self._lexique.info(mot)
+                        _infos = self._lexique.info(_lookup_form)
                         if _infos and all(
                             "PROPRE" in (e.get("cgram") or "")
                             or (e.get("cgram") or "") == "SIGLE"
@@ -490,7 +506,7 @@ class VerificateurOrthographe:
                     # Conjugated verbs are also rarer than base forms.
                     _is_inflected = False
                     if hasattr(self._lexique, "info"):
-                        _infos_infl = self._lexique.info(mot)
+                        _infos_infl = self._lexique.info(_lookup_form)
                         if _infos_infl and any(
                             e.get("nombre") in ("p", "pluriel")
                             or e.get("genre") in ("f",)
@@ -507,7 +523,7 @@ class VerificateurOrthographe:
                     # masculine singular forms should not be corrected
                     _is_base_nom = False
                     if hasattr(self._lexique, "info"):
-                        _infos_base = self._lexique.info(mot)
+                        _infos_base = self._lexique.info(_lookup_form)
                         if _infos_base and any(
                             e.get("cgram", "") in ("NOM", "ADJ")
                             and e.get("nombre") in ("s", "singulier")
@@ -557,7 +573,7 @@ class VerificateurOrthographe:
             # Placed AFTER accent and freq suspicion so real corrections take priority
             if dans_lexique and corrige == mot and not PUNCT_RE.match(mot):
                 if hasattr(self._lexique, "info"):
-                    _infos_case = self._lexique.info(mot)
+                    _infos_case = self._lexique.info(_lookup_form)
                     if _infos_case:
                         _all_sigle = all(
                             (e.get("cgram") or "") == "SIGLE"
@@ -599,7 +615,7 @@ class VerificateurOrthographe:
                 _divergence = _morpho_pi.get("divergence_pos", False)
 
                 if _pos_predit and _pos_predit not in ("?", ""):
-                    _infos_pi = self._lexique.info(mot)
+                    _infos_pi = self._lexique.info(_lookup_form)
                     _cgrams_pi = {
                         e.get("cgram", "") for e in _infos_pi
                     } if _infos_pi else set()
@@ -632,9 +648,10 @@ class VerificateurOrthographe:
 
             if not dans_lexique and not PUNCT_RE.match(mot):
                 type_corr = TypeCorrection.HORS_LEXIQUE
-                # Skip auto-correction for capitalized words not at start
-                # (likely proper nouns or foreign names)
-                if i > 0 and mot[0].isupper() and len(mot) > 1 and mot[1:].islower():
+                # Skip auto-correction for capitalized words
+                # (likely proper nouns or foreign names).
+                # A i=0 aussi : les noms propres commencent souvent la phrase.
+                if mot[0].isupper() and len(mot) > 1 and mot[1:].islower():
                     results.append(MotAnalyse(
                         original=mot,
                         corrige=mot,

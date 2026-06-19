@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import re
 
-PUNCT_RE = re.compile(r'^[,;:!?.\u2026\u00ab\u00bb"()\[\]{}\u2013\u2014/*_~#`]+$')
+# Tokens de ponctuation OU numeriques (ne doivent pas etre corriges)
+PUNCT_RE = re.compile(
+    r'^[,;:!?.\u2026\u00ab\u00bb"()\[\]{}\u2013\u2014/*_~#`<>\u00a9\u00ae\u2122|\\^@&=+\u00b1\u00b0]+$'
+    r'|^\d[\d,.°hm%/:+\-]*$'       # Nombres purs : 95, 20h, 3.14
+    r'|^[+\-]?\d[\d,.°hm%/:+\-]*$'  # Nombres signes : +38°, -5
+    r'|^:\d[\d.]*$'                   # Heures tronquees : :57, :02, :57.
+)
 
 _NO_SPACE_BEFORE = frozenset(",.)]\u2026")
 # French typography: space before ? ! : ; » (espace insecable en francais)
@@ -85,6 +91,45 @@ class LexiqueNormalise:
     def formes_de(self, *args, **kwargs):
         raw = self._lexique.formes_de(*args, **kwargs)
         return [normaliser_info(e) for e in raw]
+
+
+def est_changement_genre(forme: str, p2g: str) -> bool:
+    """True si la difference entre forme et p2g est un pattern de genre.
+
+    Detecte les transformations fem<->masc courantes :
+    -ees <-> -es (participiales), -ee <-> -e, -ues <-> -us, -ive <-> -if, etc.
+    Les formes sont attendues en minuscules.
+    """
+    f, p = forme, p2g
+    # -ees <-> -es (participiales : transformees <-> transformes)
+    if (f.endswith("ées") and p == f[:-3] + "és") or \
+       (p.endswith("ées") and f == p[:-3] + "és"):
+        return True
+    # -ee <-> -e (singulier : transformee <-> transforme)
+    if (f.endswith("ée") and p == f[:-2] + "é") or \
+       (p.endswith("ée") and f == p[:-2] + "é"):
+        return True
+    # -ues <-> -us (connues <-> connus)
+    if (f.endswith("ues") and p == f[:-3] + "us") or \
+       (p.endswith("ues") and f == p[:-3] + "us"):
+        return True
+    # -ue <-> -u (mais pas -que)
+    if (f.endswith("ue") and not f.endswith("que") and p == f[:-2] + "u") or \
+       (p.endswith("ue") and not p.endswith("que") and f == p[:-2] + "u"):
+        return True
+    # -ive <-> -if (active <-> actif)
+    if (f.endswith("ive") and p == f[:-3] + "if") or \
+       (p.endswith("ive") and f == p[:-3] + "if"):
+        return True
+    # -ives <-> -ifs (actives <-> actifs)
+    if (f.endswith("ives") and p == f[:-4] + "ifs") or \
+       (p.endswith("ives") and f == p[:-4] + "ifs"):
+        return True
+    # -ique <-> -ic (publique <-> public)
+    if (f.endswith("ique") and p == f[:-4] + "ic") or \
+       (p.endswith("ique") and f == p[:-4] + "ic"):
+        return True
+    return False
 
 
 def reconstruire_phrase(tokens: list[str]) -> str:

@@ -565,6 +565,11 @@ class Correcteur:
                 activer_negation=self._config.activer_negation,
                 pos_confiance=_pos_conf,
                 pm_guidance=_accord_guidance,
+                activer_homophones_gram=getattr(self._config, "activer_homophones_gram", True),
+                activer_accords=getattr(self._config, "activer_accords", True),
+                activer_conjugaisons=getattr(self._config, "activer_conjugaisons", True),
+                activer_participes=getattr(self._config, "activer_participes", True),
+                activer_pp_etre=getattr(self._config, "activer_pp_etre", True),
             )
             all_corrections.extend(corr_gram)
 

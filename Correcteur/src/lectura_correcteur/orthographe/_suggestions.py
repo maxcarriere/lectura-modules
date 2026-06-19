@@ -199,6 +199,15 @@ def _meilleure_variante_accent(mot: str, lexique, freq_actuelle: float) -> str |
         and best_freq < freq_actuelle * 10
     ):
         return None
+    # Guard Phase 1 : si les deux formes sont des mots courants (freq >= 5),
+    # l'accent disambiguation est trop risquee (cotes/cotes, remarque/remarque).
+    # La distinction est grammaticale, pas orthographique.
+    if freq_actuelle >= 5 and best_freq >= 5:
+        return None
+    # Guard accent-swap : si l'original a deja des accents ET le candidat aussi,
+    # c'est un changement de position d'accent (tache→tache) = risque eleve.
+    if _n_acc_orig > 0 and _n_acc_best > 0 and freq_actuelle >= 1:
+        return None
     if best_freq > max(freq_actuelle * 3, _min_threshold):
         return best_form
     return None

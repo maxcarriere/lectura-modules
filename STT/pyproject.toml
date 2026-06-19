@@ -24,12 +24,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
-dependencies = ["lectura-ctc>=2.0"]
+dependencies = [
+    "lectura-decodeur>=3.0",
+    "lectura-p2g>=4.6",
+]
 
 [project.optional-dependencies]
-p2g = ["lectura-p2g>=1.0"]
-onnx = ["lectura-ctc[onnx]", "lectura-graphemiseur[onnx]"]
-micro = ["lectura-ctc[micro]"]
+onnx = ["lectura-decodeur[onnx]", "lectura-graphemiseur[onnx]"]
 
 [project.urls]
 Homepage = "https://www.lectura.world/solutions/outils/modules/"

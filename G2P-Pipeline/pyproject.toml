@@ -25,8 +25,9 @@ classifiers = [
 ]
 dependencies = [
     "lectura-tokeniseur>=2.2",
-    "lectura-formules>=3.0",
+    "lectura-formules>=3.7",
     "lectura-phonemiseur>=4.0",
+    "lectura-lexique>=1.4",
 ]
 
 [project.optional-dependencies]

@@ -54,6 +54,14 @@ class CorrecteurConfig:
     accord_pm_seuil_violation: float = -10.0  # PM bigram logp en dessous = violation
     accord_pm_seuil_delta: float = 2.0    # Delta minimum pour accepter la correction
 
+    # --- Flags granulaires grammaire (Phase 1 = precision, tout OFF) ---
+    # Quand activer_grammaire=True, seules les sous-regles activees tournent.
+    activer_homophones_gram: bool = False  # Homophones contextuels (et/est, ou/où, etc.)
+    activer_accords: bool = False          # Accords det+nom, nom+adj, genre, nombre
+    activer_conjugaisons: bool = False     # Conjugaison sujet-verbe
+    activer_participes: bool = False       # Participe passe (infinitif↔PP)
+    activer_pp_etre: bool = False          # Accord PP avec sujet (aux. etre)
+
 
 @dataclass
 class CorrecteurV2Config:
@@ -124,6 +132,9 @@ class CorrecteurV5Config(CorrecteurConfig):
     activer_lm_homophones: bool = False  # remplace par detection P2G
     activer_editeur_homophones: bool = False  # remplace par detection P2G
     activer_homophones_p2g: bool = True  # detection homophones via P2G
+    activer_p2g_ortho: bool = False       # correction ortho via roundtrip P2G (OFF par defaut)
+    seuil_p2g_accent: float = 0.70        # seuil confiance P2G pour variantes accent seul
+    seuil_p2g_ortho: float = 0.85         # seuil confiance P2G pour corrections ortho generales
 
 
 @dataclass
