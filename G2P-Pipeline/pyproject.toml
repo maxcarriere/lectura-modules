@@ -9,7 +9,7 @@ description = "Pipeline G2P complet du français — Tokeniseur + Formules + Pho
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["g2p", "french", "nlp", "phonétique", "pipeline", "tts"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -25,15 +25,16 @@ classifiers = [
 ]
 dependencies = [
     "lectura-tokeniseur>=2.2",
-    "lectura-formules>=3.0",
+    "lectura-formules>=3.7",
     "lectura-phonemiseur>=4.0",
+    "lectura-lexique>=1.4",
 ]
 
 [project.optional-dependencies]
 aligneur = ["lectura-aligneur>=4.0"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/G2P-Pipeline"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

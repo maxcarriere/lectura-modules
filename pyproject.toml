@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura"
-version = "3.1.0"
-description = "Suite complète de traitement linguistique du français — tokenisation, phonémisation, alignement, syllabation, formules, lexique"
+version = "4.0.0"
+description = "Meta-package Lectura — suite complete de traitement linguistique et vocal du francais"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
-keywords = ["nlp", "french", "g2p", "aligneur", "syllabeur", "tokeniseur", "phonétique"]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
+keywords = ["nlp", "french", "g2p", "p2g", "stt", "tts", "vc", "phonetique", "pipeline"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -22,30 +22,51 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Text Processing :: Linguistic",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
-dependencies = [
-    "lectura-tokeniseur>=2.0",
-    "lectura-phonemiseur>=4.0",
-    "lectura-graphemiseur>=4.2",
-    "lectura-p2g>=1.0",
-    "lectura-aligneur>=4.0",
-    "lectura-formules>=2.0",
-    "lectura-lexique>=1.0",
-    "lectura-correcteur>=1.0",
-    "lectura-ctc>=1.0",
-    "lectura-stt>=1.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
+# --- Briques outils ---
+tokeniseur = ["lectura-tokeniseur>=2.2"]
+formules = ["lectura-formules>=3.7"]
+aligneur = ["lectura-aligneur>=4.0"]
+lexique = ["lectura-lexique>=1.4"]
+phonemiseur = ["lectura-phonemiseur>=4.0"]
+graphemiseur = ["lectura-graphemiseur>=4.3"]
+decodeur = ["lectura-decodeur>=3.0"]
+monospeaker = ["lectura-monospeaker>=3.0"]
+multispeaker = ["lectura-multispeaker>=3.0"]
+diphone = ["lectura-diphone>=2.0"]
+vc-zeroshot = ["lectura-vc-zeroshot>=1.1"]
+vc-locuteurs = ["lectura-vc-locuteurs>=1.0"]
+
+# --- Pipelines metiers ---
+g2p = ["lectura-g2p>=4.1"]
+p2g = ["lectura-p2g>=4.6"]
+stt = ["lectura-stt>=3.2"]
+tts-mono = ["lectura-tts-mono>=1.0"]
+tts-multi = ["lectura-tts-multi>=1.0"]
+tts-dipho = ["lectura-tts-dipho>=1.0"]
+vc = ["lectura-vc-zeroshot>=1.1", "lectura-vc-locuteurs>=1.0"]
+
+# --- Groupes de commodite ---
+nlp = ["lectura[tokeniseur,formules,aligneur,lexique,phonemiseur,graphemiseur]"]
+tts = ["lectura[tts-mono,tts-multi,tts-dipho]"]
 onnx = [
-    "lectura-phonemiseur[onnx]>=4.0",
-    "lectura-graphemiseur[onnx]>=4.0",
-    "lectura-ctc[onnx]>=1.0",
-    "lectura-stt[onnx,p2g]>=1.0",
+    "lectura-phonemiseur[onnx]",
+    "lectura-graphemiseur[onnx]",
+    "lectura-decodeur[onnx]",
+    "lectura-monospeaker[onnx]",
+    "lectura-multispeaker[onnx]",
+]
+all = [
+    "lectura[nlp,g2p,p2g,stt,tts,vc,onnx]",
+    "lectura-diphone[local]",
 ]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/modules/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

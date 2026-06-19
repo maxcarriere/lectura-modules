@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-graphemiseur"
-version = "4.3.4"
+version = "4.3.5"
 description = "Graphémiseur neural du français (IPA → orthographe) — P2G + POS + Morpho (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["p2g", "french", "nlp", "phonétique", "orthographe", "pos-tagging", "morphologie"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -29,11 +29,12 @@ dependencies = []
 [project.optional-dependencies]
 onnx = ["onnxruntime>=1.16"]
 numpy = ["numpy>=1.24"]
+lexique = ["lectura-lexique>=1.4"]
 train = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
-all = ["onnxruntime>=1.16", "numpy>=1.24"]
+all = ["onnxruntime>=1.16", "numpy>=1.24", "lectura-lexique>=1.4"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/P2G"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-tts-multi"
+version = "1.0.0"
+description = "Pipeline TTS multi-speaker du francais — G2P + Matcha-Conformer multi-speaker + retimbre optionnel"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
+keywords = ["tts", "french", "speech-synthesis", "pipeline", "g2p", "multi-speaker"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "lectura-g2p>=4.1",
+    "lectura-multispeaker>=3.0",
+]
+
+[project.optional-dependencies]
+retimbre = ["lectura-vc-zeroshot>=1.1"]
+onnx = ["lectura-multispeaker[onnx]"]
+
+[project.urls]
+Homepage = "https://www.lectura.world/developpement/modules/metiers/tts/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/TTS-Multi"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

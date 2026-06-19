@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-phonemiseur"
-version = "4.1.2"
+version = "4.1.3"
 description = "Phonémiseur neural du français — G2P + POS + Morpho + Liaison + Groupes de lecture (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-authors = [{name = "Max Carriere", email = "contact@lec-tu-ra.com"}]
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = ["g2p", "french", "nlp", "phonétique", "pos-tagging", "morphologie", "liaison"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -29,11 +29,12 @@ dependencies = []
 [project.optional-dependencies]
 onnx = ["onnxruntime>=1.16"]
 numpy = ["numpy>=1.24"]
+lexique = ["lectura-lexique>=1.4"]
 train = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
-all = ["onnxruntime>=1.16", "numpy>=1.24"]
+all = ["onnxruntime>=1.16", "numpy>=1.24", "lectura-lexique>=1.4"]
 
 [project.urls]
-Homepage = "https://www.lec-tu-ra.com/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/solutions/outils/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/G2P"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

@@ -30,7 +30,7 @@ _engine = None
 def _get_engine():
     global _engine
     if _engine is None:
-        from lectura_ctc import creer_engine
+        from lectura_decodeur import creer_engine
         _engine = creer_engine(mode="onnx")
         logger.info("CTC engine charge (mode ONNX)")
     return _engine

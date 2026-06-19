@@ -25,7 +25,7 @@ _engine = None
 def _get_engine():
     global _engine
     if _engine is None:
-        from lectura_tts_multispeaker import creer_engine
+        from lectura_multispeaker import creer_engine
         _engine = creer_engine(mode="local")
         logger.info("TTS multi-speaker engine charge (mode local)")
     return _engine
@@ -44,6 +44,8 @@ class SynthesizeRequest(BaseModel):
     pitch_range: float | None = Field(None, gt=0.0, le=5.0)
     energy_scale: float | None = Field(None, gt=0.0, le=3.0)
     pause_scale: float | None = Field(None, gt=0.0, le=5.0)
+    n_ode_steps: int | None = Field(None, ge=1, le=50, description="Nombre de pas ODE (Matcha)")
+    duration_noise: float | None = Field(None, ge=0.0, le=1.0, description="Bruit de duree lisse")
 
 
 class PhonemeTimingResponse(BaseModel):
@@ -75,12 +77,16 @@ async def synthesize(req: SynthesizeRequest):
     # Selectionner le speaker
     engine.set_speaker(req.speaker)
 
-    # Parametres de style
-    style_kwargs = {}
+    # Parametres de style et Matcha
+    extra_kwargs = {}
     if req.style is not None:
-        style_kwargs["style"] = req.style
+        extra_kwargs["style"] = req.style
     if req.style_vector is not None:
-        style_kwargs["style_vector"] = req.style_vector
+        extra_kwargs["style_vector"] = req.style_vector
+    if req.n_ode_steps is not None:
+        extra_kwargs["n_ode_steps"] = req.n_ode_steps
+    if req.duration_noise is not None:
+        extra_kwargs["duration_noise"] = req.duration_noise
 
     if req.ipa is not None:
         result = engine.synthesize_phonemes(
@@ -91,7 +97,7 @@ async def synthesize(req: SynthesizeRequest):
             pitch_range=req.pitch_range,
             energy_scale=req.energy_scale,
             pause_scale=req.pause_scale,
-            **style_kwargs,
+            **extra_kwargs,
         )
     else:
         result = engine.synthesize(
@@ -102,7 +108,7 @@ async def synthesize(req: SynthesizeRequest):
             pitch_range=req.pitch_range,
             energy_scale=req.energy_scale,
             pause_scale=req.pause_scale,
-            **style_kwargs,
+            **extra_kwargs,
         )
 
     # Encoder audio en base64
@@ -128,5 +134,5 @@ async def synthesize(req: SynthesizeRequest):
 @router.get("/speakers")
 async def speakers():
     """Retourne la liste des speakers disponibles."""
-    from lectura_tts_multispeaker import liste_speakers
+    from lectura_multispeaker import liste_speakers
     return liste_speakers()

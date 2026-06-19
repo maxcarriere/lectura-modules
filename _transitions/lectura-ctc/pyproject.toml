@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lectura-ctc"
+version = "3.0.0"
+description = "DEPRECIE — Utiliser lectura-decodeur a la place. Ce package redirige automatiquement."
+requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
+classifiers = ["Development Status :: 7 - Inactive"]
+dependencies = ["lectura-decodeur>=3.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
