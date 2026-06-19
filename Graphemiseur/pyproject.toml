@@ -29,8 +29,9 @@ dependencies = []
 [project.optional-dependencies]
 onnx = ["onnxruntime>=1.16"]
 numpy = ["numpy>=1.24"]
+lexique = ["lectura-lexique>=1.4"]
 train = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
-all = ["onnxruntime>=1.16", "numpy>=1.24"]
+all = ["onnxruntime>=1.16", "numpy>=1.24", "lectura-lexique>=1.4"]
 
 [project.urls]
 Homepage = "https://www.lectura.world/solutions/outils/modules/"

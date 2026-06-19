@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from lectura_stt._parse_ctc import parse_ctc_output, parse_ctc_v2, ParseResult
+from lectura_decodeur import parse_ctc_output, parse_ctc_v2, ParseResult
 from lectura_stt._assembler import assembler_texte, rejoin_elisions
 from lectura_stt._segmentation import (
     strip_liaisons,
@@ -40,7 +40,7 @@ from lectura_stt._correction import (
 )
 from lectura_stt._grammar import GrammarLookup, corriger_grammatical
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 
 @dataclass
@@ -424,7 +424,7 @@ def creer_engine(
     mode : str
         Mode d'inference pour le CTC (``"auto"``, ``"onnx"``, ``"api"``).
     ctc_kwargs : dict | None
-        Arguments supplementaires pour ``lectura_ctc.creer_engine()``.
+        Arguments supplementaires pour ``lectura_decodeur.creer_engine()``.
     p2g_kwargs : dict | None
         Arguments supplementaires pour le P2G engine.
     formule_tolerance : str
@@ -445,7 +445,9 @@ def creer_engine(
         - ``"texte"`` : pas de conversion numerique
     lm_path : str | None
         Chemin vers un modele de langue KenLM (.bin) pour beam search
-        CTC. Si None, utilise le decodage greedy standard.
+        CTC. Si None, tente la detection automatique dans
+        ~/.lectura/models/lm/. Si aucun modele trouve, utilise le
+        decodage greedy standard.
     beam_alpha : float
         Poids du LM pour le beam search (defaut: 0.3).
     beam_beta : float
@@ -463,7 +465,11 @@ def creer_engine(
     2. ``lectura_graphemiseur`` (modele core seul)
     3. None (mode phones uniquement)
     """
-    from lectura_ctc import creer_engine as creer_ctc
+    from lectura_decodeur import creer_engine as creer_decodeur
+
+    # Auto-detection du LM si non fourni
+    if lm_path is None:
+        lm_path = _find_lm_path()
 
     ctc_kw = dict(ctc_kwargs) if ctc_kwargs else {}
     ctc_kw.setdefault("mode", mode)
@@ -472,7 +478,7 @@ def creer_engine(
         ctc_kw.setdefault("beam_alpha", beam_alpha)
         ctc_kw.setdefault("beam_beta", beam_beta)
         ctc_kw.setdefault("beam_width", beam_width)
-    ctc_engine = creer_ctc(**ctc_kw)
+    ctc_engine = creer_decodeur(**ctc_kw)
 
     p2g_kw = dict(p2g_kwargs) if p2g_kwargs else {}
     p2g_engine, p2g_analyser = _creer_p2g(**p2g_kw)
@@ -699,13 +705,28 @@ def _find_lexicon_db(p2g_engine: object) -> str | None:
                 if c.exists():
                     return str(c)
 
-    # Chercher dans ~/.lectura/models/
-    home_models = Path.home() / ".lectura" / "models"
-    if home_models.exists():
+    # Chercher dans le package lectura_graphemiseur (modeles/)
+    try:
+        import lectura_graphemiseur
+        pkg_dir = Path(lectura_graphemiseur.__file__).parent / "modeles"
         for name in ("phone_lexicon.db", "lexique_lectura_v5.db"):
-            candidate = home_models / name
+            candidate = pkg_dir / name
             if candidate.exists():
                 return str(candidate)
+    except (ImportError, Exception):
+        pass
+
+    # Chercher dans ~/.lectura/models/ et sous-dossiers courants
+    home_models = Path.home() / ".lectura" / "models"
+    if home_models.exists():
+        for subdir in ("", "p2g", "stt"):
+            d = home_models / subdir if subdir else home_models
+            if not d.exists():
+                continue
+            for name in ("phone_lexicon.db", "lexique_lectura_v5.db"):
+                candidate = d / name
+                if candidate.exists():
+                    return str(candidate)
 
     # Chercher via lectura_correcteur
     try:
@@ -715,5 +736,36 @@ def _find_lexicon_db(p2g_engine: object) -> str | None:
             return db
     except (ImportError, Exception):
         pass
+
+    return None
+
+
+def _find_lm_path() -> str | None:
+    """Cherche un modele KenLM phone-level pour le beam search CTC.
+
+    Cascade :
+    1. ~/.lectura/models/lm/phone_lm_5gram.bin
+    2. ~/.lectura/models/lm/*.bin (premier trouve)
+    3. None (degradation gracieuse → greedy decoding)
+    """
+    from pathlib import Path
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    lm_dir = Path.home() / ".lectura" / "models" / "lm"
+    if not lm_dir.exists():
+        return None
+
+    # Chercher le modele par defaut
+    default = lm_dir / "phone_lm_5gram.bin"
+    if default.exists():
+        logger.info("KenLM phone LM trouve: %s", default)
+        return str(default)
+
+    # Chercher tout .bin dans le dossier
+    for bin_file in sorted(lm_dir.glob("*.bin")):
+        logger.info("KenLM phone LM trouve: %s", bin_file)
+        return str(bin_file)
 
     return None

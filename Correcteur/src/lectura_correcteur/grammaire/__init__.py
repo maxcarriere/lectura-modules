@@ -35,6 +35,11 @@ def appliquer_grammaire(
     pos_confiance: list[float] | None = None,
     pm_guidance=None,
     skip_homophones: bool = False,
+    activer_homophones_gram: bool = True,
+    activer_accords: bool = True,
+    activer_conjugaisons: bool = True,
+    activer_participes: bool = True,
+    activer_pp_etre: bool = True,
 ) -> tuple[list[str], list]:
     """Applique toutes les regles grammaticales sur la phrase.
 
@@ -47,6 +52,11 @@ def appliquer_grammaire(
             deja corrigees par le module PM.
         skip_homophones: Si True, sauter verifier_homophones (V1).
             Utilise par V5 quand detecter_homophones_p2g a deja tourne.
+        activer_homophones_gram: Activer les homophones contextuels.
+        activer_accords: Activer les regles d'accord.
+        activer_conjugaisons: Activer les regles de conjugaison.
+        activer_participes: Activer les regles de participe passe.
+        activer_pp_etre: Activer l'accord PP avec sujet (aux. etre).
 
     Returns:
         Tuple (mots_corriges, liste_de_Correction).
@@ -59,7 +69,7 @@ def appliquer_grammaire(
 
     # 1. Homophones contextuels (AVANT accords/conjugaison pour que est→et
     #    ait priorite sur est→sont dans les cas de coordination)
-    if not skip_homophones:
+    if activer_homophones_gram and not skip_homophones:
         result_homo, corr_homo = verifier_homophones(
             result, pos_tags, morpho, lexique, origs,
             pos_confiance=pos_confiance,
@@ -68,33 +78,37 @@ def appliquer_grammaire(
         corrections.extend(corr_homo)
 
     # 2. Accords (det+nom, det+adj+nom, det+nom+ver, genre)
-    result_acc, corr_acc = verifier_accords(
-        result, pos_tags, morpho, lexique, origs,
-        pm_guidance=pm_guidance,
-    )
-    result = result_acc
-    corrections.extend(corr_acc)
+    if activer_accords:
+        result_acc, corr_acc = verifier_accords(
+            result, pos_tags, morpho, lexique, origs,
+            pm_guidance=pm_guidance,
+        )
+        result = result_acc
+        corrections.extend(corr_acc)
 
     # 3. Conjugaisons (pronom+verbe)
-    result_conj, corr_conj = verifier_conjugaisons(
-        result, pos_tags, morpho, lexique, origs,
-    )
-    result = result_conj
-    corrections.extend(corr_conj)
+    if activer_conjugaisons:
+        result_conj, corr_conj = verifier_conjugaisons(
+            result, pos_tags, morpho, lexique, origs,
+        )
+        result = result_conj
+        corrections.extend(corr_conj)
 
     # 4. Participes passes (auxiliaire + infinitif -> PP)
-    result_pp, corr_pp = verifier_participes_passes(
-        result, pos_tags, morpho, lexique, origs,
-    )
-    result = result_pp
-    corrections.extend(corr_pp)
+    if activer_participes:
+        result_pp, corr_pp = verifier_participes_passes(
+            result, pos_tags, morpho, lexique, origs,
+        )
+        result = result_pp
+        corrections.extend(corr_pp)
 
     # 4b. Accord PP avec sujet quand auxiliaire = etre
-    result_ppetre, corr_ppetre = verifier_pp_accord_etre(
-        result, pos_tags, morpho, lexique, origs,
-    )
-    result = result_ppetre
-    corrections.extend(corr_ppetre)
+    if activer_pp_etre:
+        result_ppetre, corr_ppetre = verifier_pp_accord_etre(
+            result, pos_tags, morpho, lexique, origs,
+        )
+        result = result_ppetre
+        corrections.extend(corr_ppetre)
 
     # 5. Negation (inserer ne)
     if activer_negation:
@@ -106,12 +120,20 @@ def appliquer_grammaire(
 
     # 6. Elision : pronom/article + voyelle → forme elidee
     # "je ai" → "j' ai" (reconstruction collera "j'ai")
+    # Ne tourne que si au moins une regle de grammaire a produit des corrections.
+    # Sinon les corrections ortho (accent, etc.) declenchent des elisions parasites.
+    _any_grammar_active = (
+        activer_homophones_gram or activer_accords or activer_conjugaisons
+        or activer_participes or activer_pp_etre or activer_negation
+    )
     _ELISION = {
         "je": "j'", "me": "m'", "te": "t'", "se": "s'",
         "le": "l'", "la": "l'", "de": "d'", "ne": "n'",
         "que": "qu'",
     }
     _VOYELLES = frozenset("aeiouyàâéèêëïîôùûüæœh")
+    if not _any_grammar_active:
+        return result, corrections
     for _i_el in range(len(result) - 1):
         _low_el = result[_i_el].lower()
         _elided = _ELISION.get(_low_el)

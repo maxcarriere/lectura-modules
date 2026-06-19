@@ -16,7 +16,10 @@ def verifier_ponctuation(tokens: list[str]) -> list[Correction]:
     for i in range(n):
         tok = tokens[i]
 
-        if i == 0 or (i > 0 and tokens[i - 1] in (".", "!", "?", "\u2026")):
+        # Capitaliser seulement en debut de phrase (i==0) ou apres un point.
+        # PAS apres ? ! … car les incises de dialogue litteraire ("demanda-t-il")
+        # suivent souvent ? ou ! avec un verbe en minuscule.
+        if i == 0 or (i > 0 and tokens[i - 1] == "."):
             if tok and tok[0].islower() and tok.isalpha():
                 ancien = tok
                 tokens[i] = tok[0].upper() + tok[1:]

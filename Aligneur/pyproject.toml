@@ -25,6 +25,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+phonemiseur = ["lectura-phonemiseur>=4.0"]
+
 [project.urls]
 Homepage = "https://www.lectura.world/solutions/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Aligneur"
