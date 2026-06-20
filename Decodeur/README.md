@@ -1,4 +1,4 @@
-# lectura-ctc — Decodeur phonetique CTC du francais
+# lectura-decodeur — Decodeur phonetique CTC du francais
 
 Transcription audio vers phonemes IPA via un modele CNN-BiGRU-CTC medium (10.6M params, PER ~4.34%).
 
@@ -8,17 +8,17 @@ Le modele medium supporte les sigles, formules (nombres, dates, calculs) et la p
 
 ```bash
 # Avec backend ONNX (recommande)
-pip install lectura-ctc[onnx]
+pip install lectura-decodeur[onnx]
 
 # Sans ONNX (mode API uniquement)
-pip install lectura-ctc
+pip install lectura-decodeur
 ```
 
 ## Utilisation
 
 ```python
 import numpy as np
-from lectura_ctc import creer_engine
+from lectura_decodeur import creer_engine
 
 engine = creer_engine()
 
