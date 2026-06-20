@@ -1,4 +1,4 @@
-# lectura-tts-diphone
+# lectura-diphone
 
 Synthese vocale francaise par concatenation de diphones dans le domaine WORLD.
 
@@ -6,21 +6,21 @@ Synthese vocale francaise par concatenation de diphones dans le domaine WORLD.
 
 ```bash
 # Sans dependances (import seul)
-pip install lectura-tts-diphone
+pip install lectura-diphone
 
 # Inference locale (pyworld + numpy + scipy)
-pip install "lectura-tts-diphone[local]"
-
-# Avec G2P integre (texte → audio)
-pip install "lectura-tts-diphone[all]"
+pip install "lectura-diphone[local]"
 ```
+
+> Pour le pipeline complet texte → audio, utilisez `pip install lectura-tts-dipho` (inclut le G2P).
+
 
 ## Utilisation
 
 ### Depuis du texte (necessite lectura-phonemiseur)
 
 ```python
-from lectura_tts_diphone import synthetiser
+from lectura_diphone import synthetiser
 
 audio = synthetiser("Bonjour le monde")
 # audio: numpy array float32, 44100 Hz
@@ -29,7 +29,7 @@ audio = synthetiser("Bonjour le monde")
 ### Depuis des phonemes IPA
 
 ```python
-from lectura_tts_diphone import creer_engine
+from lectura_diphone import creer_engine
 
 engine = creer_engine()
 audio = engine.synthesize_groups([
