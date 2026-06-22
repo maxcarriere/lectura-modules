@@ -1,35 +1,25 @@
-# lectura-tts-monospeaker
+# lectura-monospeaker
 
-Synthese vocale neuronale monospeaker pour le francais.
+Moteur de synthese vocale neuronale monospeaker pour le francais — Matcha-Conformer + HiFi-GAN (ONNX).
 
 ## Installation
 
 ```bash
 # Version minimale (API distante, zero deps)
-pip install lectura-tts-monospeaker
+pip install lectura-monospeaker
 
 # Version locale (inference ONNX)
-pip install lectura-tts-monospeaker[onnx]
-
-# Avec G2P integre (texte → audio)
-pip install lectura-tts-monospeaker[all]
+pip install lectura-monospeaker[onnx]
 ```
+
+> Pour le pipeline complet texte → audio, utilisez `pip install lectura-tts-mono` (inclut le G2P).
 
 ## Utilisation
-
-### Depuis du texte (necessite lectura-phonemiseur)
-
-```python
-from lectura_tts_monospeaker import synthetiser
-
-audio = synthetiser("Bonjour le monde")
-# audio: numpy array float32, 22050 Hz
-```
 
 ### Depuis des phonemes IPA
 
 ```python
-from lectura_tts_monospeaker import creer_engine
+from lectura_monospeaker import creer_engine
 
 engine = creer_engine(mode="local")
 result = engine.synthesize_phonemes(
@@ -45,7 +35,7 @@ result = engine.synthesize_phonemes(
 ### Via l'API distante
 
 ```python
-from lectura_tts_monospeaker import creer_engine
+from lectura_monospeaker import creer_engine
 
 engine = creer_engine(mode="api", api_url="https://api.lectura.world")
 result = engine.synthesize("Bonjour")
@@ -64,9 +54,17 @@ result = engine.synthesize("Bonjour")
 
 ## Architecture
 
-- **FastPitch-Lite** : phonemes → mel-spectrogramme (~5M params)
-- **HiFi-GAN V1** : mel → audio 22050 Hz (~3.5M params)
+- **Matcha-Conformer** : phonemes → mel-spectrogramme via flow matching ODE
+- **HiFi-GAN V1** : mel → audio 22050 Hz
 - **Runtime** : ONNX (pas de dependance PyTorch)
+
+## Emplacements des modeles
+
+Recherche dans l'ordre :
+1. Parametre `models_dir` explicite
+2. `$LECTURA_MODELS_DIR/tts_mono/`
+3. `~/.lectura/models/tts_mono/`
+4. Modeles embarques dans le package (version privee)
 
 ## Licence
 
