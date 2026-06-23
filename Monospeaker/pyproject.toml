@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-monospeaker"
-version = "3.1.0"
+version = "3.1.1"
 description = "Synthese vocale neuronale monospeaker francais — Matcha-Conformer + HiFi-GAN (ONNX)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,4 +34,4 @@ Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_monospeaker = ["data/*.json", "modeles/*.onnx", "modeles/*.enc", "modeles/*.json"]
+lectura_monospeaker = ["data/*.json", "modeles/*.json"]
