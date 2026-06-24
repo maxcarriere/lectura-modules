@@ -490,6 +490,11 @@ class OnnxTTSEngine:
         # Convertir IPA -> phone IDs
         phones = ipa_to_phones(phonemes_ipa)
 
+        # Ajouter un point final si la phrase ne finit pas par une ponctuation,
+        # sinon le modele coupe brutalement (pas de release prosodique).
+        if phones and phones[-1] not in _SILENCE_PHONES:
+            phones.append(".")
+
         # Reperer les frontieres de mots (espaces dans l'IPA) pour les timings
         space_after: list[int] = []
         segments = phonemes_ipa.split(" ")
