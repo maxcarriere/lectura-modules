@@ -30,11 +30,38 @@ SHARED_FILES_FASTPITCH = [
 ]
 
 
+def _is_dual_layout(directory: Path, speaker: str = "siwis") -> bool:
+    """Verifie si le repertoire utilise le layout dual (FastPitch + Conformer).
+
+    Detecte la presence de dual_config.json ET des modeles dans les
+    sous-repertoires fastpitch/ et conformer/.
+    """
+    if not directory.is_dir():
+        return False
+
+    if not (directory / "dual_config.json").exists():
+        return False
+
+    # Verifier que les sous-repertoires contiennent des modeles
+    fastpitch_dir = directory / "fastpitch"
+    conformer_dir = directory / "conformer"
+
+    return (
+        _has_models(fastpitch_dir, speaker)
+        and _has_models(conformer_dir, speaker)
+    )
+
+
 def find_models_dir(
     speaker: str = "siwis",
     models_dir: str | Path | None = None,
 ) -> Path | None:
     """Trouve le repertoire contenant les modeles ONNX.
+
+    Detecte trois layouts :
+    - dual : dual_config.json + sous-repertoires fastpitch/ et conformer/
+    - matcha-conformer (v2) : matcha_unet.onnx + matcha_encoder_{speaker}.onnx
+    - fastpitch (v1 legacy) : decoder.onnx + encoder_{speaker}.onnx
 
     Args:
         speaker: Nom du speaker dont on verifie la presence de l'encodeur.
@@ -61,7 +88,7 @@ def find_models_dir(
     candidates.append(_PACKAGE_MODELS)
 
     for candidate in candidates:
-        if _has_models(candidate, speaker):
+        if _is_dual_layout(candidate, speaker) or _has_models(candidate, speaker):
             log.debug("Modeles trouves : %s", candidate)
             return candidate
 

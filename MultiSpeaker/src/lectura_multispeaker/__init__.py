@@ -17,7 +17,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 _SPEAKERS_DATA: list[dict] | None = None
 _DEFAULT_SPEAKER: str | None = None
@@ -106,6 +106,11 @@ def _try_local(speaker: str, models_dir: str | Path | None = None):
     resolved = find_models_dir(speaker, models_dir)
     if resolved is None:
         return None
+
+    # Layout dual : FastPitch + Conformer avec routage automatique
+    if (resolved / "dual_config.json").exists():
+        from lectura_multispeaker.inference_dual import DualTTSEngine
+        return DualTTSEngine(resolved, speaker=speaker)
 
     from lectura_multispeaker.inference_onnx import OnnxTTSEngine
     return OnnxTTSEngine(resolved, speaker=speaker)
