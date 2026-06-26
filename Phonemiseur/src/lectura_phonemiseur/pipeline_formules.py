@@ -264,6 +264,8 @@ def analyser_phrase_complete(
 
     for item_idx, (orig_idx, tok, kind) in enumerate(items):
         text = getattr(tok, "text", str(tok))
+        if orig_idx in elision_indices:
+            text = text + "'"
         neural_idx = item_to_neural[item_idx]
 
         if kind == "ponctuation":
