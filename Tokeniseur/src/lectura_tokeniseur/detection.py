@@ -139,8 +139,10 @@ _GREEK_LETTERS = set("αβγδεζηθικλμνξοπρστυφχψωΓΔΘΛΞ
 def _detect_maths(text: str) -> bool:
     """Détecte une expression mathématique (2x+3=5, sin(x), x², √9, etc.)."""
     # Alternative textuelle : mot/mot (homme/enfant, oui/non) → pas des maths
+    # Gerer aussi les parentheses : (homme/enfant)
     if "/" in text and not any(c.isdigit() for c in text):
-        parts = text.split("/")
+        inner = text.strip("()[]")
+        parts = inner.split("/")
         if all(p.isalpha() and len(p) >= 2 for p in parts):
             return False
 

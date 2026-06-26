@@ -38,6 +38,8 @@ def _normalize_spaces(text: str) -> str:
 
 
 def _normalize_apostrophes(text: str) -> str:
+    # Convertir les apostrophes typographiques en apostrophe droite
+    text = text.replace("\u2019", "'").replace("\u2018", "'")
     return _RE_SPACE_AROUND_APOSTROPHE.sub("'", text)
 
 
