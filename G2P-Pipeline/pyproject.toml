@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-g2p"
-version = "4.1.0"
+version = "4.1.1"
 description = "Pipeline G2P complet du français — Tokeniseur + Formules + Phonémiseur + Groupes de lecture"
 readme = "README.md"
 requires-python = ">=3.10"

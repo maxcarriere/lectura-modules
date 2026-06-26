@@ -123,6 +123,8 @@ _PUNCT_MAP = {
     ",": ",", ";": ",", ":": ",",
     ".": ".", "!": "!", "?": "?",
     "\u2026": "\u2026", "...": "\u2026",
+    "\u2014": ",", "\u2013": ",",   # tirets cadratins/demi-cadratins → pause
+    "(": ",", ")": ",",             # parentheses → pause
 }
 
 _SENTENCE_PUNCT = {".", "?", "!", "\u2026", "..."}
@@ -148,11 +150,17 @@ def groupes_vers_ipa(groupes: list[GroupeLecture]) -> str:
     """
     parts: list[str] = []
     for gi, grp in enumerate(groupes):
-        # Ponctuation → caractere de pause
+        # Ponctuation → caractere de pause (non cumulatif)
         if len(grp.mots) == 1 and getattr(grp.mots[0], "est_ponctuation", False):
             p = _PUNCT_MAP.get(grp.mots[0].text.strip())
             if p:
-                parts.append(p)
+                # Eviter d'empiler les pauses : garder la plus forte
+                if parts and parts[-1] in (",", ".", "?", "!", "\u2026"):
+                    _PUNCT_WEIGHT = {",": 0, ".": 1, "?": 1, "!": 1, "\u2026": 1}
+                    if _PUNCT_WEIGHT.get(p, 0) > _PUNCT_WEIGHT.get(parts[-1], 0):
+                        parts[-1] = p
+                else:
+                    parts.append(p)
             continue
 
         # Espace entre groupes (sauf avant le premier et apres ponctuation)
@@ -166,6 +174,8 @@ def groupes_vers_ipa(groupes: list[GroupeLecture]) -> str:
             for j, jonction in enumerate(grp.jonctions):
                 if jonction.startswith("liaison_"):
                     grp_parts.append(jonction[len("liaison_"):])
+                elif jonction == "elision":
+                    grp_parts.append(" ")
                 grp_parts.append(grp_phones[j + 1])
             parts.append("".join(grp_parts))
         else:

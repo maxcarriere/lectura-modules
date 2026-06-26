@@ -499,6 +499,21 @@ class OnnxTTSEngine:
         # Convertir IPA -> phone IDs
         phones = ipa_to_phones(phonemes_ipa)
 
+        # Ajouter un point final si la phrase ne finit pas par une ponctuation,
+        # sinon le modele coupe brutalement (pas de release prosodique).
+        if phones and phones[-1] not in _SILENCE_PHONES:
+            phones.append(".")
+
+        # Inserer un micro-silence entre voyelles consecutives (hiatus)
+        # pour eviter que le modele invente une consonne de transition.
+        from lectura_multispeaker.phonemes import _VOWELS
+        patched: list[str] = [phones[0]] if phones else []
+        for k in range(1, len(phones)):
+            if phones[k] in _VOWELS and phones[k - 1] in _VOWELS:
+                patched.append("#")
+            patched.append(phones[k])
+        phones = patched
+
         # Frontieres de mots
         space_after: list[int] = []
         segments = phonemes_ipa.split(" ")

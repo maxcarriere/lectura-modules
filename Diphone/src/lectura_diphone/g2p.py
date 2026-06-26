@@ -23,7 +23,12 @@ from typing import Callable, Protocol, runtime_checkable
 log = logging.getLogger(__name__)
 
 # Ponctuation → boundary type
-_PUNCT_MAP = {"...": "suspensive", ",": "comma", ".": "period", "?": "question", "!": "exclamation"}
+_PUNCT_MAP = {
+    "...": "suspensive", ",": "comma", ".": "period", "?": "question", "!": "exclamation",
+    ";": "comma", ":": "comma",
+    "\u2014": "comma", "\u2013": "comma",  # tirets cadratins/demi-cadratins
+    "(": "comma", ")": "comma",            # parentheses
+}
 _PUNCT_BOUNDARIES = {"comma", "period", "question", "exclamation", "suspensive"}
 
 # Ponctuation terminale de phrase

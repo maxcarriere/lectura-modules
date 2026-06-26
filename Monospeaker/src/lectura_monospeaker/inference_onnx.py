@@ -495,6 +495,16 @@ class OnnxTTSEngine:
         if phones and phones[-1] not in _SILENCE_PHONES:
             phones.append(".")
 
+        # Inserer un micro-silence entre voyelles consecutives (hiatus)
+        # pour eviter que le modele invente une consonne de transition (z, etc.).
+        from lectura_monospeaker.phonemes import _VOWELS
+        patched: list[str] = [phones[0]] if phones else []
+        for k in range(1, len(phones)):
+            if phones[k] in _VOWELS and phones[k - 1] in _VOWELS:
+                patched.append("#")
+            patched.append(phones[k])
+        phones = patched
+
         # Reperer les frontieres de mots (espaces dans l'IPA) pour les timings
         space_after: list[int] = []
         segments = phonemes_ipa.split(" ")
