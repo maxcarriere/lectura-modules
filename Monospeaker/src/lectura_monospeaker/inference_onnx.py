@@ -495,16 +495,6 @@ class OnnxTTSEngine:
         if phones and phones[-1] not in _SILENCE_PHONES:
             phones.append(".")
 
-        # Inserer un micro-silence entre voyelles consecutives (hiatus)
-        # pour eviter que le modele invente une consonne de transition (z, etc.).
-        from lectura_monospeaker.phonemes import _VOWELS
-        patched: list[str] = [phones[0]] if phones else []
-        for k in range(1, len(phones)):
-            if phones[k] in _VOWELS and phones[k - 1] in _VOWELS:
-                patched.append("#")
-            patched.append(phones[k])
-        phones = patched
-
         # Reperer les frontieres de mots (espaces dans l'IPA) pour les timings
         space_after: list[int] = []
         segments = phonemes_ipa.split(" ")
@@ -514,6 +504,27 @@ class OnnxTTSEngine:
                 phone_count += len(ipa_to_phones(segment))
             if seg_idx < len(segments) - 1 and phone_count > 0:
                 space_after.append(phone_count - 1)
+
+        # Inserer un micro-silence entre voyelles consecutives (hiatus)
+        # UNIQUEMENT au sein d'un meme mot (pas entre mots).
+        from lectura_monospeaker.phonemes import _VOWELS
+        word_boundaries = set(space_after)
+        patched: list[str] = [phones[0]] if phones else []
+        inserted = 0
+        new_space_after: list[int] = []
+        for k in range(1, len(phones)):
+            if (phones[k] in _VOWELS and phones[k - 1] in _VOWELS
+                    and (k - 1) not in word_boundaries):
+                patched.append("#")
+                inserted += 1
+            if (k - 1) in word_boundaries:
+                new_space_after.append(k - 1 + inserted)
+            patched.append(phones[k])
+        # Dernier indice si c'etait une frontiere
+        if (len(phones) - 1) in word_boundaries:
+            new_space_after.append(len(phones) - 1 + inserted)
+        phones = patched
+        space_after = new_space_after
 
         sil_id = self._phone2id["#"]
         unk_id = self._phone2id.get("<UNK>", 1)
