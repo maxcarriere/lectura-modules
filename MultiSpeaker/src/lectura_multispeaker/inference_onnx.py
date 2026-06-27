@@ -645,10 +645,23 @@ class OnnxTTSEngine:
         )
         _n_spoken = int(_spoken_mask.sum())
 
-        # Rallonger les deux derniers phones parles — le vocoder coupe
-        # souvent la fin de phrase quelle que soit la longueur.
-        _LAST_PHONE_SCALE = 1.3
+        # Rallonger les phones parles avant les pauses/ponctuations — le
+        # vocoder coupe souvent la fin des segments.
+        _PRE_PAUSE_SCALE = 1.3
         all_phones = ["#"] + list(phones) + ["#"]
+
+        # Avant chaque ponctuation interne
+        for _j, _ph in enumerate(all_phones):
+            if _ph in _PUNCT_MIN_FRAMES and _j > 1:
+                # Dernier phone parle avant cette ponctuation
+                _k = _j - 1
+                if all_phones[_k] not in _SILENCE_PHONES:
+                    durations[_k] = max(
+                        durations[_k],
+                        int(round(durations[_k] * _PRE_PAUSE_SCALE)),
+                    )
+
+        # Deux derniers phones parles (fin de phrase)
         _last_spoken = []
         for _j in range(len(all_phones) - 1, -1, -1):
             if all_phones[_j] not in _SILENCE_PHONES and all_phones[_j] not in _PUNCT_MIN_FRAMES:
@@ -658,7 +671,7 @@ class OnnxTTSEngine:
         for _j in _last_spoken:
             durations[_j] = max(
                 durations[_j],
-                int(round(durations[_j] * _LAST_PHONE_SCALE)),
+                int(round(durations[_j] * _PRE_PAUSE_SCALE)),
             )
 
         _is_short_sequence = _n_spoken <= 15 and _n_spoken >= 2
