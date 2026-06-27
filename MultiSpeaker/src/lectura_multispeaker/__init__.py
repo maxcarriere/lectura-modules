@@ -17,7 +17,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-__version__ = "3.1.0"
+__version__ = "3.2.0"
 
 _SPEAKERS_DATA: list[dict] | None = None
 _DEFAULT_SPEAKER: str | None = None
@@ -124,7 +124,7 @@ def synthetiser(
     api_url: str | None = None,
     api_key: str | None = None,
     phrase_type: int | None = None,
-    duration_scale: float = 1.0,
+    duration_scale: float | None = None,
     pitch_shift: float = 0.0,
     pitch_range: float = 1.0,
     energy_scale: float = 1.0,
