@@ -356,6 +356,7 @@ class OnnxTTSEngine:
         style_vector: list[float] | None = None,
         n_ode_steps: int | None = None,
         duration_noise: float | None = None,
+        model: str | None = None,
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
@@ -365,6 +366,7 @@ class OnnxTTSEngine:
                          (prioritaire sur style)
             n_ode_steps: Nombre de pas ODE (Matcha uniquement, defaut: config)
             duration_noise: Bruit de duree lisse (0.0=off, 0.1=subtil, 0.2=prononce)
+            model: Ignore (pour compatibilite DualTTSEngine)
         """
         try:
             from lectura_g2p import creer_engine as creer_g2p
@@ -462,6 +464,7 @@ class OnnxTTSEngine:
         style_vector: list[float] | None = None,
         n_ode_steps: int | None = None,
         duration_noise: float | None = None,
+        model: str | None = None,
     ) -> TTSResult:
         """Synthetise une sequence de phonemes IPA.
 

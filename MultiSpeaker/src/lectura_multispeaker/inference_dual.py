@@ -162,6 +162,24 @@ class DualTTSEngine:
         )
         return chunks
 
+    def _resolve_engine(
+        self, phonemes_ipa: str, model: str | None = None,
+    ) -> tuple[OnnxTTSEngine, str]:
+        """Choisit l'engine en tenant compte du forçage eventuel.
+
+        Parameters
+        ----------
+        phonemes_ipa : str
+            Sequence IPA (pour le routage auto).
+        model : str | None
+            "conformer" ou "fastpitch" pour forcer, None = routage auto.
+        """
+        if model == self._long_model_key or model == "conformer":
+            return self._conformer, self._long_model_key
+        if model == self._short_model_key or model == "fastpitch" or model == "fft":
+            return self._fastpitch, self._short_model_key
+        return self._choose_engine(phonemes_ipa)
+
     def synthesize_phonemes(
         self,
         phonemes_ipa: str,
@@ -176,18 +194,24 @@ class DualTTSEngine:
         style_vector: list[float] | None = None,
         n_ode_steps: int | None = None,
         duration_noise: float | None = None,
+        model: str | None = None,
     ) -> TTSResult:
         """Synthetise une sequence de phonemes IPA via l'engine appropriate.
 
         Route vers Conformer ou FastPitch selon le speaker et n_phones.
         Les sequences tres longues sont automatiquement decoupees a la
         ponctuation pour eviter la degradation du Conformer.
+
+        Parameters
+        ----------
+        model : str | None
+            Forcer un modele : "conformer", "fastpitch"/"fft", ou None (auto).
         """
-        engine, model_name = self._choose_engine(phonemes_ipa)
+        engine, model_name = self._resolve_engine(phonemes_ipa, model)
 
         log.debug(
-            "Routage dual: speaker=%s, ipa=%s... -> %s",
-            self._speaker, phonemes_ipa[:20], model_name,
+            "Routage dual: speaker=%s, model=%s, ipa=%s... -> %s",
+            self._speaker, model or "auto", phonemes_ipa[:20], model_name,
         )
 
         prosody = dict(
@@ -261,10 +285,16 @@ class DualTTSEngine:
         style_vector: list[float] | None = None,
         n_ode_steps: int | None = None,
         duration_noise: float | None = None,
+        model: str | None = None,
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
         Chaque phrase du texte est routee individuellement selon sa longueur.
+
+        Parameters
+        ----------
+        model : str | None
+            Forcer un modele : "conformer", "fastpitch"/"fft", ou None (auto).
         """
         try:
             from lectura_g2p import creer_engine as creer_g2p
@@ -296,6 +326,7 @@ class DualTTSEngine:
             pause_scale=pause_scale, variability=variability,
             style=style, style_vector=style_vector,
             n_ode_steps=n_ode_steps, duration_noise=duration_noise,
+            model=model,
         )
 
         if len(sentences) == 1:

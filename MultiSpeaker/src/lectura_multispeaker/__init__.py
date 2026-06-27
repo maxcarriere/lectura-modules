@@ -17,7 +17,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 _SPEAKERS_DATA: list[dict] | None = None
 _DEFAULT_SPEAKER: str | None = None
