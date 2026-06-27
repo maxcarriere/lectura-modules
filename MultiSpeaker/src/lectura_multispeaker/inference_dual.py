@@ -66,6 +66,13 @@ class DualTTSEngine:
         self._short_model_key = routing.get("short_model", "fastpitch")
         self._long_model_key = routing.get("long_model", "conformer")
 
+        # Facteur de duree par modele (1.0 = pas de correction)
+        duration_factors = config.get("duration_factors", {})
+        self._duration_factor = {
+            self._short_model_key: duration_factors.get(self._short_model_key, 1.0),
+            self._long_model_key: duration_factors.get(self._long_model_key, 1.0),
+        }
+
         models_cfg = config["models"]
         conformer_dir = self._models_dir / models_cfg["conformer"]["dir"]
         fastpitch_dir = self._models_dir / models_cfg["fastpitch"]["dir"]
@@ -213,6 +220,13 @@ class DualTTSEngine:
             "Routage dual: speaker=%s, model=%s, ipa=%s... -> %s",
             self._speaker, model or "auto", phonemes_ipa[:20], model_name,
         )
+
+        # Appliquer le facteur de duree specifique au modele
+        factor = self._duration_factor.get(model_name, 1.0)
+        if factor != 1.0:
+            from lectura_multispeaker.inference_onnx import _PROSODY_DEFAULTS
+            base = duration_scale if duration_scale is not None else _PROSODY_DEFAULTS["duration_scale"]
+            duration_scale = base * factor
 
         prosody = dict(
             duration_scale=duration_scale, pitch_shift=pitch_shift,
