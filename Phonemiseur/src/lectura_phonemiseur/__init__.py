@@ -145,7 +145,7 @@ def creer_engine(
     api_url: str | None = None,
     api_key: str | None = None,
     lexicon_path: str | Path | None = None,
-    corrections_lexique: bool = False,
+    corrections_lexique: bool = True,
 ):
     """Factory pour creer un engine d'inference G2P.
 
@@ -170,10 +170,9 @@ def creer_engine(
         Chemin vers le fichier lexique POS (JSON).
         Si None, resolution automatique (cascade).
     corrections_lexique : bool
-        Si True, charge les corrections etendues du lexique
-        (g2p_corrections_lexique.json, ~225K entrees).
-        Ameliore la precision sur les mots rares au prix d'un chargement
-        plus lourd (~7 Mo).
+        Si True (defaut), charge les corrections etendues du lexique
+        (g2p_corrections_lexique.json, ~30K entrees).
+        Ameliore la precision sur les mots rares et les anglicismes.
     """
     if mode == "api":
         from lectura_phonemiseur.inference_api import ApiInferenceEngine
