@@ -11,20 +11,32 @@ DualTTSEngine instancie les deux moteurs et route selon :
   - speaker == siwis (toutes longueurs) -> Conformer
   - n_phones > threshold (tous speakers) -> Conformer
   - n_phones <= threshold ET speaker != siwis -> FastPitch
+
+Les phrases tres longues (>_MAX_PHONES_CHUNK phones) sont automatiquement
+decoupees a la ponctuation (virgules, points-virgules) pour eviter la
+degradation de l'attention du Conformer sur les sequences >100 phones.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from lectura_multispeaker.inference_onnx import OnnxTTSEngine, TTSResult
+from lectura_multispeaker.inference_onnx import OnnxTTSEngine, TTSResult, PhonemeTiming
 
 log = logging.getLogger(__name__)
+
+# Seuil de phones au-dela duquel on decoupe les phrases longues
+# a la ponctuation pour le Conformer (evite la degradation d'attention).
+_MAX_PHONES_CHUNK = 80
+
+# Ponctuation IPA sur laquelle on peut couper
+_SPLIT_PUNCT = re.compile(r"(?<=[,;:])")
 
 
 class DualTTSEngine:
@@ -109,6 +121,47 @@ class DualTTSEngine:
             return self._conformer, self._long_model_key
         return self._fastpitch, self._short_model_key
 
+    def _split_long_ipa(self, phonemes_ipa: str) -> list[str]:
+        """Decoupe une sequence IPA trop longue a la ponctuation.
+
+        Decoupe aux virgules/points-virgules pour que chaque chunk
+        reste sous _MAX_PHONES_CHUNK phones. Si aucune ponctuation
+        n'est presente, retourne la sequence entiere (pas de split force).
+        """
+        from lectura_multispeaker.phonemes import ipa_to_phones
+
+        phones = ipa_to_phones(phonemes_ipa)
+        if len(phones) + 2 <= _MAX_PHONES_CHUNK:
+            return [phonemes_ipa]
+
+        # Decouper aux virgules/points-virgules
+        parts = _SPLIT_PUNCT.split(phonemes_ipa)
+        if len(parts) <= 1:
+            return [phonemes_ipa]
+
+        # Fusionner les parties pour rester sous le seuil
+        chunks: list[str] = []
+        current = parts[0]
+
+        for part in parts[1:]:
+            candidate = current + part
+            n = len(ipa_to_phones(candidate)) + 2
+            if n > _MAX_PHONES_CHUNK and current.strip():
+                chunks.append(current.strip())
+                current = part
+            else:
+                current = candidate
+
+        if current.strip():
+            chunks.append(current.strip())
+
+        log.debug(
+            "Split IPA long (%d phones) en %d chunks: %s",
+            len(phones), len(chunks),
+            [len(ipa_to_phones(c)) for c in chunks],
+        )
+        return chunks
+
     def synthesize_phonemes(
         self,
         phonemes_ipa: str,
@@ -127,6 +180,8 @@ class DualTTSEngine:
         """Synthetise une sequence de phonemes IPA via l'engine appropriate.
 
         Route vers Conformer ou FastPitch selon le speaker et n_phones.
+        Les sequences tres longues sont automatiquement decoupees a la
+        ponctuation pour eviter la degradation du Conformer.
         """
         engine, model_name = self._choose_engine(phonemes_ipa)
 
@@ -135,19 +190,61 @@ class DualTTSEngine:
             self._speaker, phonemes_ipa[:20], model_name,
         )
 
+        prosody = dict(
+            duration_scale=duration_scale, pitch_shift=pitch_shift,
+            pitch_range=pitch_range, energy_scale=energy_scale,
+            pause_scale=pause_scale, variability=variability,
+            style=style, style_vector=style_vector,
+            n_ode_steps=n_ode_steps, duration_noise=duration_noise,
+        )
+
+        # Decouper les sequences longues envoyees au Conformer
+        if model_name == self._long_model_key:
+            chunks = self._split_long_ipa(phonemes_ipa)
+            if len(chunks) > 1:
+                return self._synthesize_chunks(engine, chunks, phrase_type, prosody)
+
         return engine.synthesize_phonemes(
-            phonemes_ipa,
-            phrase_type=phrase_type,
-            duration_scale=duration_scale,
-            pitch_shift=pitch_shift,
-            pitch_range=pitch_range,
-            energy_scale=energy_scale,
-            pause_scale=pause_scale,
-            variability=variability,
-            style=style,
-            style_vector=style_vector,
-            n_ode_steps=n_ode_steps,
-            duration_noise=duration_noise,
+            phonemes_ipa, phrase_type=phrase_type, **prosody,
+        )
+
+    def _synthesize_chunks(
+        self,
+        engine: OnnxTTSEngine,
+        chunks: list[str],
+        phrase_type: int,
+        prosody: dict,
+    ) -> TTSResult:
+        """Synthetise une liste de chunks IPA et concatene les resultats."""
+        all_samples: list[np.ndarray] = []
+        all_timings: list[PhonemeTiming] = []
+        time_offset_ms = 0.0
+
+        for i, chunk_ipa in enumerate(chunks):
+            # Dernier chunk garde le phrase_type original,
+            # les intermediaires sont declaratifs (0) pour eviter
+            # l'intonation finale.
+            pt = phrase_type if i == len(chunks) - 1 else 0
+
+            result = engine.synthesize_phonemes(
+                chunk_ipa, phrase_type=pt, **prosody,
+            )
+
+            for t in result.phoneme_timings:
+                all_timings.append(PhonemeTiming(
+                    ipa=t.ipa,
+                    start_ms=t.start_ms + time_offset_ms,
+                    end_ms=t.end_ms + time_offset_ms,
+                ))
+
+            all_samples.append(result.samples)
+            time_offset_ms += len(result.samples) / self.sample_rate * 1000
+
+        combined = np.concatenate(all_samples) if all_samples else np.zeros(0, dtype=np.float32)
+        return TTSResult(
+            samples=combined,
+            sample_rate=self.sample_rate,
+            phoneme_timings=all_timings,
         )
 
     def synthesize(
@@ -182,7 +279,7 @@ class DualTTSEngine:
             self._conformer._g2p = creer_g2p(mode="auto")
         g2p = self._conformer._g2p
 
-        from lectura_multispeaker.inference_onnx import _text_to_sentences, PhonemeTiming
+        from lectura_multispeaker.inference_onnx import _text_to_sentences
 
         sentences = _text_to_sentences(text, g2p)
 

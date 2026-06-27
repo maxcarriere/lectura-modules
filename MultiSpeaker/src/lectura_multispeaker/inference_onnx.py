@@ -26,8 +26,9 @@ log = logging.getLogger(__name__)
 SEMITONE = 0.0577622  # log(2) / 12
 
 # Prosodic defaults when no style preset is active
+# duration_scale=0.85 : acceleration par defaut de 15% (comme monospeaker)
 _PROSODY_DEFAULTS = {
-    "duration_scale": 1.0,
+    "duration_scale": 0.85,
     "pitch_shift": 0.0,
     "pitch_range": 1.0,
     "energy_scale": 1.0,
@@ -41,43 +42,43 @@ STYLE_PRESETS = {
     "neutre": {
         "style_vector": [0.0, 0.0, 0.0, 0.0, 0.0],
         "pitch_range": 1.0, "energy_scale": 1.0,
-        "duration_scale": 1.0, "pause_scale": 1.0,
+        "duration_scale": 0.85, "pause_scale": 1.0,
         "duration_noise": 0.0,
     },
     "narratif": {
         "style_vector": [0.0, -0.2, -0.2, 0.0, 0.0],
         "pitch_range": 0.9, "energy_scale": 0.95,
-        "duration_scale": 1.05, "pause_scale": 1.2,
+        "duration_scale": 0.90, "pause_scale": 1.2,
         "duration_noise": 0.15,
     },
     "dialogue": {
         "style_vector": [0.3, 0.2, 0.2, 0.0, 1.0],
         "pitch_range": 1.15, "energy_scale": 1.0,
-        "duration_scale": 0.92, "pause_scale": 0.8,
+        "duration_scale": 0.80, "pause_scale": 0.8,
         "duration_noise": 0.12,
     },
     "expressif": {
         "style_vector": [1.0, 1.0, 0.0, 0.0, 0.0],
         "pitch_range": 1.1, "energy_scale": 1.3,
-        "duration_scale": 1.0, "pause_scale": 1.0,
+        "duration_scale": 0.88, "pause_scale": 1.0,
         "duration_noise": 0.18,
     },
     "meditatif": {
         "style_vector": [-1.5, -0.8, -1.0, -0.5, 0.0],
         "pitch_range": 0.7, "energy_scale": 0.8,
-        "duration_scale": 1.3, "pause_scale": 1.8,
+        "duration_scale": 1.15, "pause_scale": 1.8,
         "duration_noise": 0.08,
     },
     "rapide": {
         "style_vector": [0.0, 0.3, 2.0, 0.0, 0.0],
         "pitch_range": 1.1, "energy_scale": 1.0,
-        "duration_scale": 0.75, "pause_scale": 0.6,
+        "duration_scale": 0.65, "pause_scale": 0.6,
         "duration_noise": 0.05,
     },
     "lent": {
         "style_vector": [0.0, -0.2, -2.0, 0.0, 0.0],
         "pitch_range": 1.0, "energy_scale": 0.9,
-        "duration_scale": 1.4, "pause_scale": 1.5,
+        "duration_scale": 1.25, "pause_scale": 1.5,
         "duration_noise": 0.10,
     },
 }
