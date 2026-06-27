@@ -644,12 +644,34 @@ class OnnxTTSEngine:
             dtype=bool,
         )
         _n_spoken = int(_spoken_mask.sum())
-        _has_punct = any(p in _PUNCT_MIN_FRAMES for p in phones)
-        _is_short_sequence = _n_spoken <= 10 and not _has_punct and _n_spoken >= 2
 
-        # Ralentissement des phones parles sur sequences courtes
-        if _is_short_sequence:
-            _SLOW_FACTOR = 1.15
+        # Rallonger les deux derniers phones parles — le vocoder coupe
+        # souvent la fin de phrase quelle que soit la longueur.
+        _LAST_PHONE_SCALE = 1.3
+        all_phones = ["#"] + list(phones) + ["#"]
+        _last_spoken = []
+        for _j in range(len(all_phones) - 1, -1, -1):
+            if all_phones[_j] not in _SILENCE_PHONES and all_phones[_j] not in _PUNCT_MIN_FRAMES:
+                _last_spoken.append(_j)
+                if len(_last_spoken) == 2:
+                    break
+        for _j in _last_spoken:
+            durations[_j] = max(
+                durations[_j],
+                int(round(durations[_j] * _LAST_PHONE_SCALE)),
+            )
+
+        _is_short_sequence = _n_spoken <= 15 and _n_spoken >= 2
+
+        # Ralentissement des phones parles sur sequences courtes.
+        # Facteur dependant de la longueur — siwis exclue (pas besoin).
+        if _is_short_sequence and self._speaker != "siwis":
+            if _n_spoken <= 3:
+                _SLOW_FACTOR = 2.0
+            elif _n_spoken <= 10:
+                _SLOW_FACTOR = 1.3
+            else:  # 11-15
+                _SLOW_FACTOR = 1.15
             _spoken_indices = np.where(_spoken_mask)[0]
             for _si in _spoken_indices:
                 durations[_si] = max(1, int(round(durations[_si] * _SLOW_FACTOR)))

@@ -45,6 +45,9 @@ _archive_modules/
 # Dossier legacy (anciennes versions)
 _Outils-NLP/
 
+# Bases de données volumineuses (generees localement, pas dans le repo)
+**/lexique_correcteur.db
+
 # Claude Code
 .claude/
 CLAUDE.md
