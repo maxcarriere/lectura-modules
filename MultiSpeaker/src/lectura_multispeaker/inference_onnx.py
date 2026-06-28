@@ -647,7 +647,7 @@ class OnnxTTSEngine:
 
         # Rallonger les phones parles avant les pauses/ponctuations — le
         # vocoder coupe souvent la fin des segments.
-        _PRE_PAUSE_SCALE = 1.3
+        _PRE_PAUSE_SCALE = 1.2
         all_phones = ["#"] + list(phones) + ["#"]
 
         # Avant chaque ponctuation interne
