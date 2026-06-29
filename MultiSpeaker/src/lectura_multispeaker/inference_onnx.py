@@ -628,12 +628,12 @@ class OnnxTTSEngine:
 
         # Duree minimale du dernier phone parle (position finale de mot).
         # Le modele multi sous-predit les consonnes finales sur mots isoles.
-        _MIN_FINAL_PHONE_FRAMES = 6  # ~70 ms
+        _MIN_FINAL_PHONE_FRAMES = 8  # ~93 ms
         last_phone_idx = len(phone_ids) - 2  # avant le SIL final
         durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
 
         # SIL final minimum (evite la coupure en fin de mot)
-        _MIN_FINAL_SIL_FRAMES = 8  # ~93 ms a 22050 Hz / 256 hop
+        _MIN_FINAL_SIL_FRAMES = 12  # ~139 ms a 22050 Hz / 256 hop
         durations[-1] = max(durations[-1], _MIN_FINAL_SIL_FRAMES)
 
         # Detection sequence courte (mots isoles / 2-3 mots)
@@ -674,7 +674,7 @@ class OnnxTTSEngine:
                 int(round(durations[_j] * _PRE_PAUSE_SCALE)),
             )
 
-        _is_short_sequence = _n_spoken <= 15 and _n_spoken >= 2
+        _is_short_sequence = _n_spoken <= 15
 
         # Ralentissement des phones parles sur sequences courtes.
         # Facteur dependant de la longueur — siwis exclue (pas besoin).
