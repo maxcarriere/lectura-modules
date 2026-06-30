@@ -180,7 +180,12 @@ class _G2PAdapter:
 # Syllabeur (algorithme par sonorité)
 # ══════════════════════════════════════════════════════════════════════════════
 
-COMPOUND_PHONEMES: set[str] = {"tʃ", "dʒ", "ts", "ɡz"}
+COMPOUND_PHONEMES: set[str] = {"tʃ", "dʒ", "ts", "ɡz", "ks"}
+
+GRAPHEME_COMPOUNDS: dict[str, set[str]] = {
+    "ks": {"x"},
+    "ɡz": {"x"},
+}
 
 
 @dataclass(frozen=True)
@@ -238,13 +243,13 @@ def _class_of(token: str, classes: _SonorityClasses) -> str:
     return "O"
 
 
-def _merge_compounds_ipa(tokens: list[str]) -> list[str]:
+def _merge_compounds_ipa(tokens: list[str], compounds: set[str] = COMPOUND_PHONEMES) -> list[str]:
     out: list[str] = []
     i = 0
     while i < len(tokens):
         if i + 1 < len(tokens):
             pair = tokens[i] + tokens[i + 1]
-            if pair in COMPOUND_PHONEMES:
+            if pair in compounds:
                 out.append(pair)
                 i += 2
                 continue
@@ -306,12 +311,16 @@ def _split_central_cluster(
     return left
 
 
-def _syllabify_ipa(phone: str) -> list[str]:
+def _syllabify_ipa(phone: str, compounds: set[str] | None = None) -> list[str]:
     """Découpe une chaîne IPA en syllabes par le modèle de sonorité."""
-    tokens = _merge_compounds_ipa(iter_phonemes(phone))
+    effective = compounds if compounds is not None else COMPOUND_PHONEMES
+    tokens = _merge_compounds_ipa(iter_phonemes(phone), effective)
 
     if not tokens:
         return [phone] if phone else []
+
+    # Diphones exclus des composés → ne forment pas d'attaque valide
+    excluded = set(GRAPHEME_COMPOUNDS) - effective
 
     vowel_idx = [i for i, t in enumerate(tokens) if _class_of(t, _SONORITY) == "V"]
     if len(vowel_idx) <= 1:
@@ -320,7 +329,16 @@ def _syllabify_ipa(phone: str) -> list[str]:
     boundaries: list[int] = []
     for vi, vj in zip(vowel_idx, vowel_idx[1:]):
         cluster = tokens[vi + 1 : vj]
-        k = _split_central_cluster(cluster, _SONORITY)
+        # Si le cluster commence par un diphone exclu (ex: k+s hors composé),
+        # forcer la coupure après le premier phonème
+        if (
+            excluded
+            and len(cluster) >= 2
+            and (cluster[0] + cluster[1]) in excluded
+        ):
+            k = 1
+        else:
+            k = _split_central_cluster(cluster, _SONORITY)
         boundaries.append((vi + 1) + k)
 
     out: list[str] = []
@@ -629,15 +647,33 @@ def _phonemise_alignment(
     return new_ph, new_gr, new_spans
 
 
+def _align_raw(
+    ortho: str,
+    phone: str,
+    word_boundaries: list[int] | None = None,
+) -> tuple[list[str], list[str], bool]:
+    """Alignement brut graphèmes-phonèmes (avant décomposition)."""
+    return _alignement_v2(ortho, phone, _PHONE_TO_GRAPHEMES(), word_boundaries)
+
+
+def _detect_forced_compounds(align_ph: list[str], align_gr: list[str]) -> set[str]:
+    """Retourne les diphones composés provenant d'un graphème mono-lettre (ex: x)."""
+    forced: set[str] = set()
+    for ph, gr in zip(align_ph, align_gr):
+        if ph in GRAPHEME_COMPOUNDS:
+            gr_clean = gr.replace("²", "").replace("°", "")
+            if gr_clean in GRAPHEME_COMPOUNDS[ph]:
+                forced.add(ph)
+    return forced
+
+
 def _aligner(
     ortho: str,
     phone: str,
     word_boundaries: list[int] | None = None,
 ) -> tuple[list[str], list[str], list[Span], bool]:
     """Aligne graphèmes et phonèmes."""
-    align_ph, align_gr, ok = _alignement_v2(
-        ortho, phone, _PHONE_TO_GRAPHEMES(), word_boundaries
-    )
+    align_ph, align_gr, ok = _align_raw(ortho, phone, word_boundaries)
     if not ok:
         return [], [], [], False
     spans = _build_spans(ortho, align_gr)
@@ -1051,9 +1087,21 @@ class LecturaSyllabeur:
         if phone is None:
             phone = self._phonemizer.phonemize(word)
 
-        syll_phones = _syllabify_ipa(phone)
-        dec_ph, dec_gr, dec_spans, ok = _aligner(word, phone)
-        syllabes = _build_syllabes(syll_phones, dec_ph, dec_gr, dec_spans, 0, ok)
+        # 1. Alignement brut pour connaître les graphèmes
+        align_ph, align_gr, ok = _align_raw(word, phone)
+
+        # 2. Composés conditionnels : toujours fusionner tʃ/dʒ/ts,
+        #    fusionner ks/ɡz seulement si graphème = "x"
+        always = COMPOUND_PHONEMES - set(GRAPHEME_COMPOUNDS)
+        forced = _detect_forced_compounds(align_ph, align_gr) if ok else set(GRAPHEME_COMPOUNDS)
+        compounds = always | forced
+
+        # 3. Syllabation contextuelle
+        syll_phones = _syllabify_ipa(phone, compounds=compounds)
+
+        # 4. Alignement complet + construction syllabes
+        dec_ph, dec_gr, dec_spans, ok2 = _aligner(word, phone)
+        syllabes = _build_syllabes(syll_phones, dec_ph, dec_gr, dec_spans, 0, ok2)
 
         return ResultatAnalyse(mot=word, phone=phone, syllabes=syllabes)
 
