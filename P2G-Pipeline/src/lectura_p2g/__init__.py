@@ -395,7 +395,8 @@ def _capitaliser_noms_propres(
         # Capitaliser si l'ortho predit correspond exclusivement a un
         # NOM PROPRE dans le lexique (pas de sens commun pour la meme ortho).
         # Ex: "antoine" n'existe qu'en NOM PROPRE -> capitaliser.
-        # Ex: "paris" existe en NOM + NOM PROPRE -> ne pas capitaliser.
+        # Ex: "paris" existe en NOM + NOM PROPRE -> ne pas capitaliser
+        #     (sauf apres un verbe introducteur de nom).
         # Ex: "appelle" existe en VER -> ne pas capitaliser.
         ortho_lower = ortho_base.lower()
         has_propre = False
@@ -407,7 +408,19 @@ def _capitaliser_noms_propres(
                 has_propre = True
             else:
                 has_commun = True
-        is_propre = has_propre and not has_commun
+
+        # Contexte verbe introducteur : "m'appelle X", "s'appelle X",
+        # "je suis X", "c'est X" → forcer la capitalisation si NOM PROPRE
+        # existe dans le lexique, meme avec un sens commun.
+        after_intro = False
+        if has_propre and has_commun and i >= 1:
+            prev = result[i - 1].lower()
+            if prev in ("appelle", "suis", "est"):
+                after_intro = True
+            elif "'" in prev and prev.endswith("appelle"):
+                after_intro = True  # m'appelle, s'appelle, t'appelle
+
+        is_propre = has_propre and (not has_commun or after_intro)
         if is_propre:
             if "'" in word:
                 parts = word.split("'", 1)
@@ -663,6 +676,23 @@ def _est_compose_interne(ortho: str) -> bool:
     return "-" in inner or "'" in inner
 
 
+# Composes multi-mots connus (tuples IPA → ortho)
+# Pour les cas ou le CTC separe un compose en plusieurs mots IPA
+# et que _fusionner_composes ne peut pas les detecter (filtre OOV).
+_COMPOSES_MULTI: dict[tuple[str, ...], str] = {
+    ("oʒuʁ", "ɥi"): "aujourd'hui",
+    ("oʒuʁ", "dɥi"): "aujourd'hui",
+    ("oʒuʁd", "ɥi"): "aujourd'hui",
+    ("oʒuʁ", "yi"): "aujourd'hui",
+    ("pø", "tɛtʁ"): "peut-être",
+    ("pø", "tɛtʁə"): "peut-être",
+}
+_COMPOSES_MULTI = {
+    tuple(unicodedata.normalize("NFC", p) for p in k): v
+    for k, v in _COMPOSES_MULTI.items()
+}
+
+
 def _fusionner_composes(
     result: list[str],
     ipa_words: list[str],
@@ -691,6 +721,24 @@ def _fusionner_composes(
         return
 
     matched: set[int] = set()
+
+    # Passe 0 : composes multi-mots connus (bypass filtre OOV)
+    for key, ortho in _COMPOSES_MULTI.items():
+        k = len(key)
+        for start in range(n - k + 1):
+            if any(i in matched or i in skip_positions for i in range(start, start + k)):
+                continue
+            phones = tuple(
+                unicodedata.normalize("NFC", ipa_words[i])
+                for i in range(start, start + k)
+                if i < len(ipa_words)
+            )
+            if phones == key:
+                result[start] = ortho
+                for j in range(1, k):
+                    result[start + j] = ""
+                for j in range(k):
+                    matched.add(start + j)
 
     for k in range(min(5, n), 1, -1):
         for start in range(n - k + 1):
@@ -788,9 +836,29 @@ _ELISION_IPA_TO_ORTHO = {
 _VOYELLES_IPA = frozenset("aeɛiouøœəɑɔyɑ̃ɛ̃ɔ̃œ̃")
 
 
+# Phones IPA qui commencent par une voyelle mais ne prennent pas l'elision
+# (equivalent du h aspire en orthographe, plus "onze" et "onzieme")
+_NO_ELISION_IPA = frozenset({
+    "ɔ̃z",       # onze
+    "ɔ̃zjɛm",    # onzieme
+    "ɔ̃zjɛmə",   # onzieme (avec schwa)
+    "ɥit",       # huit (le huit)
+    "ɥitjɛm",   # huitieme
+    "ɥitjɛmə",  # huitieme (avec schwa)
+})
+_NO_ELISION_IPA = frozenset(
+    unicodedata.normalize("NFC", p) for p in _NO_ELISION_IPA
+)
+
+
 def _est_debut_voyelle(phone: str) -> bool:
-    """Le phone commence par une voyelle IPA."""
+    """Le phone commence par une voyelle IPA.
+
+    Exclut les phones qui ne prennent pas l'elision (onze, huit, h aspire).
+    """
     if not phone:
+        return False
+    if unicodedata.normalize("NFC", phone) in _NO_ELISION_IPA:
         return False
     # Les nasales composees (ɑ̃, ɛ̃, etc.) : le 1er char est une voyelle
     return phone[0] in _VOYELLES_IPA
@@ -1120,6 +1188,7 @@ def analyser(
     number_mode: str = "auto",
     corrections_p2g: bool | str = True,
     stt_mode: str = "auto",
+    aligner: object | None = None,
 ) -> dict:
     """Analyse P2G complete d'une liste de mots IPA.
 
@@ -1149,11 +1218,17 @@ def analyser(
         - ``True``      : fichier base (freq > 0) — defaut
         - ``"etendu"``  : fichier etendu (toutes les phones)
         - ``False``     : desactive
+    aligner : object | None
+        Instance de LecturaSyllabeur (ou tout objet avec
+        ``.analyze(word, phone=ipa) -> ResultatAnalyse``).
+        Si fourni, ajoute une cle ``"alignments"`` au resultat contenant
+        l'alignement grapheme-phoneme mot par mot.
 
     Returns
     -------
     dict
         {"ipa_words": [...], "ortho": [...], "pos": [...], "morpho": {...}}
+        Si *aligner* est fourni : ``"alignments": [ResultatAnalyse | None, ...]``
     """
     if engine is None:
         engine = creer_engine()
@@ -1183,6 +1258,21 @@ def analyser(
     else:
         result = {"ipa_words": [], "ortho": [], "pos": [], "morpho": {}}
 
+    # ── Alignement optionnel ──
+    if aligner is not None and clean_words:
+        alignments: list = []
+        ortho_list = result["ortho"]
+        for i, ortho_word in enumerate(ortho_list):
+            ipa_word = clean_words[i] if i < len(clean_words) else ""
+            if not ortho_word or not ipa_word:
+                alignments.append(None)
+                continue
+            try:
+                alignments.append(aligner.analyze(ortho_word, phone=ipa_word))
+            except Exception:
+                alignments.append(None)
+        result["alignments"] = alignments
+
     # ── Reinjecter la ponctuation aux bonnes positions ──
     if punct_map:
         morpho_keys = list(result.get("morpho", {}).keys())
@@ -1194,5 +1284,7 @@ def analyser(
             result["pos"].insert(pos, "PUNCT")
             for k in morpho_keys:
                 result["morpho"][k].insert(pos, "_")
+            if "alignments" in result:
+                result["alignments"].insert(pos, None)
 
     return result

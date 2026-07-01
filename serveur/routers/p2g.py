@@ -13,6 +13,7 @@ router = APIRouter()
 
 # Engine charge une seule fois (singleton)
 _engine = None
+_aligner = None
 
 
 def _get_engine():
@@ -22,6 +23,15 @@ def _get_engine():
         _engine = creer_engine(mode="local")
         logger.info("P2G engine charge (mode local)")
     return _engine
+
+
+def _get_aligner():
+    global _aligner
+    if _aligner is None:
+        from lectura_aligneur.lectura_aligneur import LecturaSyllabeur
+        _aligner = LecturaSyllabeur()
+        logger.info("P2G aligner (LecturaSyllabeur) charge")
+    return _aligner
 
 
 class AnalyserRequest(BaseModel):
@@ -35,9 +45,11 @@ async def analyser(req: AnalyserRequest):
     Returns
     -------
     dict
-        {"ipa_words": [...], "ortho": [...], "pos": [...], "morpho": {...}}
+        {"ipa_words": [...], "ortho": [...], "pos": [...], "morpho": {...},
+         "alignments": [...]}
     """
     engine = _get_engine()
+    aligner = _get_aligner()
 
     import lectura_p2g
-    return lectura_p2g.analyser(req.ipa_words, engine=engine)
+    return lectura_p2g.analyser(req.ipa_words, engine=engine, aligner=aligner)
