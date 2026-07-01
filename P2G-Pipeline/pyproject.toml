@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-p2g"
-version = "4.6.1"
+version = "4.6.2"
 description = "Pipeline P2G complet du francais — Graphemiseur + Formules + Noms propres (IPA -> orthographe)"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
@@ -27,6 +27,9 @@ dependencies = [
     "lectura-formules>=3.7",
     "lectura-lexique>=1.4",
 ]
+
+[project.optional-dependencies]
+aligneur = ["lectura-aligneur>=4.0"]
 
 [project.urls]
 Homepage = "https://www.lectura.world/solutions/outils/modules/"

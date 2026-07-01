@@ -1188,6 +1188,7 @@ def analyser(
     number_mode: str = "auto",
     corrections_p2g: bool | str = True,
     stt_mode: str = "auto",
+    aligner: object | None = None,
 ) -> dict:
     """Analyse P2G complete d'une liste de mots IPA.
 
@@ -1217,11 +1218,17 @@ def analyser(
         - ``True``      : fichier base (freq > 0) — defaut
         - ``"etendu"``  : fichier etendu (toutes les phones)
         - ``False``     : desactive
+    aligner : object | None
+        Instance de LecturaSyllabeur (ou tout objet avec
+        ``.analyze(word, phone=ipa) -> ResultatAnalyse``).
+        Si fourni, ajoute une cle ``"alignments"`` au resultat contenant
+        l'alignement grapheme-phoneme mot par mot.
 
     Returns
     -------
     dict
         {"ipa_words": [...], "ortho": [...], "pos": [...], "morpho": {...}}
+        Si *aligner* est fourni : ``"alignments": [ResultatAnalyse | None, ...]``
     """
     if engine is None:
         engine = creer_engine()
@@ -1251,6 +1258,21 @@ def analyser(
     else:
         result = {"ipa_words": [], "ortho": [], "pos": [], "morpho": {}}
 
+    # ── Alignement optionnel ──
+    if aligner is not None and clean_words:
+        alignments: list = []
+        ortho_list = result["ortho"]
+        for i, ortho_word in enumerate(ortho_list):
+            ipa_word = clean_words[i] if i < len(clean_words) else ""
+            if not ortho_word or not ipa_word:
+                alignments.append(None)
+                continue
+            try:
+                alignments.append(aligner.analyze(ortho_word, phone=ipa_word))
+            except Exception:
+                alignments.append(None)
+        result["alignments"] = alignments
+
     # ── Reinjecter la ponctuation aux bonnes positions ──
     if punct_map:
         morpho_keys = list(result.get("morpho", {}).keys())
@@ -1262,5 +1284,7 @@ def analyser(
             result["pos"].insert(pos, "PUNCT")
             for k in morpho_keys:
                 result["morpho"][k].insert(pos, "_")
+            if "alignments" in result:
+                result["alignments"].insert(pos, None)
 
     return result
