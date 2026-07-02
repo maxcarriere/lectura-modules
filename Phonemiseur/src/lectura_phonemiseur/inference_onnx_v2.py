@@ -98,6 +98,8 @@ class OnnxInferenceEngineV2:
         self.char2idx = vocabs["char2idx"]
         self.idx2g2p = {int(v): k for k, v in vocabs["g2p_label2idx"].items()}
         self.idx2pos = {int(v): k for k, v in vocabs["pos2idx"].items()}
+        # Post-traitement : fusionner PRE:det → ART:def (articles contractés)
+        self.idx2pos = {k: ("ART:def" if v == "PRE:det" else v) for k, v in self.idx2pos.items()}
         self.idx2liaison = {int(v): k for k, v in vocabs["liaison2idx"].items()}
         self.idx2morpho = {}
         for feat, vocab in vocabs["morpho_vocabs"].items():
