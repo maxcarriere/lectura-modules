@@ -1,6 +1,6 @@
 # lectura-multispeaker
 
-Moteur de synthese vocale neuronale multi-speaker pour le francais — Matcha-Conformer + HiFi-GAN (ONNX).
+Moteur de synthese vocale neuronale multi-speaker pour le francais — deux modeles au choix : **high** (Matcha-Conformer) et **light** (FastPitch) + HiFi-GAN (ONNX).
 
 Supporte 6 voix : siwis, ezwa, nadine, bernard, gilles, zeckou.
 
@@ -23,15 +23,25 @@ pip install lectura-multispeaker[onnx]
 ```python
 from lectura_multispeaker import creer_engine
 
-engine = creer_engine(mode="local")
-engine.set_speaker("siwis")
-result = engine.synthesize_phonemes(
-    "bɔ̃ʒuʁ",
-    phrase_type=0,
-)
-# result.samples: numpy float32
-# result.sample_rate: 22050
-# result.phoneme_timings: list[PhonemeTiming]
+# Modele high (Conformer, meilleure qualite) — par defaut
+engine = creer_engine(mode="local", speaker="siwis")
+result = engine.synthesize_phonemes("bɔ̃ʒuʁ", phrase_type=0)
+
+# Modele light (FastPitch, plus rapide/leger)
+engine_light = creer_engine(mode="local", speaker="siwis", model="light")
+result = engine_light.synthesize_phonemes("bɔ̃ʒuʁ")
+```
+
+### Raccourci synthetiser()
+
+```python
+from lectura_multispeaker import synthetiser
+
+# High (defaut)
+audio = synthetiser("Bonjour.", speaker="bernard")
+
+# Light
+audio = synthetiser("Bonjour.", speaker="bernard", model="light")
 ```
 
 ### Lister les speakers disponibles
@@ -40,6 +50,13 @@ result = engine.synthesize_phonemes(
 from lectura_multispeaker import liste_speakers
 print(liste_speakers())  # ['siwis', 'ezwa', 'nadine', 'bernard', 'gilles', 'zeckou']
 ```
+
+## Modeles
+
+| Modele | Architecture | Taille (INT8) | Qualite | Vitesse |
+|--------|-------------|---------------|---------|---------|
+| **high** (defaut) | Matcha-Conformer (d=384) + HiFi-GAN | ~40 Mo | Meilleure | ~30x temps-reel |
+| **light** | FastPitch (d=256) + HiFi-GAN | ~40 Mo | Bonne | ~50x temps-reel |
 
 ## Controles prosodiques
 
@@ -51,12 +68,13 @@ print(liste_speakers())  # ['siwis', 'ezwa', 'nadine', 'bernard', 'gilles', 'zec
 | energy_scale | 1.0 | Intensite |
 | pause_scale | 1.0 | Duree des pauses |
 | phrase_type | 0 | 0=decl, 1=inter, 2=excl, 3=susp |
-| n_ode_steps | 4 | Pas ODE Matcha (plus = meilleur) |
+| n_ode_steps | 4 | Pas ODE Matcha (plus = meilleur, high uniquement) |
 
 ## Architecture
 
-- **Matcha-Conformer** : phonemes → mel-spectrogramme via flow matching ODE (encodeur par speaker)
-- **HiFi-GAN V1** : mel → audio 22050 Hz
+- **high** : Matcha-Conformer (d_model=384) — phonemes → mel via flow matching ODE (encodeur par speaker)
+- **light** : FastPitch (d_model=256) — phonemes → mel via FFT decoder (encodeur par speaker)
+- **HiFi-GAN V1** : mel → audio 22050 Hz (partage)
 - **Runtime** : ONNX (pas de dependance PyTorch)
 
 ## Emplacements des modeles
@@ -66,6 +84,8 @@ Recherche dans l'ordre :
 2. `$LECTURA_MODELS_DIR/tts_multispeaker/`
 3. `~/.lectura/models/tts_multispeaker/`
 4. Modeles embarques dans le package (version privee)
+
+Chaque emplacement peut contenir des sous-repertoires `conformer/` et `fastpitch/` (nouveau layout) ou les fichiers directement (ancien layout, retrocompatible).
 
 ## Licence
 

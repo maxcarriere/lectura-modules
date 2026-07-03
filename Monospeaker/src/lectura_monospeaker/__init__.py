@@ -19,7 +19,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-__version__ = "3.0.0"
+__version__ = "4.0.0"
 
 
 def creer_engine(
@@ -27,6 +27,7 @@ def creer_engine(
     models_dir: str | Path | None = None,
     api_url: str | None = None,
     api_key: str | None = None,
+    model: str = "high",
 ):
     """Factory pour creer un engine d'inference TTS.
 
@@ -42,6 +43,8 @@ def creer_engine(
         URL du serveur API
     api_key : str | None
         Cle API
+    model : str
+        Choix du modele : "high" (Matcha-Conformer) ou "light" (FastPitch).
 
     Returns
     -------
@@ -56,7 +59,7 @@ def creer_engine(
         Si mode="local" et modeles introuvables
     """
     if mode in ("auto", "local"):
-        engine = _try_local(models_dir)
+        engine = _try_local(models_dir, model=model)
         if engine is not None:
             return engine
         if mode == "local":
@@ -69,10 +72,10 @@ def creer_engine(
 
     # API
     from lectura_monospeaker.inference_api import ApiTTSEngine
-    return ApiTTSEngine(api_url=api_url, api_key=api_key)
+    return ApiTTSEngine(api_url=api_url, api_key=api_key, model=model)
 
 
-def _try_local(models_dir: str | Path | None = None):
+def _try_local(models_dir: str | Path | None = None, model: str = "high"):
     """Tente de creer un engine ONNX local."""
     try:
         import onnxruntime  # noqa: F401
@@ -82,7 +85,7 @@ def _try_local(models_dir: str | Path | None = None):
 
     from lectura_monospeaker._chargeur import find_models_dir
 
-    resolved = find_models_dir(models_dir)
+    resolved = find_models_dir(models_dir, model_variant=model)
     if resolved is None:
         return None
 
@@ -111,6 +114,7 @@ def synthetiser(
     voix_variante: float = 0.0,
     voix_tau: float = 0.3,
     vc_models_dir: str | Path | None = None,
+    model: str = "high",
 ) -> Any:
     """Convenience : texte -> numpy audio float32.
 
@@ -150,6 +154,8 @@ def synthetiser(
         Parametre tau d'OpenVoice (0 = deterministe, 0.3 = defaut).
     vc_models_dir : str | Path | None
         Repertoire des modeles VC (defaut: auto-detection).
+    model : str
+        Choix du modele : "high" (Matcha-Conformer) ou "light" (FastPitch).
 
     Returns
     -------
@@ -157,7 +163,7 @@ def synthetiser(
         Audio float32 mono, 22050 Hz
     """
     engine = creer_engine(mode=mode, models_dir=models_dir,
-                          api_url=api_url, api_key=api_key)
+                          api_url=api_url, api_key=api_key, model=model)
     result = engine.synthesize(
         texte,
         phrase_type=phrase_type,

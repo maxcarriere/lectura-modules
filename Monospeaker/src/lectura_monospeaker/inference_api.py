@@ -52,6 +52,7 @@ class ApiTTSEngine:
         self,
         api_url: str | None = None,
         api_key: str | None = None,
+        model: str = "high",
     ) -> None:
         self._url = (
             api_url
@@ -59,6 +60,7 @@ class ApiTTSEngine:
             or _DEFAULT_API_URL
         )
         self._key = api_key or os.environ.get("LECTURA_API_KEY", "")
+        self._model = model
         self._sample_rate = 22050
 
     def synthesize(
@@ -77,7 +79,7 @@ class ApiTTSEngine:
         **kwargs,
     ) -> TTSResult:
         """Synthetise du texte via l'API."""
-        payload: dict = {"text": text}
+        payload: dict = {"text": text, "model": self._model}
         if phrase_type is not None:
             payload["phrase_type"] = phrase_type
         if duration_scale is not None:
@@ -118,6 +120,7 @@ class ApiTTSEngine:
         """Synthetise des phonemes IPA via l'API."""
         payload: dict = {
             "ipa": phonemes_ipa,
+            "model": self._model,
             "phrase_type": phrase_type,
         }
         if duration_scale is not None:

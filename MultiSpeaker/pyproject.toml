@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-multispeaker"
-version = "3.2.7"
-description = "Synthese vocale neuronale multi-speaker francais — Matcha-Conformer + HiFi-GAN (ONNX)"
+version = "4.0.0"
+description = "Synthese vocale neuronale multi-speaker francais — modeles high (Conformer) et light (FastPitch) au choix (ONNX)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}

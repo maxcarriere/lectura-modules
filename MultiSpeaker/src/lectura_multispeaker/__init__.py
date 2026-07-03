@@ -17,7 +17,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-__version__ = "3.2.7"
+__version__ = "4.0.0"
 
 _SPEAKERS_DATA: list[dict] | None = None
 _DEFAULT_SPEAKER: str | None = None
@@ -55,6 +55,7 @@ def creer_engine(
     models_dir: str | Path | None = None,
     api_url: str | None = None,
     api_key: str | None = None,
+    model: str = "high",
 ):
     """Factory pour creer un engine d'inference TTS multi-speaker.
 
@@ -72,6 +73,8 @@ def creer_engine(
         URL du serveur API
     api_key : str | None
         Cle API
+    model : str
+        Choix du modele : "high" (Matcha-Conformer) ou "light" (FastPitch).
 
     Returns
     -------
@@ -79,7 +82,7 @@ def creer_engine(
         Engine avec interface unifiee (synthesize, synthesize_phonemes)
     """
     if mode in ("auto", "local"):
-        engine = _try_local(speaker, models_dir)
+        engine = _try_local(speaker, models_dir, model=model)
         if engine is not None:
             return engine
         if mode == "local":
@@ -90,10 +93,15 @@ def creer_engine(
         log.info("Modeles locaux non disponibles, fallback vers API")
 
     from lectura_multispeaker.inference_api import ApiTTSEngine
-    return ApiTTSEngine(api_url=api_url, api_key=api_key, speaker=speaker)
+    return ApiTTSEngine(api_url=api_url, api_key=api_key, speaker=speaker,
+                        model=model)
 
 
-def _try_local(speaker: str, models_dir: str | Path | None = None):
+def _try_local(
+    speaker: str,
+    models_dir: str | Path | None = None,
+    model: str = "high",
+):
     """Tente de creer un engine ONNX local."""
     try:
         import onnxruntime  # noqa: F401
@@ -103,14 +111,9 @@ def _try_local(speaker: str, models_dir: str | Path | None = None):
 
     from lectura_multispeaker._chargeur import find_models_dir
 
-    resolved = find_models_dir(speaker, models_dir)
+    resolved = find_models_dir(speaker, models_dir, model_variant=model)
     if resolved is None:
         return None
-
-    # Layout dual : FastPitch + Conformer avec routage automatique
-    if (resolved / "dual_config.json").exists():
-        from lectura_multispeaker.inference_dual import DualTTSEngine
-        return DualTTSEngine(resolved, speaker=speaker)
 
     from lectura_multispeaker.inference_onnx import OnnxTTSEngine
     return OnnxTTSEngine(resolved, speaker=speaker)
@@ -133,6 +136,7 @@ def synthetiser(
     style_vector: list[float] | None = None,
     n_ode_steps: int | None = None,
     duration_noise: float | None = None,
+    model: str = "high",
 ) -> Any:
     """Convenience : texte -> numpy audio float32.
 
@@ -154,6 +158,8 @@ def synthetiser(
         Nombre de pas ODE (Matcha-Conformer uniquement, defaut: config)
     duration_noise : float | None
         Bruit de duree lisse (0.0=off, 0.1=subtil, 0.2=prononce)
+    model : str
+        Choix du modele : "high" (Matcha-Conformer) ou "light" (FastPitch).
 
     Returns
     -------
@@ -161,7 +167,7 @@ def synthetiser(
         Audio float32 mono, 22050 Hz
     """
     engine = creer_engine(mode=mode, speaker=speaker, models_dir=models_dir,
-                          api_url=api_url, api_key=api_key)
+                          api_url=api_url, api_key=api_key, model=model)
     result = engine.synthesize(
         texte,
         phrase_type=phrase_type,

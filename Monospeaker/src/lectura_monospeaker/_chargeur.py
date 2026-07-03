@@ -38,10 +38,23 @@ _FASTPITCH_FILES = [
 REQUIRED_FILES = _MATCHA_FILES
 
 
-def find_models_dir(models_dir: str | Path | None = None) -> Path | None:
+_VARIANT_DIRS = {"high": "conformer", "light": "fastpitch"}
+
+
+def find_models_dir(
+    models_dir: str | Path | None = None,
+    model_variant: str = "high",
+) -> Path | None:
     """Trouve le repertoire contenant les modeles ONNX.
 
-    Detecte d'abord les fichiers Matcha, puis fallback FastPitch.
+    Quand le repertoire candidat contient des sous-repertoires conformer/
+    et/ou fastpitch/, resout vers le sous-repertoire correspondant au
+    model_variant ("high" -> conformer/, "light" -> fastpitch/).
+    Sinon (ancien layout plat), retourne le repertoire tel quel.
+
+    Args:
+        models_dir: Override explicite.
+        model_variant: "high" (Conformer) ou "light" (FastPitch).
 
     Returns:
         Path du repertoire ou None si aucun modele trouve.
@@ -63,9 +76,17 @@ def find_models_dir(models_dir: str | Path | None = None) -> Path | None:
     # 4. Embarques dans le package
     candidates.append(_PACKAGE_MODELS)
 
+    subdir = _VARIANT_DIRS.get(model_variant, _VARIANT_DIRS["high"])
+
     for candidate in candidates:
+        # Nouveau layout : sous-repertoires conformer/ et/ou fastpitch/
+        variant_dir = candidate / subdir
+        if _has_models(variant_dir):
+            log.debug("Modeles trouves (%s) : %s", model_variant, variant_dir)
+            return variant_dir
+        # Ancien layout plat (retrocompatibilite)
         if _has_models(candidate):
-            log.debug("Modeles trouves : %s", candidate)
+            log.debug("Modeles trouves (layout plat) : %s", candidate)
             return candidate
 
     return None

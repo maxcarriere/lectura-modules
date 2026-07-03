@@ -55,6 +55,7 @@ class ApiTTSEngine:
         api_url: str | None = None,
         api_key: str | None = None,
         speaker: str = "siwis",
+        model: str = "high",
     ) -> None:
         self._url = (
             api_url
@@ -63,6 +64,7 @@ class ApiTTSEngine:
         )
         self._key = api_key or os.environ.get("LECTURA_API_KEY", "")
         self._speaker = speaker
+        self._model = model
         self._sample_rate = 22050
 
     @property
@@ -93,6 +95,7 @@ class ApiTTSEngine:
         payload: dict = {
             "text": text,
             "speaker": self._speaker,
+            "model": self._model,
             "duration_scale": duration_scale,
             "pitch_shift": pitch_shift,
             "pitch_range": pitch_range,
@@ -130,6 +133,7 @@ class ApiTTSEngine:
         payload: dict = {
             "ipa": phonemes_ipa,
             "speaker": self._speaker,
+            "model": self._model,
             "phrase_type": phrase_type,
             "duration_scale": duration_scale,
             "pitch_shift": pitch_shift,

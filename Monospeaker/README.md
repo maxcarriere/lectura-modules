@@ -1,6 +1,6 @@
 # lectura-monospeaker
 
-Moteur de synthese vocale neuronale monospeaker pour le francais — Matcha-Conformer + HiFi-GAN (ONNX).
+Moteur de synthese vocale neuronale monospeaker pour le francais — deux modeles au choix : **high** (Matcha-Conformer) et **light** (FastPitch) + HiFi-GAN (ONNX).
 
 ## Installation
 
@@ -21,15 +21,29 @@ pip install lectura-monospeaker[onnx]
 ```python
 from lectura_monospeaker import creer_engine
 
+# Modele high (Conformer, meilleure qualite) — par defaut
 engine = creer_engine(mode="local")
 result = engine.synthesize_phonemes(
     "bɔ̃ʒuʁ",
     phrase_type=0,
     pitch_range=1.3,
 )
-# result.samples: numpy float32
-# result.sample_rate: 22050
-# result.phoneme_timings: list[PhonemeTiming]
+
+# Modele light (FastPitch, plus rapide/leger)
+engine_light = creer_engine(mode="local", model="light")
+result = engine_light.synthesize_phonemes("bɔ̃ʒuʁ")
+```
+
+### Raccourci synthetiser()
+
+```python
+from lectura_monospeaker import synthetiser
+
+# High (defaut)
+audio = synthetiser("Bonjour le monde.")
+
+# Light
+audio = synthetiser("Bonjour le monde.", model="light")
 ```
 
 ### Via l'API distante
@@ -40,6 +54,13 @@ from lectura_monospeaker import creer_engine
 engine = creer_engine(mode="api", api_url="https://api.lectura.world")
 result = engine.synthesize("Bonjour")
 ```
+
+## Modeles
+
+| Modele | Architecture | Taille (INT8) | Qualite | Vitesse |
+|--------|-------------|---------------|---------|---------|
+| **high** (defaut) | Matcha-Conformer + HiFi-GAN | ~29 Mo | Meilleure | ~30x temps-reel |
+| **light** | FastPitch + HiFi-GAN | ~28 Mo | Bonne | ~50x temps-reel |
 
 ## Controles prosodiques
 
@@ -54,8 +75,9 @@ result = engine.synthesize("Bonjour")
 
 ## Architecture
 
-- **Matcha-Conformer** : phonemes → mel-spectrogramme via flow matching ODE
-- **HiFi-GAN V1** : mel → audio 22050 Hz
+- **high** : Matcha-Conformer — phonemes → mel-spectrogramme via flow matching ODE
+- **light** : FastPitch — phonemes → mel-spectrogramme via FFT decoder
+- **HiFi-GAN V1** : mel → audio 22050 Hz (partage)
 - **Runtime** : ONNX (pas de dependance PyTorch)
 
 ## Emplacements des modeles
@@ -65,6 +87,8 @@ Recherche dans l'ordre :
 2. `$LECTURA_MODELS_DIR/tts_mono/`
 3. `~/.lectura/models/tts_mono/`
 4. Modeles embarques dans le package (version privee)
+
+Chaque emplacement peut contenir des sous-repertoires `conformer/` et `fastpitch/` (nouveau layout) ou les fichiers directement (ancien layout, retrocompatible).
 
 ## Licence
 

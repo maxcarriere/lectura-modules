@@ -88,7 +88,7 @@ _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
               "\u2026": "\u2026", "...": "\u2026"}
 
 # Durees minimales en frames pour la ponctuation (1 frame ~ 11.6 ms)
-_PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 25}
+_PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 20}
 
 # Phones correspondant a des silences
 _SILENCE_PHONES = {"#", ",", ".", "?", "!", "\u2026"}
@@ -200,6 +200,7 @@ class OnnxTTSEngine:
         self._n_style_dims = 0
         self._speakers_map: dict[str, int] = {}
         self._g2p = None
+        self._unet_has_spk = False
 
     @property
     def speaker(self) -> str:
@@ -271,6 +272,9 @@ class OnnxTTSEngine:
                     f"matcha_unet.onnx introuvable dans {self._models_dir}"
                 )
             self._unet = ort.InferenceSession(unet_bytes, sess_options=opts, providers=providers)
+            # Check if UNet expects spk_emb (speaker FiLM conditioning)
+            unet_input_names = {inp.name for inp in self._unet.get_inputs()}
+            self._unet_has_spk = "spk_emb" in unet_input_names
 
             # Detect unified vs per-speaker encoder
             unified_bytes = load_model_bytes(self._models_dir, "matcha_encoder.onnx")
@@ -356,7 +360,6 @@ class OnnxTTSEngine:
         style_vector: list[float] | None = None,
         n_ode_steps: int | None = None,
         duration_noise: float | None = None,
-        model: str | None = None,
     ) -> TTSResult:
         """Synthetise du texte (necessite lectura-g2p).
 
@@ -366,7 +369,6 @@ class OnnxTTSEngine:
                          (prioritaire sur style)
             n_ode_steps: Nombre de pas ODE (Matcha uniquement, defaut: config)
             duration_noise: Bruit de duree lisse (0.0=off, 0.1=subtil, 0.2=prononce)
-            model: Ignore (pour compatibilite DualTTSEngine)
         """
         try:
             from lectura_g2p import creer_engine as creer_g2p
@@ -464,7 +466,6 @@ class OnnxTTSEngine:
         style_vector: list[float] | None = None,
         n_ode_steps: int | None = None,
         duration_noise: float | None = None,
-        model: str | None = None,
     ) -> TTSResult:
         """Synthetise une sequence de phonemes IPA.
 
@@ -556,23 +557,30 @@ class OnnxTTSEngine:
         phrase_type_np = np.array([phrase_type], dtype=np.int64)
 
         # 1. Encoder
+        spk_emb = None
         if self._unified:
             speaker_id_np = np.array([self._speaker_id], dtype=np.int64)
             style_np = np.array([sv], dtype=np.float32)
-            enc_out, dur_pred, pitch_pred, energy_pred = self._encoder.run(None, {
+            enc_outputs = self._encoder.run(None, {
                 "phone_ids": phone_ids_np,
                 "phrase_type": phrase_type_np,
                 "speaker_id": speaker_id_np,
                 "style_vector": style_np,
             })
+            enc_out, dur_pred, pitch_pred, energy_pred = enc_outputs[:4]
+            if len(enc_outputs) > 4:
+                spk_emb = enc_outputs[4]
         elif self._model_type == "matcha-conformer":
             # Per-speaker Matcha encoder: style_vector is dynamic (not baked)
             style_np = np.array([sv], dtype=np.float32)
-            enc_out, dur_pred, pitch_pred, energy_pred = self._encoder.run(None, {
+            enc_outputs = self._encoder.run(None, {
                 "phone_ids": phone_ids_np,
                 "phrase_type": phrase_type_np,
                 "style_vector": style_np,
             })
+            enc_out, dur_pred, pitch_pred, energy_pred = enc_outputs[:4]
+            if len(enc_outputs) > 4:
+                spk_emb = enc_outputs[4]
         else:
             # Legacy FastPitch per-speaker encoder (no style_vector input)
             enc_out, dur_pred, pitch_pred, energy_pred = self._encoder.run(None, {
@@ -629,8 +637,15 @@ class OnnxTTSEngine:
         # Duree minimale du dernier phone parle (position finale de mot).
         # Le modele multi sous-predit les consonnes finales sur mots isoles.
         _MIN_FINAL_PHONE_FRAMES = 8  # ~93 ms
-        last_phone_idx = len(phone_ids) - 2  # avant le SIL final
-        durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
+        # Chercher le dernier phone parle (ni silence, ni ponctuation)
+        all_phones_with_sil = ["#"] + list(phones) + ["#"]
+        last_phone_idx = None
+        for _idx in range(len(all_phones_with_sil) - 1, -1, -1):
+            if all_phones_with_sil[_idx] not in _SILENCE_PHONES:
+                last_phone_idx = _idx
+                break
+        if last_phone_idx is not None:
+            durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
 
         # SIL final minimum (evite la coupure en fin de mot)
         _MIN_FINAL_SIL_FRAMES = 12  # ~139 ms a 22050 Hz / 256 hop
@@ -757,7 +772,8 @@ class OnnxTTSEngine:
 
             steps = n_ode_steps or self._config.get("model", {}).get(
                 "n_ode_steps", 4)
-            mel = self._matcha_ode_sample(cond, mask, n_steps=steps)
+            mel = self._matcha_ode_sample(cond, mask, n_steps=steps,
+                                          spk_emb=spk_emb)
             mel_np = mel[0]  # [80, T_mel]
         else:
             # FastPitch legacy: decoder takes expanded embeddings
@@ -811,6 +827,7 @@ class OnnxTTSEngine:
         mask: np.ndarray,
         n_steps: int = 4,
         temperature: float = 1.0,
+        spk_emb: np.ndarray | None = None,
     ) -> np.ndarray:
         """Boucle ODE Euler en numpy, appelle le UNet ONNX N fois.
 
@@ -819,6 +836,7 @@ class OnnxTTSEngine:
             mask: [1, 1, T_mel] binary mask
             n_steps: nombre de pas ODE
             temperature: temperature du bruit initial
+            spk_emb: [1, D] speaker embedding for FiLM conditioning (optional)
 
         Returns:
             mel: [1, 80, T_mel] mel-spectrogram genere
@@ -835,12 +853,15 @@ class OnnxTTSEngine:
             t_val = np.array([i / n_steps], dtype=np.float32)
 
             # Appel UNet ONNX
-            v = self._unet.run(None, {
+            unet_inputs = {
                 "x_t": x,
                 "t": t_val,
                 "cond": cond,
                 "mask": mask,
-            })[0]
+            }
+            if spk_emb is not None and self._unet_has_spk:
+                unet_inputs["spk_emb"] = spk_emb
+            v = self._unet.run(None, unet_inputs)[0]
 
             x = x + v * dt
 

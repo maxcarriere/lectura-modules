@@ -30,42 +30,25 @@ SHARED_FILES_FASTPITCH = [
 ]
 
 
-def _is_dual_layout(directory: Path, speaker: str = "siwis") -> bool:
-    """Verifie si le repertoire utilise le layout dual (FastPitch + Conformer).
-
-    Detecte la presence de dual_config.json ET des modeles dans les
-    sous-repertoires fastpitch/ et conformer/.
-    """
-    if not directory.is_dir():
-        return False
-
-    if not (directory / "dual_config.json").exists():
-        return False
-
-    # Verifier que les sous-repertoires contiennent des modeles
-    fastpitch_dir = directory / "fastpitch"
-    conformer_dir = directory / "conformer"
-
-    return (
-        _has_models(fastpitch_dir, speaker)
-        and _has_models(conformer_dir, speaker)
-    )
+_VARIANT_DIRS = {"high": "conformer", "light": "fastpitch"}
 
 
 def find_models_dir(
     speaker: str = "siwis",
     models_dir: str | Path | None = None,
+    model_variant: str = "high",
 ) -> Path | None:
     """Trouve le repertoire contenant les modeles ONNX.
 
-    Detecte trois layouts :
-    - dual : dual_config.json + sous-repertoires fastpitch/ et conformer/
-    - matcha-conformer (v2) : matcha_unet.onnx + matcha_encoder_{speaker}.onnx
-    - fastpitch (v1 legacy) : decoder.onnx + encoder_{speaker}.onnx
+    Quand le repertoire candidat contient des sous-repertoires conformer/
+    et/ou fastpitch/, resout vers le sous-repertoire correspondant au
+    model_variant ("high" -> conformer/, "light" -> fastpitch/).
+    Sinon (ancien layout plat), retourne le repertoire tel quel.
 
     Args:
         speaker: Nom du speaker dont on verifie la presence de l'encodeur.
         models_dir: Override explicite.
+        model_variant: "high" (Conformer) ou "light" (FastPitch).
 
     Returns:
         Path du repertoire ou None si aucun modele trouve.
@@ -87,9 +70,17 @@ def find_models_dir(
     # 4. Embarques dans le package
     candidates.append(_PACKAGE_MODELS)
 
+    subdir = _VARIANT_DIRS.get(model_variant, _VARIANT_DIRS["high"])
+
     for candidate in candidates:
-        if _is_dual_layout(candidate, speaker) or _has_models(candidate, speaker):
-            log.debug("Modeles trouves : %s", candidate)
+        # Nouveau layout : sous-repertoires conformer/ et/ou fastpitch/
+        variant_dir = candidate / subdir
+        if _has_models(variant_dir, speaker):
+            log.debug("Modeles trouves (%s) : %s", model_variant, variant_dir)
+            return variant_dir
+        # Ancien layout plat (retrocompatibilite)
+        if _has_models(candidate, speaker):
+            log.debug("Modeles trouves (layout plat) : %s", candidate)
             return candidate
 
     return None
