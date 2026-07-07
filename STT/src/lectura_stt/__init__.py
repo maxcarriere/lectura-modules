@@ -71,6 +71,9 @@ class ResultatSTT:
     texte: str | None
     mots: list[str] | None
     ponctuation: list[str]
+    ctc_phones: list[dict] | None = None  # CTC timestamps par phone
+    # Chaque dict : {"phone": str, "phone_id": int, "frame": int,
+    #                "time_s": float, "confidence": float, "entropy": float}
 
 
 class STTEngine:
@@ -108,8 +111,36 @@ class STTEngine:
         self.denoiser = denoiser  # CTCDenoiser optionnel (corrige phones avant P2G)
         self.number_mode = number_mode
         self.grammar_lookup = grammar_lookup
+        self._subsample_factor: int | None = None  # cache
 
-    def transcrire(self, audio: np.ndarray, sr: int = 16000, stt_mode: str | None = None) -> ResultatSTT:
+    def _detect_subsample(self) -> int:
+        """Detecte le facteur de subsampling du modele CTC.
+
+        Utilise un court signal probe (1s de silence) pour comparer
+        le nombre de frames mel au nombre de frames de sortie.
+        """
+        if self._subsample_factor is not None:
+            return self._subsample_factor
+
+        try:
+            from lectura_decodeur._mel import mel_spectrogram
+            probe = np.zeros(16000, dtype=np.float32)
+            mel = mel_spectrogram(probe, 16000)
+            T_mel = mel.shape[-1]
+            logits = self.ctc.session.run(None, {"mel": mel})[0]
+            T_out = logits.shape[1]
+            factor = max(1, round(T_mel / T_out))
+        except Exception:
+            factor = 4  # defaut conservateur
+
+        self._subsample_factor = factor
+        return factor
+
+    def transcrire(
+        self, audio: np.ndarray, sr: int = 16000,
+        stt_mode: str | None = None,
+        with_timestamps: bool = False,
+    ) -> ResultatSTT:
         """Transcrit un signal audio en texte.
 
         Parameters
@@ -118,16 +149,18 @@ class STTEngine:
             Signal audio PCM float32 mono.
         sr : int
             Sample rate (defaut 16000).
+        with_timestamps : bool
+            Si True, force transcrire_avec_alternatives() pour obtenir
+            les timestamps CTC frame-level et les attache au ResultatSTT.
 
         Returns
         -------
         ResultatSTT
             Resultat contenant IPA et texte (si P2G disponible).
         """
-        # Etape 1 : CTC → IPA (avec alternatives si phone_correct actif)
+        # Etape 1 : CTC → IPA (avec alternatives si phone_correct actif ou timestamps demandes)
         ctc_tokens = None
-        if (self.phone_correct
-                and self.phone_lexicon is not None
+        if ((with_timestamps or (self.phone_correct and self.phone_lexicon is not None))
                 and hasattr(self.ctc, "transcrire_avec_alternatives")):
             ipa_str, ctc_tokens = self.ctc.transcrire_avec_alternatives(
                 audio, sr=sr, top_k=5,
@@ -135,10 +168,27 @@ class STTEngine:
         else:
             ipa_str = self.ctc.transcrire(audio, sr=sr)
 
+        # Enrichir timestamps (frame_end ajouté par le décodeur)
+        # Le modèle CTC a un subsampling 4× sur le mel (hop=160),
+        # donc chaque frame de sortie = 4 * 160 / 16000 = 0.04s
+        if ctc_tokens is not None:
+            subsample = self._detect_subsample()
+            frame_duration = subsample * 160 / 16000  # secondes par frame
+            for t in ctc_tokens:
+                t["time_s"] = t["frame"] * frame_duration
+                t["time_end_s"] = (t.get("frame_end", t["frame"]) + 1) * frame_duration
+
         # Choix du pipeline : optimal si PhoneLexicon disponible, sinon simplifie
         if self.phone_lexicon is not None and self.p2g is not None:
-            return self._transcrire_optimal(ipa_str, ctc_tokens=ctc_tokens, stt_mode=stt_mode)
-        return self._transcrire_simple(ipa_str, stt_mode=stt_mode)
+            result = self._transcrire_optimal(ipa_str, ctc_tokens=ctc_tokens, stt_mode=stt_mode)
+        else:
+            result = self._transcrire_simple(ipa_str, stt_mode=stt_mode)
+
+        # Attacher les timestamps CTC au resultat
+        if with_timestamps and ctc_tokens is not None:
+            result.ctc_phones = ctc_tokens
+
+        return result
 
     def _transcrire_simple(self, ipa_str: str, stt_mode: str | None = None) -> ResultatSTT:
         """Pipeline simplifie (sans PhoneLexicon)."""
@@ -280,7 +330,34 @@ class STTEngine:
                 ortho_words, self.grammar_lookup,
             )
 
-        # 8. Reconstruction du texte
+        # 8. Valider compound_joins contre le lexique : ne garder un join
+        #    que si l'IPA fusionne (mots[i]+mots[i+1]) correspond a un
+        #    compose reel dans le lexique (ex. "katʁvɛ̃"+"duz" ->
+        #    "quatre-vingt-douze").  Cela elimine les faux positifs du CTC
+        #    comme "vingt-quatre" + "ans" -> "vingt-quatre-ans".
+        if compound_joins:
+            valid_joins: set[int] = set()
+            for i in sorted(compound_joins):
+                if i + 1 >= len(ipa_words):
+                    continue
+                merged = ipa_words[i] + ipa_words[i + 1]
+                # Recherche exacte dans le lexique
+                ortho_merged = lexicon.best_ortho(merged)
+                if ortho_merged and "-" in ortho_merged:
+                    valid_joins.add(i)
+                    continue
+                # Recherche avec perturbations CTC, en verifiant
+                # que l'ortho trouvee commence bien par ortho_words[i]-
+                entries, _ = lexicon.all_entries_with_perturbations(merged)
+                prefix = ortho_words[i] + "-"
+                for entry in entries:
+                    eo = entry.get("ortho", "")
+                    if eo and "-" in eo and eo.startswith(prefix):
+                        valid_joins.add(i)
+                        break
+            compound_joins = valid_joins
+
+        # 9. Reconstruction du texte
         texte = rejoin_elisions(ortho_words, ipa_words, compound_joins)
         if ponctuation_finale and texte:
             texte += ponctuation_finale

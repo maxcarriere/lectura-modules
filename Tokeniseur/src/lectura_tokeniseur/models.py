@@ -34,6 +34,7 @@ class FormuleType(Enum):
     GPS = "gps"
     PAGE_CHAPITRE = "page_chapitre"
     ROMAIN = "romain"
+    ABV = "abv"
 
 
 @dataclass

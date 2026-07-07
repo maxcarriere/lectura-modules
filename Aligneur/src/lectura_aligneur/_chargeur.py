@@ -44,6 +44,10 @@ def liaison_consonnes() -> dict[str, str]:
     return _charger()["liaison_consonnes"]
 
 
+def phone_to_graphemes_fallback() -> dict[str, list[str]]:
+    return _charger().get("phone_to_graphemes_fallback", {})
+
+
 def lettres_muettes_possibles() -> set[str]:
     return set(_charger()["lettres_muettes_possibles"])
 

@@ -133,6 +133,9 @@ class OnnxCTCEngine:
         tokens = ctc_greedy_decode_with_alternatives(
             logits[0], blank_id=self.blank_id, top_k=top_k,
         )
+        # Enrichir chaque token avec la clé "phone" (IPA string)
+        for t in tokens:
+            t["phone"] = self.vocab_inv.get(t["phone_id"], "")
         ids = [t["phone_id"] for t in tokens]
         ipa_str = ids_vers_phones(ids, self.vocab_inv)
         return ipa_str, tokens

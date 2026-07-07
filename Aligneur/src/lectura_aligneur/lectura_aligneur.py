@@ -48,6 +48,7 @@ from typing import Protocol, runtime_checkable
 from lectura_aligneur._chargeur import (
     alphabet_ipa as _get_alphabet_ipa,
     phone_to_graphemes as _get_phone_to_graphemes,
+    phone_to_graphemes_fallback as _get_phone_to_graphemes_fallback,
     espeak_to_ipa as _get_espeak_to_ipa,
     lettres_muettes_possibles as _get_lettres_muettes_possibles,
     voyelles as _get_voyelles,
@@ -180,7 +181,12 @@ class _G2PAdapter:
 # Syllabeur (algorithme par sonorité)
 # ══════════════════════════════════════════════════════════════════════════════
 
-COMPOUND_PHONEMES: set[str] = {"tʃ", "dʒ", "ts", "ɡz"}
+COMPOUND_PHONEMES: set[str] = {"tʃ", "dʒ", "ts", "ɡz", "ks"}
+
+GRAPHEME_COMPOUNDS: dict[str, set[str]] = {
+    "ks": {"x"},
+    "ɡz": {"x"},
+}
 
 
 @dataclass(frozen=True)
@@ -238,13 +244,13 @@ def _class_of(token: str, classes: _SonorityClasses) -> str:
     return "O"
 
 
-def _merge_compounds_ipa(tokens: list[str]) -> list[str]:
+def _merge_compounds_ipa(tokens: list[str], compounds: set[str] = COMPOUND_PHONEMES) -> list[str]:
     out: list[str] = []
     i = 0
     while i < len(tokens):
         if i + 1 < len(tokens):
             pair = tokens[i] + tokens[i + 1]
-            if pair in COMPOUND_PHONEMES:
+            if pair in compounds:
                 out.append(pair)
                 i += 2
                 continue
@@ -306,12 +312,16 @@ def _split_central_cluster(
     return left
 
 
-def _syllabify_ipa(phone: str) -> list[str]:
+def _syllabify_ipa(phone: str, compounds: set[str] | None = None) -> list[str]:
     """Découpe une chaîne IPA en syllabes par le modèle de sonorité."""
-    tokens = _merge_compounds_ipa(iter_phonemes(phone))
+    effective = compounds if compounds is not None else COMPOUND_PHONEMES
+    tokens = _merge_compounds_ipa(iter_phonemes(phone), effective)
 
     if not tokens:
         return [phone] if phone else []
+
+    # Diphones exclus des composés → ne forment pas d'attaque valide
+    excluded = set(GRAPHEME_COMPOUNDS) - effective
 
     vowel_idx = [i for i, t in enumerate(tokens) if _class_of(t, _SONORITY) == "V"]
     if len(vowel_idx) <= 1:
@@ -320,7 +330,16 @@ def _syllabify_ipa(phone: str) -> list[str]:
     boundaries: list[int] = []
     for vi, vj in zip(vowel_idx, vowel_idx[1:]):
         cluster = tokens[vi + 1 : vj]
-        k = _split_central_cluster(cluster, _SONORITY)
+        # Si le cluster commence par un diphone exclu (ex: k+s hors composé),
+        # forcer la coupure après le premier phonème
+        if (
+            excluded
+            and len(cluster) >= 2
+            and (cluster[0] + cluster[1]) in excluded
+        ):
+            k = 1
+        else:
+            k = _split_central_cluster(cluster, _SONORITY)
         boundaries.append((vi + 1) + k)
 
     out: list[str] = []
@@ -347,21 +366,29 @@ def _alignement_v2(
     phone: str,
     phone_to_graphs: dict[str, list[str]],
     word_boundaries: list[int] | None = None,
-) -> tuple[list[str], list[str], bool]:
+) -> tuple[list[str], list[str], bool, str, tuple[int, int, int, int]]:
     ortho_orig = ortho
     ortho_norm = ortho.lower()
     phone_tokens = iter_phonemes(phone.lower())
     # Positions juste avant une frontière de mot (1 ou 2 chars avant)
     # pour autoriser l'exploration e-muet / s-muet / e°s° en fin de mot.
-    _boundary_muet_positions: frozenset[int] = frozenset()
+    # Inclut aussi les positions juste avant un séparateur de composé
+    # (tiret, espace, apostrophe) pour explorer le e muet dans des mots
+    # composés comme "libre-échange" où le 'e' de "libre" est muet.
+    pos_set: set[int] = set()
     if word_boundaries:
-        pos_set: set[int] = set()
         for b in word_boundaries:
             if b - 1 >= 0:
                 pos_set.add(b - 1)  # dernière lettre du mot (s, e)
             if b - 2 >= 0:
                 pos_set.add(b - 2)  # avant-dernière (e dans e°s°)
-        _boundary_muet_positions = frozenset(pos_set)
+    # Positions avant les séparateurs de composé (_IGNORED_CHARS)
+    for idx, ch in enumerate(ortho_orig):
+        if ch in _IGNORED_CHARS and idx - 1 >= 0:
+            pos_set.add(idx - 1)  # e muet avant tiret/espace/apostrophe
+            if idx - 2 >= 0:
+                pos_set.add(idx - 2)  # e°s° avant séparateur
+    _boundary_muet_positions: frozenset[int] = frozenset(pos_set)
 
     bloc_defs = [
         (b, iter_phonemes(b.lower()))
@@ -393,8 +420,20 @@ def _alignement_v2(
 
     segmentations = generate_segmentations()
 
+    # Set de tous les graphèmes valides (valeurs de phone_to_graphs)
+    # pour le scoring : un graphème est "pass1" s'il apparaît dans la
+    # table de correspondance, "pass2" sinon (pénalité de scoring).
+    _valid_graphemes: frozenset[str] = frozenset(
+        g_raw.replace("²", "")
+        for graphemes in phone_to_graphs.values()
+        for g_raw in graphemes
+    )
+
     all_results: list[tuple[list[str], list[str], int]] = []
     M = len(ortho_orig)
+
+    # Diagnostic d'échec : tracker le point le plus loin atteint
+    _diag: dict = {"pos": 0, "i_el": 0, "n_el": 0, "elements": []}
 
     for elements0 in segmentations:
 
@@ -409,6 +448,14 @@ def _alignement_v2(
             allow_split: bool = True,
         ) -> None:
             N = len(elements)
+
+            # Tracker la progression maximale (plus loin = meilleur diagnostic)
+            progress = pos_ortho * 1000 + i_el
+            if progress > _diag["pos"] * 1000 + _diag["i_el"]:
+                _diag["pos"] = pos_ortho
+                _diag["i_el"] = i_el
+                _diag["n_el"] = N
+                _diag["elements"] = elements
 
             while pos_ortho < M and ortho_orig[pos_ortho] in _IGNORED_CHARS:
                 if align_gr:
@@ -521,10 +568,64 @@ def _alignement_v2(
                         allow_split=True,
                     )
 
+            # Explorer x muet même quand un graphème matche (x→/k/, /s/,
+            # /z/). En français x est fréquemment muet ("auxquels", "faux",
+            # "doux") et le scoring sélectionnera la meilleure solution.
+            if (pos_ortho < M and possible_here
+                    and ortho_orig[pos_ortho].lower() == "x"):
+                ch = ortho_orig[pos_ortho]
+                mu = ch + "°"
+                if align_gr:
+                    align_gr[-1] += mu
+                    dfs(
+                        elements, i_el, pos_ortho + 1,
+                        align_ph, align_gr, pending, muettes + 1,
+                        allow_split=True,
+                    )
+                    align_gr[-1] = align_gr[-1][: -len(mu)]
+                else:
+                    dfs(
+                        elements, i_el, pos_ortho + 1,
+                        align_ph, align_gr, pending + mu, muettes + 1,
+                        allow_split=True,
+                    )
+
         dfs(elements0, 0, 0, [], [], "", 0, allow_split=True)
 
     if not all_results:
-        return [], [], False
+        # Construire un diagnostic d'échec à partir du point le plus loin atteint
+        diag_parts = []
+        dp = _diag["pos"]
+        di = _diag["i_el"]
+        dn = _diag["n_el"]
+        d_elements = _diag["elements"]
+        reste_ortho = ortho_orig[dp:]
+        if d_elements and di < dn:
+            phone_bloque = d_elements[di]
+            reste_phones = ".".join(d_elements[di:])
+            graphemes_attendus = phone_to_graphs.get(phone_bloque, [])
+            ga_str = ",".join(graphemes_attendus[:6])
+            if len(graphemes_attendus) > 6:
+                ga_str += "…"
+            diag_parts.append(
+                f"pos={dp}/{M} reste='{reste_ortho}' "
+                f"phone=/{phone_bloque}/ ({di+1}/{dn}) "
+                f"attendu=[{ga_str}]"
+            )
+        elif dp >= M and di < dn:
+            reste_phones = ".".join(d_elements[di:]) if d_elements else ""
+            diag_parts.append(
+                f"ortho épuisé pos={dp}/{M} "
+                f"phones restants=/{reste_phones}/ ({di+1}/{dn})"
+            )
+        elif dp < M and (not d_elements or di >= dn):
+            diag_parts.append(
+                f"phones épuisés ortho restant='{reste_ortho}' pos={dp}/{M}"
+            )
+        else:
+            diag_parts.append(f"pos={dp}/{M} phone={di}/{dn}")
+        diag_msg = "; ".join(diag_parts)
+        return [], [], False, diag_msg, (0, 0, 0, 0)
 
     def _muette_penalty(gr: list[str]) -> int:
         penalty = 0
@@ -541,11 +642,22 @@ def _alignement_v2(
         sol: tuple[list[str], list[str], int],
     ) -> tuple[int, int, int, int]:
         _, gr, muettes = sol
-        pass2_count = sum(1 for g in gr if g not in phone_to_graphs and "²" not in g)
+        # pass2_count : graphèmes qui ne correspondent à aucune entrée
+        # connue dans la table phonème→graphèmes (ni directement ni via ²).
+        # On nettoie le graphème (retrait °, ², casse) avant le test.
+        def _is_pass2(g: str) -> bool:
+            if "²" in g:
+                return False
+            clean = g.replace("°", "").lower()
+            # Retirer les caractères ignorés en fin de graphème (tiret, etc.)
+            clean = clean.rstrip("-' \u2019_")
+            return clean not in _valid_graphemes
+        pass2_count = sum(1 for g in gr if _is_pass2(g))
         muette_pos_penalty = _muette_penalty(gr)
         return (muettes, muette_pos_penalty, pass2_count, len(gr))
 
     best = min(all_results, key=_score)
+    best_score = _score(best)
     align_ph, align_gr, _ = best
 
     # Réinjection de la casse originale
@@ -566,7 +678,7 @@ def _alignement_v2(
                     rebuilt += ch
         new_gr.append(rebuilt)
 
-    return align_ph, new_gr, True
+    return align_ph, new_gr, True, "", best_score
 
 
 def _build_spans(ortho: str, align_gr: list[str]) -> list[Span]:
@@ -629,20 +741,70 @@ def _phonemise_alignment(
     return new_ph, new_gr, new_spans
 
 
+_PHONE_TO_GRAPHEMES_EXTENDED: dict[str, list[str]] | None = None
+
+
+def _get_extended_graphemes() -> dict[str, list[str]]:
+    """Retourne phone_to_graphemes étendu avec les associations de fallback."""
+    global _PHONE_TO_GRAPHEMES_EXTENDED
+    if _PHONE_TO_GRAPHEMES_EXTENDED is None:
+        base = _PHONE_TO_GRAPHEMES()
+        fallback = _get_phone_to_graphemes_fallback()
+        extended = {k: list(v) for k, v in base.items()}
+        for ph, graphemes in fallback.items():
+            if ph in extended:
+                extended[ph] = extended[ph] + [g for g in graphemes if g not in extended[ph]]
+            else:
+                extended[ph] = list(graphemes)
+        _PHONE_TO_GRAPHEMES_EXTENDED = extended
+    return _PHONE_TO_GRAPHEMES_EXTENDED
+
+
+def _align_raw(
+    ortho: str,
+    phone: str,
+    word_boundaries: list[int] | None = None,
+) -> tuple[list[str], list[str], bool, str, tuple[int, int, int, int]]:
+    """Alignement brut graphèmes-phonèmes (avant décomposition).
+
+    Essaie d'abord avec les associations standard. Si l'alignement
+    échoue, retente avec les associations de fallback (ex: gni→ɲ).
+    Retourne (align_ph, align_gr, ok, diagnostic, score).
+    """
+    result = _alignement_v2(ortho, phone, _PHONE_TO_GRAPHEMES(), word_boundaries)
+    if not result[2]:
+        extended = _get_extended_graphemes()
+        if extended is not _PHONE_TO_GRAPHEMES():
+            result = _alignement_v2(ortho, phone, extended, word_boundaries)
+    return result
+
+
+def _detect_forced_compounds(align_ph: list[str], align_gr: list[str]) -> set[str]:
+    """Retourne les diphones composés provenant d'un graphème mono-lettre (ex: x)."""
+    forced: set[str] = set()
+    for ph, gr in zip(align_ph, align_gr):
+        if ph in GRAPHEME_COMPOUNDS:
+            gr_clean = gr.replace("²", "").replace("°", "")
+            if gr_clean in GRAPHEME_COMPOUNDS[ph]:
+                forced.add(ph)
+    return forced
+
+
 def _aligner(
     ortho: str,
     phone: str,
     word_boundaries: list[int] | None = None,
-) -> tuple[list[str], list[str], list[Span], bool]:
-    """Aligne graphèmes et phonèmes."""
-    align_ph, align_gr, ok = _alignement_v2(
-        ortho, phone, _PHONE_TO_GRAPHEMES(), word_boundaries
-    )
+) -> tuple[list[str], list[str], list[Span], bool, str, tuple[int, int, int, int]]:
+    """Aligne graphèmes et phonèmes.
+
+    Retourne (dec_ph, dec_gr, dec_spans, ok, diagnostic, score).
+    """
+    align_ph, align_gr, ok, diag, score = _align_raw(ortho, phone, word_boundaries)
     if not ok:
-        return [], [], [], False
+        return [], [], [], False, diag, score
     spans = _build_spans(ortho, align_gr)
     dec_ph, dec_gr, dec_spans = _phonemise_alignment(align_ph, align_gr, spans)
-    return dec_ph, dec_gr, dec_spans, True
+    return dec_ph, dec_gr, dec_spans, True, "", score
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -952,7 +1114,7 @@ def syllabifier_groupes(
         if len(groupe.mots) == 1:
             ortho = groupe.mots[0].text
             word_offset = getattr(groupe.mots[0], "span", (0, 0))[0]
-            dec_ph, dec_gr, dec_spans, ok = _aligner(ortho, phone)
+            dec_ph, dec_gr, dec_spans, ok, _diag_msg, _sc = _aligner(ortho, phone)
         else:
             # Multi-mots : concaténer sans espaces pour l'alignement IPA
             # et calculer les frontières de mots pour guider les muettes
@@ -964,7 +1126,7 @@ def syllabifier_groupes(
             for p in parts[:-1]:
                 pos += len(p)
                 boundaries.append(pos)
-            dec_ph, dec_gr, dec_spans, ok = _aligner(
+            dec_ph, dec_gr, dec_spans, ok, _diag_msg, _sc = _aligner(
                 ortho, phone, word_boundaries=boundaries
             )
             # Remapper les spans concat → positions absolues dans le texte
@@ -1051,11 +1213,32 @@ class LecturaSyllabeur:
         if phone is None:
             phone = self._phonemizer.phonemize(word)
 
-        syll_phones = _syllabify_ipa(phone)
-        dec_ph, dec_gr, dec_spans, ok = _aligner(word, phone)
-        syllabes = _build_syllabes(syll_phones, dec_ph, dec_gr, dec_spans, 0, ok)
+        # 1. Alignement brut pour connaître les graphèmes
+        align_ph, align_gr, ok, _diag_msg, _raw_score = _align_raw(word, phone)
 
-        return ResultatAnalyse(mot=word, phone=phone, syllabes=syllabes)
+        # 2. Composés conditionnels : toujours fusionner tʃ/dʒ/ts,
+        #    fusionner ks/ɡz seulement si graphème = "x"
+        always = COMPOUND_PHONEMES - set(GRAPHEME_COMPOUNDS)
+        forced = _detect_forced_compounds(align_ph, align_gr) if ok else set(GRAPHEME_COMPOUNDS)
+        compounds = always | forced
+
+        # 3. Syllabation contextuelle
+        syll_phones = _syllabify_ipa(phone, compounds=compounds)
+
+        # 4. Alignement complet + construction syllabes
+        dec_ph, dec_gr, dec_spans, ok2, _diag_msg2, _score2 = _aligner(word, phone)
+        syllabes = _build_syllabes(syll_phones, dec_ph, dec_gr, dec_spans, 0, ok2)
+
+        # Diagnostic : utiliser le résultat de l'alignement brut (étape 1)
+        # car c'est lui qui contient le diagnostic pertinent
+        diag = _diag_msg if not ok else ""
+
+        return ResultatAnalyse(
+            mot=word, phone=phone, syllabes=syllabes,
+            dec_ortho=list(align_gr), dec_phone=list(align_ph),
+            alignment_ok=ok, diagnostic=diag,
+            score_brut=_raw_score,
+        )
 
     def analyze_text(self, text: str) -> list[ResultatAnalyse]:
         """Analyse syllabique de chaque mot d'un texte."""

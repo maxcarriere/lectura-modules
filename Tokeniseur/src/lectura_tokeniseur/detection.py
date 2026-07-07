@@ -377,3 +377,14 @@ _PAGE_CHAP_RE = re.compile(
 def _detect_page_chapitre(text: str) -> bool:
     """Détecte une référence page/chapitre (p.42, chap3, page 12)."""
     return bool(_PAGE_CHAP_RE.match(text.strip()))
+
+
+# ── ABRÉVIATION LETTRE PAR LETTRE ──
+_ABV_RE = re.compile(r"^(?:[A-Za-zÀ-ÿ]\.){1,}[A-Za-zÀ-ÿ]?$")
+
+
+def _detect_abv(text: str) -> bool:
+    """Détecte une abréviation lettre par lettre (i.e., e.g., U.S.A., N.B.)."""
+    if len(text) < 3:
+        return False
+    return bool(_ABV_RE.match(text))

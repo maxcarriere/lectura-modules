@@ -57,6 +57,14 @@ class ResultatAnalyse:
     mot: str
     phone: str
     syllabes: list[Syllabe] = field(default_factory=list)
+    # Décomposition brute de l'alignement (avant syllabation)
+    dec_ortho: list[str] = field(default_factory=list)
+    dec_phone: list[str] = field(default_factory=list)
+    alignment_ok: bool = True
+    # Score brut DFS : (muettes, penalty_pos, pass2_count, nb_segments)
+    score_brut: tuple[int, int, int, int] = (0, 0, 0, 0)
+    # Diagnostic d'échec (vide si alignement réussi)
+    diagnostic: str = ""
 
     @property
     def nb_syllabes(self) -> int:

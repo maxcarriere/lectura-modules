@@ -15,6 +15,7 @@ from lectura_tokeniseur.detection import (
     _detect_numero, _detect_nombre, _is_roman, _detect_romain,
     _detect_heure, _detect_monnaie, _detect_pourcentage,
     _detect_intervalle, _detect_gps, _detect_page_chapitre,
+    _detect_abv,
     _TEL_CLEAN_RE, _FRACTION_RE, _NUMERO_SPLIT_RE,
     _ROMAN_VALID_RE, _MATHS_OPERATORS, _MATHS_SUPERSCRIPTS, _GREEK_LETTERS,
     _MATHS_FUNCTIONS, _MATHS_SPECIAL,
@@ -100,6 +101,10 @@ def _classify_formule_single(text: str) -> FormuleType | None:
     if _detect_sigle(text):
         return FormuleType.SIGLE
 
+    # 13b. ABRÉVIATION lettre par lettre
+    if _detect_abv(text):
+        return FormuleType.ABV
+
     # 14. NUMERO
     if _detect_numero(text):
         return FormuleType.NUMERO
@@ -129,6 +134,42 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
         return None
 
     first = tokens[start]
+
+    # ── Abréviation lettre par lettre : Mot(1 lettre) + Ponc(".") + Mot(1 lettre) ... ──
+    # Détecte : i.e., e.g., U.S.A., N.B., a.m., etc.
+    # Note : le normaliseur ajoute un espace après le point (i.e. → i. e.),
+    # donc on accepte des Separateur(space) entre les paires lettre+point.
+    if isinstance(first, Mot) and len(first.text) == 1 and first.text.isalpha():
+        j = start
+        parts: list[str] = []
+        dot_count = 0
+        last_consumed = start  # dernier token significatif consommé
+        while j < n:
+            t = tokens[j]
+            # Sauter les espaces entre les groupes lettre-point
+            if isinstance(t, Separateur) and t.sep_type == "space":
+                j += 1
+                continue
+            if isinstance(t, Mot) and len(t.text) == 1 and t.text.isalpha():
+                parts.append(t.text)
+                last_consumed = j
+                # Chercher le point suivant (éventuellement après un espace)
+                k = j + 1
+                while k < n and isinstance(tokens[k], Separateur) and tokens[k].sep_type == "space":
+                    k += 1
+                if k < n and isinstance(tokens[k], Ponctuation) and tokens[k].text == ".":
+                    parts.append(".")
+                    dot_count += 1
+                    last_consumed = k
+                    j = k + 1
+                else:
+                    j += 1
+                    break
+            else:
+                break
+        if dot_count >= 1 and len(parts) >= 3:
+            full = "".join(parts)
+            return full, last_consumed + 1, FormuleType.ABV
 
     # ── Téléphone : FORMULE(NOMBRE) + espaces + FORMULE(NOMBRE) × 4 ──
     if isinstance(first, Formule) and first.text.startswith("0") and len(first.text) == 2:
@@ -756,6 +797,28 @@ def _build_formule_children(text: str, ftype: FormuleType, offset: int) -> list[
         # Atomique, pas d'enfants
         return []
 
+    if ftype == FormuleType.ABV:
+        # Enfants : alternance Mot (lettre) / Ponctuation (point)
+        children: list[Token] = []
+        i = 0
+        while i < len(text):
+            if text[i].isalpha():
+                children.append(Mot(
+                    type=TokenType.MOT, text=text[i],
+                    span=(offset + i, offset + i + 1),
+                    ortho=text[i].lower(),
+                ))
+                i += 1
+            elif text[i] == ".":
+                children.append(Ponctuation(
+                    type=TokenType.PONCTUATION, text=".",
+                    span=(offset + i, offset + i + 1),
+                ))
+                i += 1
+            else:
+                i += 1
+        return children
+
     if ftype == FormuleType.SIGLE:
         # 1 enfant Mot par lettre, 1 enfant Formule(NOMBRE) par groupe de chiffres
         children: list[Token] = []
@@ -1216,4 +1279,6 @@ def _extract_valeur(text: str, ftype: FormuleType) -> str:
         return m.group(0) if m else text
     if ftype == FormuleType.ROMAIN:
         return text
+    if ftype == FormuleType.ABV:
+        return text.lower()
     return text

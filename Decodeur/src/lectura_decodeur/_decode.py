@@ -108,8 +108,12 @@ def ctc_greedy_decode_with_alternatives(
                 "confidence": best_val,
                 "entropy": entropy,
                 "frame": t,
+                "frame_end": t,
                 "alternatives": alternatives,
             })
+        elif best != blank_id and best == prev_id and tokens:
+            # Meme phone continue — etendre frame_end
+            tokens[-1]["frame_end"] = t
 
         prev_id = best
 
