@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tts-mono"
-version = "1.0.0"
+version = "1.0.1"
 description = "Pipeline TTS monospeaker du francais — G2P + Matcha-Conformer + retimbre optionnel"
 readme = "README.md"
 requires-python = ">=3.10"

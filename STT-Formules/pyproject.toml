@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-stt-formules"
-version = "0.1.0"
+version = "0.1.1"
 description = "STT dedie formules — CTC semantique pour nombres, dates, heures, sigles (generateur de corpus)"
 readme = "README.md"
 requires-python = ">=3.10"
