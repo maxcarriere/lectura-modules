@@ -5,13 +5,36 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lectura-lexique"
 version = "1.5.0"
-description = "Module partage d'acces au lexique Lectura"
+description = "French lexical database access — 359k lemmas, 1.5M inflected forms with IPA phonetics and syllabification"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "CC-BY-SA-4.0"
+authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
+keywords = [
+    "french", "lexicon", "lexique", "nlp", "dictionary",
+    "phonetics", "ipa", "morphology", "inflection",
+    "lexical-database", "wiktionary",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Linguistic",
+]
 dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://www.lectura.world/developpement/modules/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Lexique"
+Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

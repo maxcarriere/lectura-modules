@@ -89,4 +89,7 @@ Chaque emplacement peut contenir des sous-repertoires `conformer/` et `fastpitch
 
 ## Licence
 
-Licence proprietaire Lectura. Voir LICENCE.txt.
+Code source sous licence **AGPL-3.0** — voir [LICENCE.txt](LICENCE.txt).
+Modeles pre-entraines : voir [MODEL_LICENCE.md](MODEL_LICENCE.md).
+
+**Licence commerciale et modeles locaux disponibles** — contacter [admin@lectura.world](mailto:admin@lectura.world).

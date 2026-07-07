@@ -422,7 +422,7 @@ class Lexique:
                     "FROM formes f "
                     "LEFT JOIN lemmes l ON f.lemme_id = l.id "
                     f"WHERE f.phone IN ({placeholders}) "
-                    "AND l.cgram IN ('VER', 'AUX') "
+                    "AND (l.cgram LIKE 'VER%' OR l.cgram LIKE 'AUX%') "
                 )
                 params: list[Any] = list(phones)
                 if multext_pattern and multext_pattern != "%":
@@ -449,7 +449,7 @@ class Lexique:
                     f"freq_opensubs AS freq, phone "
                     f"FROM {self._table} "
                     f"WHERE phone IN ({placeholders}) "
-                    f"AND cgram IN ('VER', 'AUX') "
+                    f"AND (cgram LIKE 'VER%' OR cgram LIKE 'AUX%') "
                     f"AND personne = ?"
                 )
                 params = list(phones) + [personne]
@@ -471,7 +471,7 @@ class Lexique:
             for phone in phones:
                 entries = phone_index.get(phone, [])
                 for e in entries:
-                    if e.get("cgram", "") not in ("VER", "AUX"):
+                    if not (e.get("cgram", "").startswith("VER") or e.get("cgram", "").startswith("AUX")):
                         continue
                     if e.get("personne", "") != personne:
                         continue
@@ -503,7 +503,7 @@ class Lexique:
                     "FROM formes f "
                     "JOIN lemmes l ON f.lemme_id = l.id "
                     "WHERE l.lemme = ? COLLATE NOCASE "
-                    "AND l.cgram IN ('VER', 'AUX')",
+                    "AND (l.cgram LIKE 'VER%' OR l.cgram LIKE 'AUX%')",
                     (normaliser_ortho(verbe),),
                 )
                 entries = []
@@ -523,7 +523,7 @@ class Lexique:
             cur = conn.execute(
                 f"SELECT * FROM {self._table} "  # noqa: S608
                 f"WHERE lemme = ? COLLATE NOCASE "
-                f"AND cgram IN ('VER', 'AUX')",
+                f"AND (cgram LIKE 'VER%' OR cgram LIKE 'AUX%')",
                 (normaliser_ortho(verbe),),
             )
             colonnes = [desc[0] for desc in cur.description]

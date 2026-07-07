@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["stt", "asr", "ctc", "french", "formulas", "numbers", "dates"]
+keywords = [
+    "stt", "asr", "ctc", "french", "speech-recognition",
+    "formulas", "numbers", "dates", "semantic-ctc",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -33,7 +36,7 @@ export = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
 inference = ["onnxruntime>=1.16", "numpy>=1.24", "soundfile>=0.12"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/STT-Formules"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

@@ -40,4 +40,6 @@ print(result["alignments"][0].syllabes)
 
 ## Licence
 
-AGPL-3.0-or-later — voir [LICENCE.txt](LICENCE.txt)
+AGPL-3.0-or-later — voir [LICENCE.txt](LICENCE.txt).
+
+**Licence commerciale et modeles locaux disponibles** — contacter [admin@lectura.world](mailto:admin@lectura.world).

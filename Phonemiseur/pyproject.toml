@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["g2p", "french", "nlp", "phonétique", "pos-tagging", "morphologie", "liaison"]
+keywords = [
+    "g2p", "grapheme-to-phoneme", "phonemizer", "french", "nlp",
+    "phonetics", "ipa", "pos-tagging", "morphology", "liaison",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -34,8 +37,8 @@ train = ["torch>=2.0", "onnx>=1.14", "onnxruntime>=1.16"]
 all = ["onnxruntime>=1.16", "numpy>=1.24", "lectura-lexique>=1.4"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/solutions/outils/modules/"
-Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/G2P"
+Homepage = "https://www.lectura.world/developpement/modules/"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Phonemiseur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]

@@ -6,10 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "lectura-p2g"
 version = "4.6.2"
 description = "Pipeline P2G complet du francais — Graphemiseur + Formules + Noms propres (IPA -> orthographe)"
+readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["p2g", "french", "nlp", "pipeline", "phonétique", "orthographe"]
+keywords = [
+    "p2g", "phoneme-to-grapheme", "inverse-g2p", "french", "nlp",
+    "phonetics", "ipa", "orthography", "speech-to-text",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -32,7 +36,7 @@ dependencies = [
 aligneur = ["lectura-aligneur>=4.0"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/P2G-Pipeline"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

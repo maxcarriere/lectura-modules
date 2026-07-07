@@ -10,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["syllabeur", "aligneur", "alignment", "grapheme-phoneme", "french", "nlp", "syllabation", "phonétique", "liaison", "lecture"]
+keywords = [
+    "syllabification", "syllable", "alignment", "grapheme-phoneme",
+    "french", "nlp", "phonetics", "ipa", "onset-nucleus-coda",
+    "reading", "french-syllabification",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -29,7 +33,7 @@ dependencies = []
 phonemiseur = ["lectura-phonemiseur>=4.0"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/solutions/modules/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Aligneur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

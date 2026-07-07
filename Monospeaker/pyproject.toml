@@ -5,15 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lectura-monospeaker"
 version = "4.0.0"
-description = "Synthese vocale neuronale monospeaker francais — modeles high (Conformer) et light (FastPitch) au choix (ONNX)"
+description = "French neural TTS monospeaker — Conformer (high) or FastPitch (light), ONNX inference"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["tts", "french", "speech-synthesis", "onnx", "matcha-tts", "flow-matching"]
+keywords = [
+    "tts", "french", "text-to-speech", "speech-synthesis", "onnx",
+    "matcha-tts", "flow-matching", "fastpitch", "hifi-gan",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,7 +32,7 @@ dependencies = []
 onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/developpement/modules/outils/tts-mono/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Monospeaker"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

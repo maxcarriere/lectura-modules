@@ -10,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["nlp", "french", "g2p", "p2g", "stt", "tts", "vc", "phonetique", "pipeline"]
+keywords = [
+    "nlp", "french", "g2p", "p2g", "stt", "tts", "vc",
+    "phonetics", "pipeline", "text-to-speech", "speech-to-text",
+    "syllabification", "spell-checker", "grapheme-to-phoneme",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",

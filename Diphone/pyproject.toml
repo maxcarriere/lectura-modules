@@ -5,15 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lectura-diphone"
 version = "2.0.1"
-description = "Synthese vocale par concatenation de diphones WORLD — francais"
+description = "French diphone TTS via WORLD vocoder — concatenative speech synthesis with controlled prosody"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["tts", "french", "speech-synthesis", "diphone", "world"]
+keywords = [
+    "tts", "french", "text-to-speech", "speech-synthesis",
+    "diphone", "world-vocoder", "concatenation", "prosody",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: French",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,7 +32,7 @@ dependencies = []
 local = ["pyworld>=0.3.4", "numpy>=1.24", "scipy>=1.10", "soundfile>=0.12"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/developpement/modules/outils/tts-diphone/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Diphone"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

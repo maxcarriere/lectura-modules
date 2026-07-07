@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["g2p", "french", "nlp", "phonétique", "pipeline", "tts"]
+keywords = [
+    "g2p", "grapheme-to-phoneme", "text-to-phoneme", "french", "nlp",
+    "phonemizer", "phonetics", "ipa", "tts-frontend",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -34,7 +37,7 @@ dependencies = [
 aligneur = ["lectura-aligneur>=4.0"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/G2P-Pipeline"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["formules", "french", "nlp", "nombres", "lecture", "romains"]
+keywords = [
+    "number-to-text", "text-normalization", "french", "nlp",
+    "numbers", "dates", "roman-numerals", "formulas",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -26,7 +29,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://www.lectura.world/solutions/outils/modules/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Formules"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 

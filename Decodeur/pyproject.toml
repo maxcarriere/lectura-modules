@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
-keywords = ["stt", "asr", "ctc", "french", "phonetic", "ipa", "decoder"]
+keywords = [
+    "speech-recognition", "asr", "ctc", "french",
+    "phonetic-decoder", "ipa", "audio-to-phoneme",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -30,7 +33,7 @@ dependencies = ["numpy>=1.24"]
 onnx = ["onnxruntime>=1.16"]
 
 [project.urls]
-Homepage = "https://www.lectura.world/developpement/modules/outils/decodeur/"
+Homepage = "https://www.lectura.world/developpement/modules/"
 Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/Decodeur"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
