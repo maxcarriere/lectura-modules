@@ -597,8 +597,8 @@ class TestTokenTypes:
         assert FormuleType.MATHS.value == "maths"
 
     def test_formule_type_all_members(self):
-        """L'enum FormuleType a exactement 17 membres."""
-        assert len(FormuleType) == 17
+        """L'enum FormuleType a exactement 18 membres."""
+        assert len(FormuleType) == 18
 
     # -- Span type alias --
 
@@ -1040,13 +1040,13 @@ class TestMathsTokenization:
     def test_detect_number_unit(self):
         tok = LecturaTokeniseur()
         result = tok.analyze("5 km")
-        formules = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        formules = [f for f in result.formules if f.formule_type == FormuleType.UNITE]
         assert len(formules) > 0
 
     def test_detect_degres(self):
         tok = LecturaTokeniseur()
         result = tok.analyze("36.5 °C")
-        formules = [f for f in result.formules if f.formule_type == FormuleType.MATHS]
+        formules = [f for f in result.formules if f.formule_type == FormuleType.UNITE]
         assert len(formules) > 0
 
     def test_maths_children_enriched(self):

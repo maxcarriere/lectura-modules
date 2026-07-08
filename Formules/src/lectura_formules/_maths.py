@@ -46,10 +46,37 @@ SUBSCRIPTS_UNICODE: dict[str, str] = {
 _SUBSCRIPT_UNICODE_CHARS = set(SUBSCRIPTS_UNICODE.keys())
 
 UNIT_MULTI = sorted(
-    ["°C", "°F", "km", "kg", "mg", "cm", "mm", "ml"],
+    [
+        "°C", "°F",
+        # Longueur
+        "km", "cm", "mm", "dm", "µm", "nm",
+        # Masse
+        "kg", "mg", "µg",
+        # Temps
+        "ms", "min",
+        # Volume
+        "mL", "ml", "cL", "cl", "dL", "dl",
+        # Surface
+        "ha",
+        # Électrique / Énergie
+        "kW", "MW", "kV", "mA", "Hz", "kHz", "MHz", "GHz",
+        "Wh", "kWh", "kJ", "cal", "kcal", "eV",
+        # Pression
+        "Pa", "hPa", "bar",
+        # Son
+        "dB",
+        # Informatique
+        "bit", "ko", "Mo", "Go", "To", "kB", "MB", "GB", "TB",
+    ],
     key=len, reverse=True,
 )
-UNIT_SINGLE = {"g", "m", "s", "h", "L"}
+UNIT_SINGLE = {"g", "m", "s", "h", "L", "l", "t", "W", "V", "A", "N", "J", "o", "B"}
+
+# Unités multi-caractères non-ambiguës : détection standalone
+UNIT_NAMES_SAFE = {mu for mu in UNIT_MULTI if not mu.startswith("°")}
+# Unités mono-caractère : détectées seulement après un NOMBRE
+UNIT_NAMES_CONTEXTUAL = UNIT_SINGLE
+# Union complète (conservé pour compatibilité interne MATHS)
 UNIT_NAMES_LOWER = {mu.lower() for mu in UNIT_MULTI} | {u for u in UNIT_SINGLE}
 
 FUNC_NAMES = {"sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs"}

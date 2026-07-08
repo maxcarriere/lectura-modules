@@ -21,14 +21,26 @@ from lectura_tokeniseur.detection import (
     _MATHS_FUNCTIONS, _MATHS_SPECIAL,
 )
 try:
-    from lectura_formules._maths import UNIT_NAMES_LOWER as _UNIT_NAMES_LOWER
+    from lectura_formules._maths import (
+        UNIT_NAMES_LOWER as _UNIT_NAMES_LOWER,
+        UNIT_NAMES_SAFE as _UNIT_NAMES_SAFE,
+        UNIT_NAMES_CONTEXTUAL as _UNIT_NAMES_CONTEXTUAL,
+    )
 except ImportError:
     _UNIT_NAMES_LOWER: set[str] = set()
+    _UNIT_NAMES_SAFE: set[str] = set()
+    _UNIT_NAMES_CONTEXTUAL: set[str] = set()
 
 logger = logging.getLogger(__name__)
 
 # Abréviations à une seule lettre reconnues comme formule ABV (M. → monsieur)
 _KNOWN_SINGLE_ABV = frozenset({"M"})
+
+# Abréviations multi-lettres : Mot("Dr") + Ponct(".") → ABV("Dr.")
+_KNOWN_MULTI_ABV = frozenset({
+    "dr", "st", "ste", "mme", "mlle", "mgr", "av", "bd",
+    "etc", "cf", "pr", "me", "jr", "sr", "vs",
+})
 
 
 def _is_unit_name(text: str) -> bool:
@@ -475,38 +487,6 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
             if _detect_ordinal(full):
                 return full, j + 1, FormuleType.ORDINAL
 
-    # ── Nombre + espace + unité → MATHS (5 km, 36.5 °C, -5 km) ──
-    # Variante avec signe : PONCT(sign) + FORMULE + espace + unité
-    if isinstance(first, Ponctuation) and first.text in _SIGN_CHARS:
-        j = start + 1
-        if (j < n and isinstance(tokens[j], Formule)
-                and tokens[j].text.replace(".", "").replace(",", "").isdigit()
-                and tokens[j].span[0] == first.span[1]):
-            k = j + 1
-            if k < n and isinstance(tokens[k], Separateur) and tokens[k].sep_type == "space":
-                m2 = k + 1
-                if m2 < n and isinstance(tokens[m2], Mot) and _is_unit_name(tokens[m2].text):
-                    full = first.text + tokens[j].text + " " + tokens[m2].text
-                    return full, m2 + 1, FormuleType.MATHS
-                if (m2 + 1 < n and isinstance(tokens[m2], Ponctuation) and tokens[m2].text == "°"
-                        and isinstance(tokens[m2 + 1], Mot) and tokens[m2 + 1].text in ("C", "F")):
-                    full = first.text + tokens[j].text + " °" + tokens[m2 + 1].text
-                    return full, m2 + 2, FormuleType.MATHS
-    # Variante sans signe
-    if isinstance(first, Formule) and first.text.replace(".", "").replace(",", "").isdigit():
-        j = start + 1
-        if j < n and isinstance(tokens[j], Separateur) and tokens[j].sep_type == "space":
-            k = j + 1
-            # Unité simple : MOT("km"), MOT("m"), ...
-            if k < n and isinstance(tokens[k], Mot) and _is_unit_name(tokens[k].text):
-                full = first.text + " " + tokens[k].text
-                return full, k + 1, FormuleType.MATHS
-            # Unité composée : °C, °F
-            if (k + 1 < n and isinstance(tokens[k], Ponctuation) and tokens[k].text == "°"
-                    and isinstance(tokens[k + 1], Mot) and tokens[k + 1].text in ("C", "F")):
-                full = first.text + " °" + tokens[k + 1].text
-                return full, k + 2, FormuleType.MATHS
-
     # ── Sigle/Maths : séquence de tokens adjacents (lettres+chiffres+opérateurs) ──
     # Accepte aussi un signe initial (-/+) collé à un chiffre : -12.5/54, -3x+1
     _MERGE_PUNCT = _MATHS_OPERATORS | set("()[]{}^/!")
@@ -691,6 +671,12 @@ def _classify_and_merge(tokens: list[Token]) -> list[Token]:
                         full_text += "/" + tokens[end_idx + 1].text
                         end_idx += 2
                         ftype = FormuleType.MATHS
+                    # Reclassifier en UNITE si le texte est purement
+                    # des unités séparées par "/" (km/h, m/s, etc.)
+                    if ftype == FormuleType.MATHS and "/" in full_text:
+                        _parts = full_text.split("/")
+                        if all(_is_unit_name(p) for p in _parts):
+                            ftype = FormuleType.UNITE
                     span_start = tokens[i].span[0]
                     span_end = tokens[end_idx - 1].span[1]
                     formule = Formule(
@@ -745,23 +731,100 @@ def _classify_and_merge(tokens: list[Token]) -> list[Token]:
             i += 1
             continue
 
-        # Classifie les MOT qui sont des unités seules (km, cm, etc.)
+        # Classifie PONCT("°") + MOT("C"/"F") adjacents → UNITE("°C"/"°F")
+        if (isinstance(tok, Ponctuation) and tok.text == "°"
+                and i + 1 < n and isinstance(tokens[i + 1], Mot)
+                and tokens[i + 1].text in ("C", "F")
+                and tokens[i + 1].span[0] == tok.span[1]):
+            unit_text = "°" + tokens[i + 1].text
+            span_start = tok.span[0]
+            span_end = tokens[i + 1].span[1]
+            formule = Formule(
+                type=TokenType.FORMULE,
+                text=unit_text,
+                span=(span_start, span_end),
+                formule_type=FormuleType.UNITE,
+                children=[],
+                valeur=unit_text,
+            )
+            result.append(formule)
+            i += 2
+            continue
+
+        # Classifie les MOT qui sont des unités (km, cm, m, g, etc.)
         # Sauf si suivi d'une apostrophe (élision : m'appelle, s'il)
         if isinstance(tok, Mot) and _is_unit_name(tok.text):
             _next_is_apos = (i + 1 < n and isinstance(tokens[i + 1], Separateur)
                              and tokens[i + 1].sep_type == "apostrophe")
             if not _next_is_apos:
+                # Mono-caractère (contextual) : seulement si précédé d'un NOMBRE
+                _is_safe = (tok.text in _UNIT_NAMES_SAFE
+                            or tok.text.lower() in _UNIT_NAMES_SAFE)
+                if not _is_safe:
+                    # Chercher le token précédent non-séparateur dans result
+                    _prev_is_nombre = False
+                    for _ri in range(len(result) - 1, -1, -1):
+                        _prev = result[_ri]
+                        if isinstance(_prev, Separateur):
+                            continue
+                        if (isinstance(_prev, Formule)
+                                and _prev.formule_type == FormuleType.NOMBRE):
+                            _prev_is_nombre = True
+                        break
+                    if not _prev_is_nombre:
+                        result.append(tok)
+                        i += 1
+                        continue
+
+                # Vérifier si c'est une unité composée : UNITE + "/" + UNITE
+                unit_text = tok.text
+                span_end = tok.span[1]
+                j = i + 1
+                if (j + 1 < n
+                        and isinstance(tokens[j], Ponctuation) and tokens[j].text == "/"
+                        and tokens[j].span[0] == span_end
+                        and isinstance(tokens[j + 1], Mot)
+                        and _is_unit_name(tokens[j + 1].text)
+                        and tokens[j + 1].span[0] == tokens[j].span[1]):
+                    unit_text = tok.text + "/" + tokens[j + 1].text
+                    span_end = tokens[j + 1].span[1]
+                    j += 2
+                else:
+                    j = i + 1
+
                 formule = Formule(
                     type=TokenType.FORMULE,
-                    text=tok.text,
-                    span=tok.span,
-                    formule_type=FormuleType.MATHS,
-                    children=_build_formule_children(tok.text, FormuleType.MATHS, tok.span[0]),
-                    valeur=tok.text,
+                    text=unit_text,
+                    span=(tok.span[0], span_end),
+                    formule_type=FormuleType.UNITE,
+                    children=[],
+                    valeur=unit_text,
                 )
                 result.append(formule)
-                i += 1
+                i = j
                 continue
+
+        # Classifie les MOT qui sont des abréviations connues (Dr., St., etc.)
+        # Mot("Dr") + Ponct(".") → Formule ABV("Dr.")
+        if (isinstance(tok, Mot)
+                and tok.text.lower() in _KNOWN_MULTI_ABV
+                and i + 1 < n
+                and isinstance(tokens[i + 1], Ponctuation)
+                and tokens[i + 1].text == "."):
+            full_text = tok.text + "."
+            span_start = tok.span[0]
+            span_end = tokens[i + 1].span[1]
+            formule = Formule(
+                type=TokenType.FORMULE,
+                text=full_text,
+                span=(span_start, span_end),
+                formule_type=FormuleType.ABV,
+                children=_build_formule_children(full_text, FormuleType.ABV, span_start),
+                valeur=tok.text,
+            )
+            result.append(formule)
+            i += 2  # Mot + Ponct(".")
+            continue
 
         # Classifie les MOT qui sont des nombres romains (IV, XV, XXI)
         if isinstance(tok, Mot) and _detect_romain(tok.text):

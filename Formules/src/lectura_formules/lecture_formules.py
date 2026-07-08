@@ -39,6 +39,7 @@ from lectura_formules._chargeur import (
     gps_directions as _load_gps_directions,
     gps_units as _load_gps_units,
     intervalle_bounds as _load_intervalle_bounds,
+    unites_mesure as _load_unites_mesure,
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -112,6 +113,7 @@ try:
     _FOIS = _load_fois()
     _DIX = _load_dix()
     _EXPOSANT = _load_exposant()
+    _UNITES_MESURE = _load_unites_mesure()
 except FileNotFoundError:
     _MODE_API = True
     # Placeholders — jamais accedes en mode API (les fonctions publiques
@@ -126,6 +128,7 @@ except FileNotFoundError:
     _FOIS = ("", "")
     _DIX = ("", "")
     _EXPOSANT = ("", "")
+    _UNITES_MESURE = {}
 
 # Constantes maths (source locale)
 from lectura_formules._maths import (
@@ -1353,6 +1356,61 @@ def _decimal_m3(partie_dec: str) -> list[tuple[str, str]]:
     return parts
 
 
+# -- ABV (abréviation) ---------------------------------------------------------
+
+# Table de lecture des abréviations connues : forme normalisée → (ortho, phone)
+_ABV_CONNUES: dict[str, tuple[str, str]] = {
+    "m":    ("monsieur",     "mɔ̃sjø"),
+    "mme":  ("madame",       "madam"),
+    "mlle": ("mademoiselle", "madmwazɛl"),
+    "dr":   ("docteur",      "dɔktœʁ"),
+    "pr":   ("professeur",   "pʁofɛsœʁ"),
+    "me":   ("maître",       "mɛtʁ"),
+    "mgr":  ("monseigneur",  "mɔ̃sɛɲœʁ"),
+    "st":   ("saint",        "sɛ̃"),
+    "ste":  ("sainte",       "sɛ̃t"),
+    "jr":   ("junior",       "ʒynjɔʁ"),
+    "sr":   ("senior",       "senjɔʁ"),
+    "av":   ("avenue",       "avəny"),
+    "bd":   ("boulevard",    "bulvaʁ"),
+    "etc":  ("et cetera",    "ɛtsetɛʁa"),
+    "cf":   ("confer",       "kɔ̃fɛʁ"),
+    # Latinismes courants
+    "ie":   ("c'est-à-dire", "sɛtadiʁ"),
+    "eg":   ("par exemple",  "paʁɛɡzɑ̃pl"),
+    "vs":   ("versus",       "vɛʁsys"),
+    "nb":   ("nota bene",    "nɔta bene"),
+    "ps":   ("post-scriptum","pɔstskʁiptɔm"),
+}
+
+
+def lire_abv(
+    text: str,
+    span: Span = (0, 0),
+    children: list[object] | None = None,
+    **_kw: object,
+) -> LectureFormuleResult:
+    """Lit une abréviation : lookup table si connue, sinon lettre par lettre.
+
+    Ex: "M." → "monsieur" ; "i.e." → "i", "e" (épelé).
+    """
+    # Normaliser : supprimer les points, mettre en minuscule
+    normalized = "".join(c for c in text if c.isalpha()).lower()
+
+    entry = _ABV_CONNUES.get(normalized)
+    if entry is not None:
+        ortho, phone = entry
+        return _make_result([
+            EventFormuleLecture(
+                ortho=ortho, phone=phone,
+                span_source=span, composant=0,
+            ),
+        ], display_num=text)
+
+    # Fallback : épeler lettre par lettre (comme un sigle), sans les points
+    return lire_sigle(text, span, children, **_kw)
+
+
 # -- SIGLE ---------------------------------------------------------------------
 
 def lire_sigle(
@@ -1365,7 +1423,21 @@ def lire_sigle(
 
     Composants : 1 composant par lettre/chiffre-groupe.
     Ex: "SNCF" → 4 composants ; "B2B" → 3 composants.
+
+    Vérifie d'abord si le sigle a une lecture connue (N.B. → nota bene).
     """
+    # Vérifier si le sigle a une lecture connue dans _ABV_CONNUES
+    normalized = "".join(c for c in text if c.isalpha()).lower()
+    entry = _ABV_CONNUES.get(normalized)
+    if entry is not None:
+        ortho, phone = entry
+        return _make_result([
+            EventFormuleLecture(
+                ortho=ortho, phone=phone,
+                span_source=span, composant=0,
+            ),
+        ], display_num=text)
+
     events: list[EventFormuleLecture] = []
     src_start = span[0]
     comp_idx = 0
@@ -3588,6 +3660,29 @@ def lire_romain(
     return result
 
 
+def lire_unite(
+    text: str,
+    span: Span = (0, 0),
+    children: list[object] | None = None,
+    **_kw: object,
+) -> LectureFormuleResult:
+    """Lit une unité de mesure. Gère les composées (km/h → kilomètre par heure)."""
+    parts = text.split("/")
+    events: list[EventFormuleLecture] = []
+    comp_idx = 0
+    for idx, part in enumerate(parts):
+        if idx > 0:
+            events.append(EventFormuleLecture(
+                ortho="par", phone="paʁ", span_source=span, composant=comp_idx))
+            comp_idx += 1
+        lookup = _UNITES_MESURE.get(part) or _SYMBOLES.get(part)
+        ortho, phone = lookup if lookup else (part, part)
+        events.append(EventFormuleLecture(
+            ortho=ortho, phone=phone, span_source=span, composant=comp_idx))
+        comp_idx += 1
+    return _make_result(events, display_num=text)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # API publique
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3612,6 +3707,8 @@ _LECTEURS: dict[str, object] = {
     "gps":             lire_gps,
     "page_chapitre":   lire_page_chapitre,
     "romain":          lire_romain,
+    "abv":             lire_abv,
+    "unite":           lire_unite,
 }
 
 

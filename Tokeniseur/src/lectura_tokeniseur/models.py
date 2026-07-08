@@ -35,6 +35,7 @@ class FormuleType(Enum):
     PAGE_CHAPITRE = "page_chapitre"
     ROMAIN = "romain"
     ABV = "abv"
+    UNITE = "unite"
 
 
 @dataclass

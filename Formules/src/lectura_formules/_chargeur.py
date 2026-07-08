@@ -141,6 +141,12 @@ def romains_single() -> dict[str, int]:
     return _charger()["romains_single"]
 
 
+def unites_mesure() -> dict[str, tuple[str, str]]:
+    """Retourne les unites de mesure sous forme de dict[str, tuple[str, str]]."""
+    raw = _charger()["unites_mesure"]
+    return {k: tuple(v) for k, v in raw.items()}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Tables inverses (reconnaissance)
 # ══════════════════════════════════════════════════════════════════════════════
