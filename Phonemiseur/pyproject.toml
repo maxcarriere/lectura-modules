@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-phonemiseur"
-version = "4.1.7"
+version = "4.1.8"
 description = "Phonémiseur neural du français — G2P + POS + Morpho + Liaison + Groupes de lecture (BiLSTM multi-tâche)"
 readme = "README.md"
 requires-python = ">=3.10"

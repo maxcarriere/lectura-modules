@@ -27,6 +27,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Abréviations à une seule lettre reconnues comme formule ABV (M. → monsieur)
+_KNOWN_SINGLE_ABV = frozenset({"M"})
+
 
 def _is_unit_name(text: str) -> bool:
     """Vérifie si un texte est un nom d'unité (casse originale ou minuscule)."""
@@ -136,7 +139,7 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
     first = tokens[start]
 
     # ── Abréviation lettre par lettre : Mot(1 lettre) + Ponc(".") + Mot(1 lettre) ... ──
-    # Détecte : i.e., e.g., U.S.A., N.B., a.m., etc.
+    # Détecte : i.e., e.g., U.S.A., N.B., M., etc.
     # Note : le normaliseur ajoute un espace après le point (i.e. → i. e.),
     # donc on accepte des Separateur(space) entre les paires lettre+point.
     if isinstance(first, Mot) and len(first.text) == 1 and first.text.isalpha():
@@ -167,9 +170,17 @@ def _try_merge_formule_group(tokens: list[Token], start: int) -> tuple[str, int,
                     break
             else:
                 break
-        if dot_count >= 1 and len(parts) >= 3:
+        if dot_count >= 1:
             full = "".join(parts)
-            return full, last_consumed + 1, FormuleType.ABV
+            letters = [c for c in full if c.isalpha()]
+            if len(letters) >= 2:
+                # Multi-lettres : tout majuscule → sigle (U.S.A.), sinon ABV (i.e.)
+                if all(c.isupper() for c in letters):
+                    return full, last_consumed + 1, FormuleType.SIGLE
+                return full, last_consumed + 1, FormuleType.ABV
+            elif len(letters) == 1 and letters[0] in _KNOWN_SINGLE_ABV:
+                # Abréviation connue à une lettre (M. → monsieur)
+                return full, last_consumed + 1, FormuleType.ABV
 
     # ── Téléphone : FORMULE(NOMBRE) + espaces + FORMULE(NOMBRE) × 4 ──
     if isinstance(first, Formule) and first.text.startswith("0") and len(first.text) == 2:

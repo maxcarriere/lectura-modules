@@ -384,7 +384,16 @@ _ABV_RE = re.compile(r"^(?:[A-Za-zÀ-ÿ]\.){1,}[A-Za-zÀ-ÿ]?$")
 
 
 def _detect_abv(text: str) -> bool:
-    """Détecte une abréviation lettre par lettre (i.e., e.g., U.S.A., N.B.)."""
+    """Détecte une abréviation lettre par lettre (i.e., e.g., etc.).
+
+    Les formes tout-majuscules (U.S.A., N.B.) sont des sigles, pas des ABV.
+    """
     if len(text) < 3:
         return False
-    return bool(_ABV_RE.match(text))
+    if not _ABV_RE.match(text):
+        return False
+    # Tout majuscule → sigle (traité par _detect_sigle / fusion SIGLE)
+    letters = [c for c in text if c.isalpha()]
+    if letters and all(c.isupper() for c in letters):
+        return False
+    return True

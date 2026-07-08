@@ -346,4 +346,16 @@ def analyser_phrase_complete(
         if mots_resultat[i + 1].est_ponctuation:
             mots_resultat[i].liaison = ""
 
+    # ── Étape 6 : raffiner NOM → NOM PROPRE selon la casse ──
+    # Le modèle neural ne distingue pas NOM / NOM PROPRE.
+    # Heuristique : majuscule en milieu de phrase → NOM PROPRE.
+    # Position 0 (début de phrase) : ambigu, on ne touche pas.
+    word_pos = 0  # compteur de mots (hors ponctuation)
+    for mot in mots_resultat:
+        if mot.est_ponctuation:
+            continue
+        if mot.pos == "NOM" and word_pos > 0 and mot.text and mot.text[0].isupper():
+            mot.pos = "NOM PROPRE"
+        word_pos += 1
+
     return ResultatPhraseG2P(mots=mots_resultat)

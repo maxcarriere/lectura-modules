@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lectura-tokeniseur"
-version = "2.3.4"
+version = "2.3.5"
 description = "Normalisateur et tokeniseur complet pour le français — détection de formules (nombres, sigles, dates, téléphones, etc.)"
 readme = "README.md"
 requires-python = ">=3.10"
