@@ -37,6 +37,7 @@ _SUBTYPE = {
     "P": {"p": "personnel", "d": "demonstratif", "i": "indefini",
            "s": "possessif", "t": "interrogatif", "r": "relatif",
            "x": "reflexif"},
+    "X": {"u": "unité"},
 }
 
 # Modes verbaux (position 2 des verbes)
@@ -149,5 +150,12 @@ def decoder_multext(tag: str) -> dict[str, str]:
             result["genre"] = _GENRE.get(tag[3], tag[3])
         if len(tag) > 4 and tag[4] != "-":
             result["nombre"] = _NOMBRE.get(tag[4], tag[4])
+
+    elif cat == "X":
+        # Autre : X sous_type (u=unité)
+        if len(tag) > 1 and tag[1] != "-":
+            st = _SUBTYPE.get("X", {}).get(tag[1])
+            if st:
+                result["sous_type"] = st
 
     return result

@@ -267,7 +267,12 @@ class OnnxTTSEngine:
         Independant du timbre (set_speaker). Par defaut, la prosodie
         suit le speaker courant. Appeler set_prosody() avec un speaker
         different permet de decoupler prosodie et timbre.
+
+        Note: sans effet sur le modele FastPitch (Light) ou l'encodeur
+        porte a la fois la prosodie et le timbre.
         """
+        if self._model_type != "matcha-conformer":
+            return  # FastPitch: pas de decouplage possible
         if speaker == self._prosody_speaker:
             return
         self._prosody_speaker = speaker
