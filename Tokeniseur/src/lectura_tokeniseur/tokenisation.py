@@ -23,6 +23,17 @@ _PRONOMS_INVERSION = frozenset({
     "ce",
 })
 
+# Pronoms clitiques objets — impératif (dis-moi, donne-le, vas-y, etc.)
+_PRONOMS_CLITIQUES_OBJET = frozenset({
+    "moi", "toi", "soi",
+    "le", "la", "les",
+    "lui", "leur",
+    "y", "en",
+})
+
+# Union : tout pronom qui déclenche un split de composé
+_ALL_PRONOMS_SPLIT = _PRONOMS_INVERSION | _PRONOMS_CLITIQUES_OBJET
+
 # Composés lexicaux connus finissant par un pronom — ne pas casser
 _COMPOSES_AVEC_PRONOM = frozenset({
     "rendez-vous", "garde-à-vous", "chez-nous", "chez-vous",
@@ -130,55 +141,68 @@ def _merge_compounds(tokens: list[Token]) -> list[Token]:
                 children.append(inner_mot)
                 j += 2
 
-            # Verifier inversion pronominale (dit-il, a-t-on, etc.)
+            # Vérifier inversion ou clitiques (dit-il, dis-moi, donne-le-moi…)
             full_text = "".join(c.text for c in children)
-            last_mot = children[-1]
-            if (
-                isinstance(last_mot, Mot)
-                and last_mot.text.lower() in _PRONOMS_INVERSION
-                and full_text.lower() not in _COMPOSES_AVEC_PRONOM
-            ):
-                # Detecter le t euphonique : ...SEP-MOT("t")-SEP-MOT(pronom)
-                has_euphonic_t = (
-                    len(children) >= 5
-                    and isinstance(children[-3], Mot)
-                    and children[-3].text.lower() == "t"
-                    and len(children[-3].text) == 1
-                    and isinstance(children[-4], Separateur)
-                )
-                split = -4 if has_euphonic_t else -2
+            split_done = False
 
-                # Partie verbe
-                verb_parts = children[:split]
-                if len(verb_parts) == 1:
-                    result.append(verb_parts[0])
-                elif len(verb_parts) > 1:
-                    vtext = "".join(c.text for c in verb_parts)
-                    result.append(Mot(
-                        type=TokenType.MOT,
-                        text=vtext,
-                        span=(verb_parts[0].span[0], verb_parts[-1].span[1]),
-                        ortho=vtext.lower(),
-                        children=verb_parts,
-                    ))
+            if full_text.lower() not in _COMPOSES_AVEC_PRONOM:
+                # Détacher les pronoms clitiques depuis la droite
+                right_tokens: list[Token] = []
 
-                # Separateur
-                result.append(children[split])
+                while (
+                    len(children) >= 3
+                    and isinstance(children[-1], Mot)
+                    and children[-1].text.lower() in _ALL_PRONOMS_SPLIT
+                ):
+                    pronoun = children[-1]
 
-                # Partie pronom (fusionner t euphonique + pronom si besoin)
-                inv_parts = children[split + 1:]
-                if len(inv_parts) == 1:
-                    result.append(inv_parts[0])
-                else:
-                    inv_text = "".join(c.text for c in inv_parts)
-                    result.append(Mot(
-                        type=TokenType.MOT,
-                        text=inv_text,
-                        span=(inv_parts[0].span[0], inv_parts[-1].span[1]),
-                        ortho=inv_text.lower(),
-                    ))
-            else:
-                # Construire le Mot composé
+                    # Détecter le t euphonique : …-SEP-MOT("t")-SEP-PRONOM
+                    has_euphonic_t = (
+                        pronoun.text.lower() in _PRONOMS_INVERSION
+                        and len(children) >= 5
+                        and isinstance(children[-3], Mot)
+                        and children[-3].text.lower() == "t"
+                        and len(children[-3].text) == 1
+                        and isinstance(children[-4], Separateur)
+                    )
+
+                    if has_euphonic_t:
+                        p = children.pop()   # pronom
+                        s2 = children.pop()  # sep entre t et pronom
+                        t = children.pop()   # "t"
+                        s1 = children.pop()  # sep avant t
+                        fused_text = t.text + s2.text + p.text
+                        fused = Mot(
+                            type=TokenType.MOT,
+                            text=fused_text,
+                            span=(t.span[0], p.span[1]),
+                            ortho=fused_text.lower(),
+                        )
+                        right_tokens.extend([fused, s1])
+                    else:
+                        p = children.pop()   # pronom
+                        s = children.pop()   # sep
+                        right_tokens.extend([p, s])
+
+                if right_tokens:
+                    # Partie verbe
+                    if len(children) == 1:
+                        result.append(children[0])
+                    elif children:
+                        vtext = "".join(c.text for c in children)
+                        result.append(Mot(
+                            type=TokenType.MOT,
+                            text=vtext,
+                            span=(children[0].span[0], children[-1].span[1]),
+                            ortho=vtext.lower(),
+                            children=children,
+                        ))
+                    # Séparateurs et pronoms (inverser : collectés de droite à gauche)
+                    result.extend(reversed(right_tokens))
+                    split_done = True
+
+            if not split_done:
+                # Mot composé classique (peut-être, rendez-vous, etc.)
                 compound = Mot(
                     type=TokenType.MOT,
                     text=full_text,

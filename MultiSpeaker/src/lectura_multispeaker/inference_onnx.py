@@ -26,9 +26,8 @@ log = logging.getLogger(__name__)
 SEMITONE = 0.0577622  # log(2) / 12
 
 # Prosodic defaults when no style preset is active
-# duration_scale=0.85 : acceleration par defaut de 15% (comme monospeaker)
 _PROSODY_DEFAULTS = {
-    "duration_scale": 0.85,
+    "duration_scale": 1.0,
     "pitch_shift": 0.0,
     "pitch_range": 1.0,
     "energy_scale": 1.0,
@@ -42,43 +41,43 @@ STYLE_PRESETS = {
     "neutre": {
         "style_vector": [0.0, 0.0, 0.0, 0.0, 0.0],
         "pitch_range": 1.0, "energy_scale": 1.0,
-        "duration_scale": 0.85, "pause_scale": 1.0,
+        "duration_scale": 1.0, "pause_scale": 1.0,
         "duration_noise": 0.0,
     },
     "narratif": {
         "style_vector": [0.0, -0.2, -0.2, 0.0, 0.0],
         "pitch_range": 0.9, "energy_scale": 0.95,
-        "duration_scale": 0.90, "pause_scale": 1.2,
+        "duration_scale": 1.05, "pause_scale": 1.2,
         "duration_noise": 0.15,
     },
     "dialogue": {
         "style_vector": [0.3, 0.2, 0.2, 0.0, 1.0],
         "pitch_range": 1.15, "energy_scale": 1.0,
-        "duration_scale": 0.80, "pause_scale": 0.8,
+        "duration_scale": 0.92, "pause_scale": 0.8,
         "duration_noise": 0.12,
     },
     "expressif": {
         "style_vector": [1.0, 1.0, 0.0, 0.0, 0.0],
         "pitch_range": 1.1, "energy_scale": 1.3,
-        "duration_scale": 0.88, "pause_scale": 1.0,
+        "duration_scale": 1.0, "pause_scale": 1.0,
         "duration_noise": 0.18,
     },
     "meditatif": {
         "style_vector": [-1.5, -0.8, -1.0, -0.5, 0.0],
         "pitch_range": 0.7, "energy_scale": 0.8,
-        "duration_scale": 1.15, "pause_scale": 1.8,
+        "duration_scale": 1.3, "pause_scale": 1.8,
         "duration_noise": 0.08,
     },
     "rapide": {
         "style_vector": [0.0, 0.3, 2.0, 0.0, 0.0],
         "pitch_range": 1.1, "energy_scale": 1.0,
-        "duration_scale": 0.65, "pause_scale": 0.6,
+        "duration_scale": 0.75, "pause_scale": 0.6,
         "duration_noise": 0.05,
     },
     "lent": {
         "style_vector": [0.0, -0.2, -2.0, 0.0, 0.0],
         "pitch_range": 1.0, "energy_scale": 0.9,
-        "duration_scale": 1.25, "pause_scale": 1.5,
+        "duration_scale": 1.4, "pause_scale": 1.5,
         "duration_noise": 0.10,
     },
 }
@@ -88,10 +87,42 @@ _PUNCT_MAP = {",": ",", ";": ",", ":": ",", ".": ".", "!": "!", "?": "?",
               "\u2026": "\u2026", "...": "\u2026"}
 
 # Durees minimales en frames pour la ponctuation (1 frame ~ 11.6 ms)
-_PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 20}
+_PUNCT_MIN_FRAMES = {",": 10, ".": 20, "?": 15, "!": 15, "\u2026": 25}
 
 # Phones correspondant a des silences
 _SILENCE_PHONES = {"#", ",", ".", "?", "!", "\u2026"}
+
+# Duration transfer: speaker de reference pour la prediction de durees.
+# Siwis (id=0) a les durees les plus fiables (70% du corpus d'entrainement).
+_DUR_TRANSFER_SID = 0  # siwis
+
+# Courbe universelle de scaling adaptatif par longueur de sequence.
+# Appliquee identiquement a tous les locuteurs (puisque le duration transfer
+# donne a chacun les durees de siwis).
+_LENGTH_SCALE = [
+    (1,  0.88),
+    (4,  0.88),
+    (8,  0.88),
+    (15, 0.88),
+    (30, 0.88),
+    (50, 0.88),
+]
+
+
+def _get_length_duration_scale(n_spoken: int) -> float:
+    """Interpole le facteur de scaling de duree selon le nombre de phones parles."""
+    bp = _LENGTH_SCALE
+    if n_spoken <= bp[0][0]:
+        return bp[0][1]
+    if n_spoken >= bp[-1][0]:
+        return bp[-1][1]
+    for i in range(len(bp) - 1):
+        n0, s0 = bp[i]
+        n1, s1 = bp[i + 1]
+        if n0 <= n_spoken <= n1:
+            t = (n_spoken - n0) / (n1 - n0)
+            return s0 + t * (s1 - s0)
+    return 1.0
 
 
 def _zero_silence_regions(
@@ -200,7 +231,11 @@ class OnnxTTSEngine:
         self._n_style_dims = 0
         self._speakers_map: dict[str, int] = {}
         self._g2p = None
+        self._siwis_encoder = None
+        self._dur_predictor = None
         self._unet_has_spk = False
+        self._spk_embs: dict[str, np.ndarray] | None = None
+        self._prosody_speaker: str | None = None  # None = suit le speaker courant
 
     @property
     def speaker(self) -> str:
@@ -208,17 +243,35 @@ class OnnxTTSEngine:
         return self._speaker
 
     def set_speaker(self, speaker: str) -> None:
-        """Change le speaker actif.
+        """Change le speaker actif (timbre).
 
-        En mode unifie, change uniquement le speaker_id (pas de reload).
-        En mode per-speaker, recharge l'encodeur ONNX correspondant.
+        Quand spk_embs est charge, set_speaker() ne change que le speaker_id
+        et le lookup spk_emb. L'encodeur n'est PAS recharge (la prosodie
+        reste independante, controlee par set_prosody()).
         """
         if speaker == self._speaker and self._encoder is not None:
             return
         self._speaker = speaker
+        self._speaker_id = self._speakers_map.get(speaker, 0)
+        if self._spk_embs is not None:
+            return  # timbre via spk_emb, pas de reload encodeur
         if self._unified:
-            self._speaker_id = self._speakers_map.get(speaker, 0)
+            pass
         elif self._hifigan is not None:
+            # Sans spk_embs, l'encodeur porte le timbre aussi
+            self._load_encoder(speaker)
+
+    def set_prosody(self, speaker: str) -> None:
+        """Selectionne l'encodeur pour la prosodie (pitch, energy, rythme).
+
+        Independant du timbre (set_speaker). Par defaut, la prosodie
+        suit le speaker courant. Appeler set_prosody() avec un speaker
+        different permet de decoupler prosodie et timbre.
+        """
+        if speaker == self._prosody_speaker:
+            return
+        self._prosody_speaker = speaker
+        if self._hifigan is not None:
             self._load_encoder(speaker)
 
     def _ensure_loaded(self) -> None:
@@ -276,12 +329,23 @@ class OnnxTTSEngine:
             unet_input_names = {inp.name for inp in self._unet.get_inputs()}
             self._unet_has_spk = "spk_emb" in unet_input_names
 
+            # Charger les spk_emb pre-extraits si disponibles
+            spk_emb_path = self._models_dir / "spk_emb.npz"
+            if spk_emb_path.exists():
+                data = np.load(str(spk_emb_path))
+                self._spk_embs = {k: data[k] for k in data}
+                log.info("spk_emb pre-charges: %s", list(self._spk_embs.keys()))
+
             # Detect unified vs per-speaker encoder
             unified_bytes = load_model_bytes(self._models_dir, "matcha_encoder.onnx")
             self._unified = unified_bytes is not None
             if self._unified:
                 self._encoder = ort.InferenceSession(
                     unified_bytes, sess_options=opts, providers=providers)
+            elif self._spk_embs is not None:
+                # spk_emb pre-charges: charger un seul encodeur (siwis par defaut)
+                encoder_spk = self._prosody_speaker or self._speaker
+                self._load_encoder(encoder_spk)
             else:
                 self._load_encoder(self._speaker)
         else:
@@ -345,6 +409,67 @@ class OnnxTTSEngine:
         self._encoder = ort.InferenceSession(
             enc_bytes, sess_options=opts, providers=["CPUExecutionProvider"]
         )
+
+    def _ensure_dur_predictor(self) -> bool:
+        """Charge lazily le duration predictor standalone (remplace l'encodeur siwis pour les durees)."""
+        if self._dur_predictor is not None:
+            return True
+        import onnxruntime as ort
+
+        from lectura_multispeaker._chargeur import load_model_bytes
+
+        dp_bytes = load_model_bytes(self._models_dir, "duration_predictor.onnx")
+        if dp_bytes is None:
+            return False
+        opts = ort.SessionOptions()
+        opts.inter_op_num_threads = 2
+        opts.intra_op_num_threads = 2
+        self._dur_predictor = ort.InferenceSession(
+            dp_bytes, sess_options=opts, providers=["CPUExecutionProvider"])
+        log.info("Duration predictor standalone charge (%s)", "duration_predictor.onnx")
+        return True
+
+    def _ensure_siwis_encoder(self) -> None:
+        """Charge lazily l'encodeur siwis pour le duration transfer per-speaker (fallback)."""
+        if self._siwis_encoder is not None:
+            return
+        siwis_name = None
+        for name, sid in self._speakers_map.items():
+            if sid == _DUR_TRANSFER_SID:
+                siwis_name = name
+                break
+        if siwis_name is None:
+            log.warning("Speaker de reference (id=%d) introuvable, duration transfer desactive", _DUR_TRANSFER_SID)
+            return
+        import onnxruntime as ort
+
+        from lectura_multispeaker._chargeur import load_model_bytes
+
+        # Verifier si un encodeur baseline de reference existe
+        baseline_name = f"matcha_encoder_{siwis_name}_baseline.onnx"
+        baseline_bytes = load_model_bytes(self._models_dir, baseline_name)
+        if baseline_bytes is not None:
+            log.info("Utilisation de l'encodeur baseline pour le duration transfer: %s", baseline_name)
+            opts = ort.SessionOptions()
+            opts.inter_op_num_threads = 2
+            opts.intra_op_num_threads = 2
+            self._siwis_encoder = ort.InferenceSession(
+                baseline_bytes, sess_options=opts, providers=["CPUExecutionProvider"])
+            return
+
+        if self._speaker == siwis_name:
+            self._siwis_encoder = self._encoder
+            return
+        encoder_name = f"matcha_encoder_{siwis_name}.onnx"
+        enc_bytes = load_model_bytes(self._models_dir, encoder_name)
+        if enc_bytes is None:
+            log.warning("Encoder siwis (%s) introuvable, duration transfer desactive", encoder_name)
+            return
+        opts = ort.SessionOptions()
+        opts.inter_op_num_threads = 2
+        opts.intra_op_num_threads = 2
+        self._siwis_encoder = ort.InferenceSession(
+            enc_bytes, sess_options=opts, providers=["CPUExecutionProvider"])
 
     def synthesize(
         self,
@@ -504,11 +629,6 @@ class OnnxTTSEngine:
         # Convertir IPA -> phone IDs
         phones = ipa_to_phones(phonemes_ipa)
 
-        # Ajouter un point final si la phrase ne finit pas par une ponctuation,
-        # sinon le modele coupe brutalement (pas de release prosodique).
-        if phones and phones[-1] not in _SILENCE_PHONES:
-            phones.append(".")
-
         # Frontieres de mots
         space_after: list[int] = []
         segments = phonemes_ipa.split(" ")
@@ -518,27 +638,6 @@ class OnnxTTSEngine:
                 phone_count += len(ipa_to_phones(segment))
             if seg_idx < len(segments) - 1 and phone_count > 0:
                 space_after.append(phone_count - 1)
-
-        # Inserer un micro-silence entre voyelles consecutives (hiatus)
-        # UNIQUEMENT au sein d'un meme mot (pas entre mots).
-        from lectura_multispeaker.phonemes import _VOWELS
-        word_boundaries = set(space_after)
-        patched: list[str] = [phones[0]] if phones else []
-        inserted = 0
-        new_space_after: list[int] = []
-        for k in range(1, len(phones)):
-            if (phones[k] in _VOWELS and phones[k - 1] in _VOWELS
-                    and (k - 1) not in word_boundaries):
-                patched.append("#")
-                inserted += 1
-            if (k - 1) in word_boundaries:
-                new_space_after.append(k - 1 + inserted)
-            patched.append(phones[k])
-        # Dernier indice si c'etait une frontiere
-        if (len(phones) - 1) in word_boundaries:
-            new_space_after.append(len(phones) - 1 + inserted)
-        phones = patched
-        space_after = new_space_after
 
         sil_id = self._phone2id["#"]
         unk_id = self._phone2id.get("<UNK>", 1)
@@ -573,14 +672,36 @@ class OnnxTTSEngine:
         elif self._model_type == "matcha-conformer":
             # Per-speaker Matcha encoder: style_vector is dynamic (not baked)
             style_np = np.array([sv], dtype=np.float32)
-            enc_outputs = self._encoder.run(None, {
+            encoder_inputs = {
                 "phone_ids": phone_ids_np,
                 "phrase_type": phrase_type_np,
                 "style_vector": style_np,
-            })
-            enc_out, dur_pred, pitch_pred, energy_pred = enc_outputs[:4]
-            if len(enc_outputs) > 4:
+            }
+            enc_outputs = self._encoder.run(None, encoder_inputs)
+            enc_out = enc_outputs[0]
+            dur_pred = enc_outputs[1]
+            pitch_pred = enc_outputs[2]
+            energy_pred = enc_outputs[3]
+
+            # spk_emb : pre-charge (timbre decouple) > sortie encodeur > zero
+            if self._spk_embs is not None and self._speaker in self._spk_embs:
+                spk_emb = self._spk_embs[self._speaker][np.newaxis, :]
+            elif len(enc_outputs) > 4:
                 spk_emb = enc_outputs[4]
+            elif self._unet_has_spk:
+                spk_emb = np.zeros((1, enc_out.shape[-1]), dtype=np.float32)
+
+            # Duration transfer : dur_predictor > siwis encoder > fallback
+            if self._ensure_dur_predictor():
+                dur_pred = self._dur_predictor.run(None, {
+                    "phone_ids": phone_ids_np,
+                    "phrase_type": phrase_type_np,
+                })[0]
+            else:
+                self._ensure_siwis_encoder()
+                if self._siwis_encoder is not None and self._siwis_encoder is not self._encoder:
+                    siwis_outputs = self._siwis_encoder.run(None, encoder_inputs)
+                    dur_pred = siwis_outputs[1]
         else:
             # Legacy FastPitch per-speaker encoder (no style_vector input)
             enc_out, dur_pred, pitch_pred, energy_pred = self._encoder.run(None, {
@@ -600,7 +721,7 @@ class OnnxTTSEngine:
         if pause_scale != 1.0:
             dur_raw[pause_mask] *= pause_scale
 
-        durations = np.maximum(1, np.round(dur_raw * duration_scale)).astype(np.int64)
+        durations = np.maximum(1, np.round(dur_raw)).astype(np.int64)
 
         if variability:
             rng = np.random.default_rng()
@@ -634,24 +755,8 @@ class OnnxTTSEngine:
             min_dur = get_phone_min_frames(phone)
             durations[frame_idx] = max(durations[frame_idx], min_dur)
 
-        # Duree minimale du dernier phone parle (position finale de mot).
-        # Le modele multi sous-predit les consonnes finales sur mots isoles.
-        _MIN_FINAL_PHONE_FRAMES = 8  # ~93 ms
-        # Chercher le dernier phone parle (ni silence, ni ponctuation)
-        all_phones_with_sil = ["#"] + list(phones) + ["#"]
-        last_phone_idx = None
-        for _idx in range(len(all_phones_with_sil) - 1, -1, -1):
-            if all_phones_with_sil[_idx] not in _SILENCE_PHONES:
-                last_phone_idx = _idx
-                break
-        if last_phone_idx is not None:
-            durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
-
-        # SIL final minimum (evite la coupure en fin de mot)
-        _MIN_FINAL_SIL_FRAMES = 12  # ~139 ms a 22050 Hz / 256 hop
-        durations[-1] = max(durations[-1], _MIN_FINAL_SIL_FRAMES)
-
-        # Detection sequence courte (mots isoles / 2-3 mots)
+        # Detection sequence courte (avant les protections finales pour
+        # pouvoir adapter les minimums a la longueur)
         _spoken_mask = np.array(
             [False]  # SIL initial
             + [p not in _SILENCE_PHONES for p in phones]
@@ -660,15 +765,26 @@ class OnnxTTSEngine:
         )
         _n_spoken = int(_spoken_mask.sum())
 
-        # Rallonger les phones parles avant les pauses/ponctuations — le
-        # vocoder coupe souvent la fin des segments.
-        _PRE_PAUSE_SCALE = 1.2
         all_phones = ["#"] + list(phones) + ["#"]
 
-        # Avant chaque ponctuation interne
+        # Duree minimale du dernier phone parle (position finale de mot).
+        _MIN_FINAL_PHONE_FRAMES = 4
+        last_phone_idx = len(phone_ids) - 2  # default: avant le SIL final
+        for _lpi in range(len(phone_ids) - 2, 0, -1):
+            if all_phones[_lpi] not in _SILENCE_PHONES:
+                last_phone_idx = _lpi
+                break
+        durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
+
+        # SIL final minimum (evite la coupure en fin de mot)
+        _MIN_FINAL_SIL_FRAMES = 5
+        durations[-1] = max(durations[-1], _MIN_FINAL_SIL_FRAMES)
+
+        # Rallonger les phones parles avant les pauses/ponctuations internes
+        _PRE_PAUSE_SCALE = 1.3
+
         for _j, _ph in enumerate(all_phones):
             if _ph in _PUNCT_MIN_FRAMES and _j > 1:
-                # Dernier phone parle avant cette ponctuation
                 _k = _j - 1
                 if all_phones[_k] not in _SILENCE_PHONES:
                     durations[_k] = max(
@@ -676,33 +792,18 @@ class OnnxTTSEngine:
                         int(round(durations[_k] * _PRE_PAUSE_SCALE)),
                     )
 
-        # Deux derniers phones parles (fin de phrase)
-        _last_spoken = []
-        for _j in range(len(all_phones) - 1, -1, -1):
-            if all_phones[_j] not in _SILENCE_PHONES and all_phones[_j] not in _PUNCT_MIN_FRAMES:
-                _last_spoken.append(_j)
-                if len(_last_spoken) == 2:
-                    break
-        for _j in _last_spoken:
-            durations[_j] = max(
-                durations[_j],
-                int(round(durations[_j] * _PRE_PAUSE_SCALE)),
-            )
-
-        _is_short_sequence = _n_spoken <= 15
-
-        # Ralentissement des phones parles sur sequences courtes.
-        # Facteur dependant de la longueur — siwis exclue (pas besoin).
-        if _is_short_sequence and self._speaker != "siwis":
-            if _n_spoken <= 3:
-                _SLOW_FACTOR = 2.0
-            elif _n_spoken <= 10:
-                _SLOW_FACTOR = 1.3
-            else:  # 11-15
-                _SLOW_FACTOR = 1.15
+        # Scaling adaptatif par longueur de sequence (courbe universelle,
+        # identique pour tous les locuteurs grace au duration transfer).
+        _len_scale = _get_length_duration_scale(_n_spoken) * duration_scale
+        if _len_scale != 1.0:
             _spoken_indices = np.where(_spoken_mask)[0]
             for _si in _spoken_indices:
-                durations[_si] = max(1, int(round(durations[_si] * _SLOW_FACTOR)))
+                durations[_si] = max(1, int(round(durations[_si] * _len_scale)))
+
+        # Re-appliquer les minimums finaux apres le scaling (le scaling peut
+        # avoir reduit le dernier phone en dessous du minimum).
+        durations[last_phone_idx] = max(durations[last_phone_idx], _MIN_FINAL_PHONE_FRAMES)
+        durations[-1] = max(durations[-1], _MIN_FINAL_SIL_FRAMES)
 
         # Pitch avec shift et range
         pitch_mean = pitch_pred[0].mean()
@@ -711,34 +812,6 @@ class OnnxTTSEngine:
             + (pitch_pred[0] - pitch_mean) * pitch_range
             + pitch_shift * SEMITONE
         )
-
-        # Clamper les valeurs aberrantes (phones non-SIL)
-        # Le modele multi produit parfois des extremes sur les mots courts.
-        _PITCH_CLAMP_SIGMA = 2.0
-        speech_mask = ~pause_mask
-        if speech_mask.any():
-            sp = pitch_values[speech_mask]
-            sp_mean = sp.mean()
-            sp_std = max(sp.std(), 0.1)
-            lo = sp_mean - _PITCH_CLAMP_SIGMA * sp_std
-            hi = sp_mean + _PITCH_CLAMP_SIGMA * sp_std
-            pitch_values = np.clip(pitch_values, lo, hi)
-
-        # Contour prosodique pour sequences courtes (mots isoles / 2-3 mots)
-        if _is_short_sequence:
-            _CONTOUR_AMP = 0.5
-            _spoken_indices = np.where(_spoken_mask)[0]
-            _positions = np.linspace(0.0, 1.0, _n_spoken)
-            # Demi-sinusoide asymetrique : pic a 60% de la sequence
-            _stretched = np.where(
-                _positions <= 0.6,
-                _positions / 0.6 * 0.5,       # [0, 0.6] -> [0, 0.5]
-                0.5 + (_positions - 0.6) / 0.4 * 0.5,  # [0.6, 1] -> [0.5, 1]
-            )
-            _contour = _CONTOUR_AMP * np.sin(np.pi * _stretched)
-            _contour -= _contour.mean()  # centrer : montee puis descente sous baseline
-            for _ci, _si in enumerate(_spoken_indices):
-                pitch_values[_si] += _contour[_ci]
 
         if variability:
             pitch_values *= rng.normal(1.0, 0.03, size=pitch_values.shape)

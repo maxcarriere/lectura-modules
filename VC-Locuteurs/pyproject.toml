@@ -1,18 +1,18 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lectura-multispeaker"
-version = "5.0.0"
-description = "French neural TTS multi-speaker — Conformer (high) or FastPitch (light), ONNX inference"
+name = "lectura-vc-locuteurs"
+version = "1.0.1"
+description = "RVC voice conversion with 6 pre-trained French voices (pure ONNX) — Conversion vocale RVC"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = [
-    "tts", "french", "text-to-speech", "speech-synthesis", "onnx",
-    "matcha-tts", "conformer", "multi-speaker", "fastpitch",
+    "voice-conversion", "rvc", "onnx", "french",
+    "speech", "speaker-transfer", "audio",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -26,18 +26,24 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = []
+
+dependencies = [
+    "onnxruntime>=1.16",
+    "numpy>=1.24",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+]
 
 [project.optional-dependencies]
-onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
+dev = ["pytest>=7.0"]
 
 [project.urls]
 Homepage = "https://www.lectura.world/developpement/modules/"
-Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/MultiSpeaker"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/VC-Locuteurs"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_multispeaker = ["data/*.json", "modeles/*.json"]
+lectura_vc_locuteurs = ["data/*.json", "modeles/*.enc"]

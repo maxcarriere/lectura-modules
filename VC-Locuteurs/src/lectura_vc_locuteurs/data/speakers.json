@@ -1,0 +1,44 @@
+{
+  "siwis": {
+    "name": "SIWIS Female",
+    "gender": "F",
+    "mean_f0": 210.0,
+    "corpus": "siwis_french",
+    "hours": 10.7
+  },
+  "ezwa": {
+    "name": "Ezwa (M-AILABS)",
+    "gender": "F",
+    "mean_f0": 195.0,
+    "corpus": "mailabs_french",
+    "hours": 50.2
+  },
+  "nadine": {
+    "name": "Nadine (M-AILABS)",
+    "gender": "F",
+    "mean_f0": 200.0,
+    "corpus": "mailabs_french",
+    "hours": 47.8
+  },
+  "bernard": {
+    "name": "Bernard (M-AILABS)",
+    "gender": "M",
+    "mean_f0": 130.0,
+    "corpus": "mailabs_french",
+    "hours": 28.8
+  },
+  "gilles": {
+    "name": "Gilles (M-AILABS)",
+    "gender": "M",
+    "mean_f0": 125.0,
+    "corpus": "mailabs_french",
+    "hours": 18.9
+  },
+  "zeckou": {
+    "name": "Zeckou (M-AILABS)",
+    "gender": "M",
+    "mean_f0": 135.0,
+    "corpus": "mailabs_french",
+    "hours": 23.4
+  }
+}

@@ -1,18 +1,18 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lectura-multispeaker"
-version = "5.0.0"
-description = "French neural TTS multi-speaker — Conformer (high) or FastPitch (light), ONNX inference"
+name = "lectura-vc-zeroshot"
+version = "1.2.1"
+description = "Zero-shot voice conversion for French via OpenVoice (pure ONNX) — Conversion vocale zero-shot"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "Max Carriere", email = "admin@lectura.world"}]
 keywords = [
-    "tts", "french", "text-to-speech", "speech-synthesis", "onnx",
-    "matcha-tts", "conformer", "multi-speaker", "fastpitch",
+    "voice-conversion", "openvoice", "zero-shot", "onnx",
+    "french", "speech", "voice-cloning", "audio",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -26,18 +26,23 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = []
+
+dependencies = [
+    "onnxruntime>=1.16",
+    "numpy>=1.24",
+    "librosa>=0.10",
+]
 
 [project.optional-dependencies]
-onnx = ["onnxruntime>=1.16", "numpy>=1.24"]
+dev = ["pytest>=7.0"]
 
 [project.urls]
 Homepage = "https://www.lectura.world/developpement/modules/"
-Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/MultiSpeaker"
+Repository = "https://github.com/maxcarriere/lectura-modules/tree/main/VC-ZeroShot"
 Issues = "https://github.com/maxcarriere/lectura-modules/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-lectura_multispeaker = ["data/*.json", "modeles/*.json"]
+lectura_vc_zeroshot = ["modeles/*.enc", "presets/*.npy", "presets/*.wav"]
