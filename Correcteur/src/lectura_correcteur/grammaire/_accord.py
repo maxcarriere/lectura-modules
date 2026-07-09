@@ -623,9 +623,9 @@ def verifier_accords(
                                 for e in _r1_all_infos
                             )
                             _r1_all_sigle = all(
-                                (e.get("cgram") or "") in (
-                                    "SIGLE", "NOM PROPRE",
-                                )
+                                ":sigle" in (e.get("cgram") or "")
+                                or ":acronyme" in (e.get("cgram") or "")
+                                or "PROPRE" in (e.get("cgram") or "")
                                 for e in _r1_all_infos
                             )
                             if (_r1_has_np and _r1_nom_freq_max < 5.0) \

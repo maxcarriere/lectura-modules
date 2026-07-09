@@ -917,9 +917,12 @@ def verifier_conjugaisons(
             if _is_wrong_number and lexique is not None and hasattr(lexique, "info"):
                 _infos_5c = lexique.info(curr)
                 if _infos_5c:
-                    # Skip si NOM, NOM PROPRE, ou SIGLE
+                    # Skip si NOM, NOM PROPRE, sigle ou acronyme
                     if any(
-                        (e.get("cgram") or "") in ("NOM", "NOM PROPRE", "SIGLE")
+                        (c := (e.get("cgram") or "")) in ("NOM", "NOM PROPRE")
+                        or c.startswith("NOM:")
+                        or ":sigle" in c
+                        or ":acronyme" in c
                         for e in _infos_5c
                     ):
                         _is_wrong_number = False

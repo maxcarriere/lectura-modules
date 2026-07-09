@@ -586,7 +586,7 @@ class Lexique:
             params.append(f"{cgram}%")
         cur = conn.execute(query, params)
         results = []
-        seen: set[str] = set()
+        seen: set[tuple[str, str]] = set()
         for row in cur.fetchall():
             entry: dict[str, Any] = dict(row)
             multext = entry.get("multext") or ""
@@ -598,8 +598,9 @@ class Lexique:
                 entry["temps"] = traits.get("temps", "")
                 entry["personne"] = traits.get("personne", "")
             ortho = str(entry.get("ortho", "")).lower()
-            if ortho not in seen:
-                seen.add(ortho)
+            dedup_key = (ortho, multext)
+            if dedup_key not in seen:
+                seen.add(dedup_key)
                 results.append(entry)
         return results
 

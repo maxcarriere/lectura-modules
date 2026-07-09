@@ -378,7 +378,8 @@ class VerificateurOrthographe:
                     _infos_acc = self._lexique.info(_lookup_form)
                     if _infos_acc:
                         _cgrams_acc = [(e.get("cgram") or "") for e in _infos_acc]
-                        if all(c == "SIGLE" for c in _cgrams_acc):
+                        if all(":sigle" in c or ":acronyme" in c
+                               for c in _cgrams_acc):
                             _only_sigle = True
                         if all("PROPRE" in c for c in _cgrams_acc):
                             # Exception: freq=0 en minuscule = entree fantome
@@ -494,7 +495,8 @@ class VerificateurOrthographe:
                         _infos = self._lexique.info(_lookup_form)
                         if _infos and all(
                             "PROPRE" in (e.get("cgram") or "")
-                            or (e.get("cgram") or "") == "SIGLE"
+                            or ":sigle" in (e.get("cgram") or "")
+                            or ":acronyme" in (e.get("cgram") or "")
                             for e in _infos
                         ):
                             _only_np = True
@@ -576,7 +578,8 @@ class VerificateurOrthographe:
                     _infos_case = self._lexique.info(_lookup_form)
                     if _infos_case:
                         _all_sigle = all(
-                            (e.get("cgram") or "") == "SIGLE"
+                            ":sigle" in (e.get("cgram") or "")
+                            or ":acronyme" in (e.get("cgram") or "")
                             for e in _infos_case
                         )
                         _all_np = all(

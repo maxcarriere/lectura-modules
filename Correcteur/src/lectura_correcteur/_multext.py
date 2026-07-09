@@ -22,7 +22,6 @@ _POS = {
     "C": "CON",
     "I": "ONO",
     "X": "AUT",
-    "Y": "SIGLE",
 }
 
 # Position 1 : Sous-type (depend de la categorie)
@@ -37,7 +36,7 @@ _SUBTYPE = {
     "P": {"p": "personnel", "d": "demonstratif", "i": "indefini",
            "s": "possessif", "t": "interrogatif", "r": "relatif",
            "x": "reflexif"},
-    "X": {"u": "unité"},
+    "X": {"u": "unité", "l": "lettre", "a": "abréviation", "s": "sigle", "c": "acronyme"},
 }
 
 # Modes verbaux (position 2 des verbes)
@@ -152,7 +151,7 @@ def decoder_multext(tag: str) -> dict[str, str]:
             result["nombre"] = _NOMBRE.get(tag[4], tag[4])
 
     elif cat == "X":
-        # Autre : X sous_type (u=unité)
+        # Autre : X sous_type (u=unité, l=lettre)
         if len(tag) > 1 and tag[1] != "-":
             st = _SUBTYPE.get("X", {}).get(tag[1])
             if st:

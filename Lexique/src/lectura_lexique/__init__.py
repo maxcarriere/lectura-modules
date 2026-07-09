@@ -10,7 +10,7 @@ Usage::
         print(lex.homophones("ʃa"))     # [{"ortho": "chat", ...}, ...]
 """
 
-__version__ = "1.5.2"
+__version__ = "1.5.3"
 
 from lectura_lexique._types import (
     Categorie,
