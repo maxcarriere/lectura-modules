@@ -76,6 +76,15 @@ from lectura_aligneur._utilitaires import (  # noqa: F401
     est_consonne,
     est_semi_voyelle,
 )
+from lectura_aligneur._aligned import (
+    build_aligned_from_alignment,
+    map_syllabes_to_aligned,
+    build_coupure_labels,
+    CUT_NONE, CUT_SYL, CUT_SPC, CUT_APO, CUT_TIR,
+    CUT_LIZ, CUT_LIT, CUT_LIN, CUT_LIR, CUT_LIP,
+    CONT_TOKENS, CONT_C, CONT_M,
+    jonction_to_coupure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -712,6 +721,14 @@ def _phonemise_alignment(
             new_spans.append(span)
             continue
 
+        # Graphème marqué ² : un seul char ortho pour plusieurs phonèmes.
+        # Garder le phonème composé intact (ex: x² → ɡz, x² → ks).
+        if "²" in gr:
+            new_ph.append(ph)
+            new_gr.append(gr)
+            new_spans.append(span)
+            continue
+
         first = tokens[0]
         new_ph.append(first)
         new_gr.append(gr[0] if gr else "")
@@ -1155,6 +1172,388 @@ def syllabifier_groupes(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Représentation alignée pour corpus
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def align_for_corpus(
+    ortho: str,
+    phone: str,
+    syllabe_labels: list[int] | None = None,
+    word_boundary: str = CUT_NONE,
+    word_boundaries: list[int] | None = None,
+    auto_syllabify: bool = True,
+) -> dict | None:
+    """Construit la représentation alignée ortho/phone pour le corpus.
+
+    Retourne 3 lignes : aligned_ortho, aligned_phone, aligned_coupure.
+    Les labels de coupure unifient syllabes et frontières de mots.
+
+    Args:
+        ortho: Texte orthographique (un mot ou groupe fusionné)
+        phone: Chaîne IPA
+        syllabe_labels: Labels syllabiques (0/1) par phonème (optionnel).
+            Si None et auto_syllabify=True, les labels sont générés
+            automatiquement par syllabification IPA.
+        word_boundary: Label de coupure à appliquer au premier phonème
+        word_boundaries: Positions de frontières de mots dans ortho (optionnel)
+        auto_syllabify: Si True (défaut), syllabifie automatiquement
+            quand syllabe_labels n'est pas fourni.
+
+    Returns:
+        dict avec aligned_ortho, aligned_phone, aligned_coupure
+        ou None si l'alignement échoue.
+    """
+    dec_ph, dec_gr, _spans, ok, _diag, _score = _aligner(
+        ortho, phone, word_boundaries
+    )
+    if not ok:
+        return None
+
+    result = build_aligned_from_alignment(ortho, phone, dec_ph, dec_gr)
+    if result is None:
+        return None
+
+    # Auto-syllabification quand pas de labels fournis
+    # Sans contexte graphemique, exclure ks/ɡz (composes seulement pour "x")
+    if syllabe_labels is None and auto_syllabify:
+        _safe = COMPOUND_PHONEMES - set(GRAPHEME_COMPOUNDS)
+        syllabes = _syllabify_ipa(phone, compounds=_safe)
+        if len(syllabes) > 1:
+            # Convertir les syllabes en labels 0/1 par phonème
+            syllabe_labels = []
+            for s_idx, syl in enumerate(syllabes):
+                syl_phones = list(iter_phonemes(syl))
+                for p_idx, _ in enumerate(syl_phones):
+                    syllabe_labels.append(1 if s_idx > 0 and p_idx == 0 else 0)
+
+    coupure = build_coupure_labels(
+        result["aligned_phone"], syllabe_labels, word_boundary
+    )
+    return {
+        "aligned_ortho": result["aligned_ortho"],
+        "aligned_phone": result["aligned_phone"],
+        "aligned_coupure": coupure,
+    }
+
+
+def align_utterance(
+    words: list[str],
+    phones: list[str],
+    separators: list[str | None] | None = None,
+    syllabe_labels_per_word: list[list[int] | None] | None = None,
+) -> dict | None:
+    """Aligne une utterance complète (plusieurs mots) pour le corpus.
+
+    Chaque mot est aligné individuellement (mode sep). Les labels de coupure
+    encodent à la fois les frontières syllabiques et les frontières de mots
+    (espace, liaison, apostrophe, tiret).
+
+    La variante fused (groupes de liaison) se dérive dans le dataloader
+    à partir des labels de coupure LI*.
+
+    Args:
+        words: Liste de mots orthographiques
+        phones: Liste de chaînes IPA correspondantes (même longueur)
+        separators: Label de coupure entre chaque mot et le précédent.
+                    separators[0] est ignoré (pas de séparateur avant le 1er mot).
+                    Si None, CUT_SPC est utilisé entre tous les mots.
+        syllabe_labels_per_word: Labels syllabiques (0/1) par phonème pour
+                                 chaque mot. None = pas de syllabation.
+
+    Returns:
+        dict avec aligned_ortho, aligned_phone, aligned_coupure
+        (3 listes de même longueur, séparées par <SEP>)
+        ou None si un alignement échoue.
+    """
+    if len(words) != len(phones):
+        return None
+
+    all_ortho: list[str] = []
+    all_phone: list[str] = []
+    all_coupure: list[str] = []
+
+    for i, (word, phone) in enumerate(zip(words, phones)):
+        # Séparateur entre mots
+        if i > 0:
+            boundary = CUT_SPC
+            if separators is not None and i < len(separators) and separators[i]:
+                boundary = separators[i]
+
+            if boundary == CUT_APO:
+                # Apostrophe : '/_C/APO puis <SEP>/<SEP>/_
+                if all_ortho and all_ortho[-1] in ("'", "\u2019"):
+                    all_coupure[-1] = CUT_APO
+                else:
+                    all_ortho.append("'")
+                    all_phone.append(CONT_C)
+                    all_coupure.append(CUT_APO)
+                all_ortho.append("<SEP>")
+                all_phone.append("<SEP>")
+                all_coupure.append(CUT_NONE)
+            elif boundary == CUT_TIR:
+                # Tiret : -/_C/TIR, pas de <SEP>
+                if all_ortho and all_ortho[-1] == "-":
+                    all_coupure[-1] = CUT_TIR
+                else:
+                    all_ortho.append("-")
+                    all_phone.append(CONT_C)
+                    all_coupure.append(CUT_TIR)
+            else:
+                all_ortho.append("<SEP>")
+                all_phone.append("<SEP>")
+                all_coupure.append(boundary)
+
+        if not phone:
+            # Mot sans phone → chars ortho avec <PAD>
+            for ch in word.lower():
+                all_ortho.append(ch)
+                all_phone.append("<PAD>")
+                all_coupure.append(CUT_NONE)
+            continue
+
+        # Syllabes pour ce mot
+        syl = None
+        if syllabe_labels_per_word is not None and i < len(syllabe_labels_per_word):
+            syl = syllabe_labels_per_word[i]
+
+        result = align_for_corpus(
+            ortho=word.lower(),
+            phone=phone,
+            syllabe_labels=syl,
+            word_boundary=CUT_NONE,  # pas de frontière interne au mot
+        )
+
+        if result is None:
+            # Fallback : chars avec <PAD>
+            for ch in word.lower():
+                all_ortho.append(ch)
+                all_phone.append("<PAD>")
+                all_coupure.append(CUT_NONE)
+            continue
+
+        all_ortho.extend(result["aligned_ortho"])
+        all_phone.extend(result["aligned_phone"])
+        all_coupure.extend(result["aligned_coupure"])
+
+    return {
+        "aligned_ortho": all_ortho,
+        "aligned_phone": all_phone,
+        "aligned_coupure": all_coupure,
+    }
+
+
+_PONCT_CHARS = frozenset(",.;:!?«»\"()…–—")
+
+# Espacement normalise avant chaque signe de ponctuation (typographie francaise)
+# True = espace (SPC), False = colle (_)
+_PONCT_ESPACEMENT: dict[str, bool] = {
+    ',': False, '.': False, '\u2026': False, ':': False,
+    '?': True, '!': True, ';': True,
+    '\u00ab': True, '\u00bb': True,
+    '"': False,
+    '(': True, ')': False,
+    '\u2013': True, '\u2014': True,
+}
+
+
+def _syllabe_labels_from_lookup(
+    syl_notation: str, phone: str,
+) -> list[int] | None:
+    """Convertit la notation pointee (ex: 'fɔ̃k.sjɔ̃') en labels binaires par phoneme.
+
+    Returns:
+        Liste de 0/1 (1=debut de syllabe sauf le 1er phoneme), ou None si incompatible.
+    """
+    parts = syl_notation.split(".")
+    labels: list[int] = []
+    for s_idx, part in enumerate(parts):
+        ph_in_syl = list(iter_phonemes(part))
+        for p_idx, _ in enumerate(ph_in_syl):
+            labels.append(1 if s_idx > 0 and p_idx == 0 else 0)
+    # Verifier coherence avec le nombre de phonemes du mot
+    n_phonemes = len(list(iter_phonemes(phone)))
+    if len(labels) != n_phonemes:
+        return None
+    return labels
+
+
+def align_phrase(
+    words: list[str],
+    phones: list[str],
+    separators: list[str | None] | None = None,
+    word_types: list[str | None] | None = None,
+    syllabes_lookup: dict[str, str] | None = None,
+) -> dict | None:
+    """Aligne une phrase pre-phonemisee (sans re-G2P).
+
+    Contrairement a aligner_pour_corpus() du G2P Pipeline, cette fonction
+    ne re-phonemise pas : les phones fournis sont utilises tels quels.
+    Syllabification : lookup dictionnaire d'abord, auto (_syllabify_ipa) en fallback.
+
+    Args:
+        words: Mots orthographiques (ou texte ponctuation/formule).
+        phones: Phones IPA correspondants (vide pour ponctuation/formules).
+        separators: Label de coupure avant chaque mot (SPC, LIz, APO, TIR...).
+                    separators[0] est ignore. Si None, CUT_SPC partout.
+        word_types: Type de chaque element :
+                    None ou "mot" = mot normal (aligne + syllabifie)
+                    "ponctuation" = ponctuation (1 token/char, coupure=PONCT)
+                    "formule" = formule (token unique <FML>/<FML>/FML)
+        syllabes_lookup: Dictionnaire mot -> notation pointee (ex: "chocolat" -> "ʃɔ.kɔ.la").
+                         Prioritaire sur l'auto-syllabification.
+
+    Returns:
+        dict avec aligned_ortho, aligned_phone, aligned_coupure
+        ou None si tous les alignements echouent.
+    """
+    if len(words) != len(phones):
+        return None
+
+    all_ortho: list[str] = []
+    all_phone: list[str] = []
+    all_coupure: list[str] = []
+
+    for i, (word, phone) in enumerate(zip(words, phones)):
+        wtype = None
+        if word_types is not None and i < len(word_types):
+            wtype = word_types[i]
+
+        # ── Separateur entre elements ──
+        if i > 0:
+            boundary = CUT_SPC
+            if separators is not None and i < len(separators):
+                if separators[i] is None:
+                    boundary = None  # Pas de separateur (coller au precedent)
+                elif separators[i]:
+                    boundary = separators[i]
+
+            if boundary is None:
+                pass  # Rien : element colle au precedent (trailing ponctuation)
+            elif boundary == CUT_APO:
+                # Apostrophe : '/_C/APO puis <SEP>/<SEP>/_
+                if all_ortho and all_ortho[-1] in ("'", "\u2019"):
+                    all_coupure[-1] = CUT_APO
+                else:
+                    all_ortho.append("'")
+                    all_phone.append(CONT_C)
+                    all_coupure.append(CUT_APO)
+                all_ortho.append("<SEP>")
+                all_phone.append("<SEP>")
+                all_coupure.append(CUT_NONE)
+            elif boundary == CUT_TIR:
+                # Tiret : -/_C/TIR, pas de <SEP>
+                if all_ortho and all_ortho[-1] == "-":
+                    all_coupure[-1] = CUT_TIR
+                else:
+                    all_ortho.append("-")
+                    all_phone.append(CONT_C)
+                    all_coupure.append(CUT_TIR)
+            else:
+                all_ortho.append("<SEP>")
+                all_phone.append("<SEP>")
+                all_coupure.append(boundary)
+
+        # ── Ponctuation ──
+        if wtype == "ponctuation":
+            if i > 0:
+                # Espacement normalise selon les regles typographiques
+                first_ch = word[0] if word else None
+                norm_sep = CUT_SPC if _PONCT_ESPACEMENT.get(first_ch, False) else CUT_NONE
+                if all_ortho and all_ortho[-1] == "<SEP>":
+                    # <SEP> deja present : normaliser son label
+                    all_coupure[-1] = norm_sep
+                else:
+                    all_ortho.append("<SEP>")
+                    all_phone.append("<SEP>")
+                    all_coupure.append(norm_sep)
+            for ch in word:
+                all_ortho.append(ch)
+                all_phone.append(CONT_C)
+                all_coupure.append("PONCT")
+            continue
+
+        # ── Formule ──
+        if wtype == "formule":
+            all_ortho.append("<FML>")
+            all_phone.append("<FML>")
+            all_coupure.append("FML")
+            continue
+
+        # ── Mot normal ──
+        if not phone:
+            for ch in word.lower():
+                all_ortho.append(ch)
+                all_phone.append("<PAD>")
+                all_coupure.append(CUT_NONE)
+            continue
+
+        # Syllabification : lookup d'abord, auto en fallback
+        syl_labels = None
+        word_lower = word.lower()
+
+        # 1. Lookup dictionnaire (plus precis)
+        if syllabes_lookup:
+            syl_str = syllabes_lookup.get(word_lower, "")
+            if syl_str:
+                syl_labels = _syllabe_labels_from_lookup(syl_str, phone)
+
+        # 2. Fallback : auto-syllabification par sonorite
+        #    Sans contexte graphemique, exclure ks/ɡz des composes
+        #    (ne sont composes que pour "x")
+        if syl_labels is None:
+            _safe_compounds = COMPOUND_PHONEMES - set(GRAPHEME_COMPOUNDS)
+            try:
+                sylls = _syllabify_ipa(phone, compounds=_safe_compounds)
+                syl_labels = []
+                for s_idx, syll in enumerate(sylls):
+                    ph_in_syll = iter_phonemes(syll)
+                    for p_idx, _ in enumerate(ph_in_syll):
+                        if s_idx > 0 and p_idx == 0:
+                            syl_labels.append(1)
+                        else:
+                            syl_labels.append(0)
+            except Exception:
+                pass
+
+        result = align_for_corpus(
+            ortho=word_lower,
+            phone=phone,
+            syllabe_labels=syl_labels,
+            word_boundary=CUT_NONE,
+        )
+
+        if result is None:
+            for ch in word.lower():
+                all_ortho.append(ch)
+                all_phone.append("<PAD>")
+                all_coupure.append(CUT_NONE)
+            continue
+
+        all_ortho.extend(result["aligned_ortho"])
+        all_phone.extend(result["aligned_phone"])
+        all_coupure.extend(result["aligned_coupure"])
+
+    if not all_ortho:
+        return None
+
+    # Restaurer APO/TIR/PONCT (ecrase par la syllabification)
+    for i, ch in enumerate(all_ortho):
+        if ch in ("'", "\u2019"):
+            all_coupure[i] = CUT_APO
+        elif ch == "-":
+            all_coupure[i] = CUT_TIR
+        elif ch in _PONCT_CHARS:
+            all_coupure[i] = "PONCT"
+
+    return {
+        "aligned_ortho": all_ortho,
+        "aligned_phone": all_phone,
+        "aligned_coupure": all_coupure,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Classe principale
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1252,6 +1651,38 @@ class LecturaSyllabeur:
         ['ʃɔ', 'kɔ', 'la']
         """
         return _syllabify_ipa(phone)
+
+    def align_for_corpus(
+        self,
+        word: str,
+        phone: str | None = None,
+        syllabe_labels: list[int] | None = None,
+        word_boundary: str = CUT_NONE,
+    ) -> dict | None:
+        """Construit la représentation alignée 3 lignes pour le corpus.
+
+        Parameters
+        ----------
+        word : str
+            Mot orthographique.
+        phone : str | None
+            Transcription IPA. Si None, utilise le phonémiseur.
+        syllabe_labels : list[int] | None
+            Labels syllabiques (0/1) par phonème (optionnel).
+        word_boundary : str
+            Label de coupure à appliquer au premier phonème.
+
+        Returns
+        -------
+        dict | None
+            {aligned_ortho, aligned_phone, aligned_coupure}
+            ou None si l'alignement échoue.
+        """
+        if phone is None:
+            phone = self._phonemizer.phonemize(word)
+        return align_for_corpus(ortho=word, phone=phone,
+                                syllabe_labels=syllabe_labels,
+                                word_boundary=word_boundary)
 
     # ── API complète avec groupes de lecture ──
 

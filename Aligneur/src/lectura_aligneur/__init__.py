@@ -39,6 +39,24 @@ from lectura_aligneur._utilitaires import (
     est_semi_voyelle,
 )
 
+# Représentation alignée (toujours disponible, zero dependance)
+from lectura_aligneur._aligned import (
+    CONT_C,
+    CONT_M,
+    CONT_D,
+    CONT_TOKENS,
+    build_aligned_word,
+    build_aligned_from_alignment,
+    map_syllabes_to_aligned,
+    build_coupure_labels,
+    # Labels de coupure (tête unifiée syllabe + frontière de mot)
+    COUPURE_LABELS,
+    CUT_NONE, CUT_SYL, CUT_SPC, CUT_APO, CUT_TIR,
+    CUT_LIZ, CUT_LIT, CUT_LIN, CUT_LIR, CUT_LIP,
+    jonction_to_coupure,
+    bracket_to_coupure,
+)
+
 # Detection du mode : local (algo present) ou API
 try:
     from lectura_aligneur.lectura_aligneur import (
@@ -49,6 +67,10 @@ try:
         lecture_depuis_g2p,
         syllabifier_groupes,
         _valider_spans_formule,
+        # Représentation alignée
+        align_for_corpus,
+        align_utterance,
+        align_phrase,
         # Classe principale (version locale)
         LecturaSyllabeur,
     )
