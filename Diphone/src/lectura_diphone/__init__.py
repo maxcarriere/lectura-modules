@@ -201,5 +201,7 @@ def synthetiser(
 __all__ = [
     "creer_engine",
     "synthetiser",
+    "DiphoneResult",
+    "PhonemeTiming",
     "__version__",
 ]

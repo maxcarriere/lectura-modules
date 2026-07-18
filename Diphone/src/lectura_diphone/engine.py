@@ -12,6 +12,7 @@ import logging
 import pickle
 import random
 import time
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -26,6 +27,23 @@ from lectura_diphone._world import (
 )
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class PhonemeTiming:
+    """Timing d'un phoneme dans l'audio synthetise."""
+    ipa: str
+    start_ms: float
+    end_ms: float
+
+
+@dataclass
+class DiphoneResult:
+    """Resultat de synthese diphone avec timings phonemiques."""
+    samples: np.ndarray
+    sample_rate: int
+    phoneme_timings: list[PhonemeTiming] = field(default_factory=list)
+
 
 MIN_STATS_N = 5  # minimum observations for corpus stats
 _BASE_RATE = 1.2  # facteur interne : vitesse naturelle (applique avant duration_scale)
@@ -681,7 +699,7 @@ class DiphoneEngine:
         voix_variante: float = 0.0,
         voix_tau: float = 0.3,
         vc_models_dir: str | Path | None = None,
-    ) -> np.ndarray:
+    ) -> DiphoneResult:
         """Synthesize multiple prosodic groups with inter-group pauses.
 
         Le texte est decoupes en phrases aux frontieres terminales
@@ -745,7 +763,7 @@ class DiphoneEngine:
             vc_models_dir: repertoire des modeles VC (defaut: auto-detection).
 
         Returns:
-            np.float32 audio array at 44100 Hz
+            DiphoneResult with audio samples and phoneme timings
         """
         if seed is not None:
             np.random.seed(seed)
@@ -769,7 +787,10 @@ class DiphoneEngine:
             timbre_signature = load_signature(timbre)
 
         if not groups:
-            return np.array([], dtype=np.float32)
+            return DiphoneResult(
+                samples=np.array([], dtype=np.float32),
+                sample_rate=SIWIS_SR,
+            )
 
         # -- Decouper les groupes en phrases --
         sentences = self._split_into_sentences(groups)
@@ -784,36 +805,57 @@ class DiphoneEngine:
             timbre_signature=timbre_signature, base_f0=base_f0,
         )
 
-        sentence_audios = []
+        sentence_results: list[DiphoneResult] = []
         for sent_groups in sentences:
-            audio = self._synthesize_sentence(sent_groups, **synth_kwargs)
-            if len(audio) > 0:
-                sentence_audios.append(audio)
+            result = self._synthesize_sentence(sent_groups, **synth_kwargs)
+            if len(result.samples) > 0:
+                sentence_results.append(result)
 
-        if not sentence_audios:
-            return np.array([], dtype=np.float32)
+        if not sentence_results:
+            return DiphoneResult(
+                samples=np.array([], dtype=np.float32),
+                sample_rate=SIWIS_SR,
+            )
 
         # -- Concatener les phrases avec pause inter-phrase --
-        n_pause = int(sentence_pause_ms * pause_scale / 1000.0 * SIWIS_SR)
+        pause_actual_ms = sentence_pause_ms * pause_scale
+        n_pause = int(pause_actual_ms / 1000.0 * SIWIS_SR)
         pause = np.zeros(n_pause, dtype=np.float32) if n_pause > 0 else None
 
-        parts = []
-        for i, audio in enumerate(sentence_audios):
-            parts.append(audio)
-            if i < len(sentence_audios) - 1 and pause is not None:
+        parts: list[np.ndarray] = []
+        all_timings: list[PhonemeTiming] = []
+        time_offset_ms = 0.0
+
+        for i, result in enumerate(sentence_results):
+            parts.append(result.samples)
+            # Accumulate timings with offset
+            for t in result.phoneme_timings:
+                all_timings.append(PhonemeTiming(
+                    ipa=t.ipa,
+                    start_ms=t.start_ms + time_offset_ms,
+                    end_ms=t.end_ms + time_offset_ms,
+                ))
+            time_offset_ms += len(result.samples) / SIWIS_SR * 1000.0
+            if i < len(sentence_results) - 1 and pause is not None:
                 parts.append(pause)
+                time_offset_ms += pause_actual_ms
 
         combined = np.concatenate(parts)
         combined = np.clip(combined, -0.95, 0.95)
 
         # -- Retimbre optionnel (OpenVoice zero-shot) --
+        # Le retimbre ne change pas la duree, les timings restent valides
         if voix is not None:
             combined = self._apply_retimbre(
                 combined, SIWIS_SR, voix, voix_variante, voix_tau,
                 vc_models_dir,
             )
 
-        return combined
+        return DiphoneResult(
+            samples=combined,
+            sample_rate=SIWIS_SR,
+            phoneme_timings=all_timings,
+        )
 
     def _split_into_sentences(
         self, groups: list[dict],
@@ -848,12 +890,15 @@ class DiphoneEngine:
         vtln_alpha: float,
         timbre_signature,
         base_f0: float,
-    ) -> np.ndarray:
+    ) -> DiphoneResult:
         """Synthetise une phrase (liste de groupes prosodiques)."""
         n_groups = len(groups)
         base_f0_start = base_f0
 
-        audio_parts = []
+        audio_parts: list[np.ndarray] = []
+        all_timings: list[PhonemeTiming] = []
+        time_offset_ms = 0.0
+
         for gi, group in enumerate(groups):
             phones = group["phones"]
             if not phones:
@@ -882,7 +927,7 @@ class DiphoneEngine:
             }
 
             word_boundaries = group.get("word_boundaries", [])
-            audio = self.synthesize_phones(
+            result = self.synthesize_phones(
                 phones, mode=mode, prosody=prosody,
                 use_corpus_stats=True,
                 group_info=group_info,
@@ -894,7 +939,16 @@ class DiphoneEngine:
                 vtln_alpha=vtln_alpha,
                 timbre_signature=timbre_signature,
             )
-            audio_parts.append(audio)
+            audio_parts.append(result.samples)
+
+            # Accumulate timings with offset
+            for t in result.phoneme_timings:
+                all_timings.append(PhonemeTiming(
+                    ipa=t.ipa,
+                    start_ms=t.start_ms + time_offset_ms,
+                    end_ms=t.end_ms + time_offset_ms,
+                ))
+            time_offset_ms += len(result.samples) / SIWIS_SR * 1000.0
 
             # Pauses intra-phrase (virgules, etc.) — pas aux frontieres
             # de fin de phrase (gerees par sentence_pause_ms)
@@ -907,9 +961,13 @@ class DiphoneEngine:
                     if n_silence > 0:
                         audio_parts.append(
                             np.zeros(n_silence, dtype=np.float32))
+                        time_offset_ms += pause_ms
 
         if not audio_parts:
-            return np.array([], dtype=np.float32)
+            return DiphoneResult(
+                samples=np.array([], dtype=np.float32),
+                sample_rate=SIWIS_SR,
+            )
 
         # ── Egalisation RMS inter-groupes ──────────────────────────
         speech_indices = [i for i, p in enumerate(audio_parts)
@@ -934,7 +992,11 @@ class DiphoneEngine:
                                      dtype=np.float32))
 
         combined = np.concatenate(audio_parts)
-        return combined
+        return DiphoneResult(
+            samples=combined,
+            sample_rate=SIWIS_SR,
+            phoneme_timings=all_timings,
+        )
 
     # -- Retimbre helper ─────────────────────────────────────────────────
 
@@ -974,6 +1036,51 @@ class DiphoneEngine:
 
         return retimbre_audio
 
+    @staticmethod
+    def _build_timings(
+        phones: list[str],
+        boundaries: list[tuple[int, int]],
+        word_boundaries: list[int] | None = None,
+    ) -> list[PhonemeTiming]:
+        """Map diphone boundaries (frames) to phoneme timings (ms).
+
+        For N phones and N+1 diphones in the chain:
+        - phone[0]: from boundaries[0].start to midpoint(boundaries[1])
+        - phone[i]: from midpoint(boundaries[i]) to midpoint(boundaries[i+1])
+        - phone[N-1]: from midpoint(boundaries[N-1]) to boundaries[N].end
+
+        Inserts PhonemeTiming(ipa=" ") at word boundaries.
+        """
+        n = len(phones)
+        if n == 0 or len(boundaries) < 2:
+            return []
+
+        wb_set = set(word_boundaries) if word_boundaries else set()
+
+        def mid_ms(start: int, end: int) -> float:
+            return (start + end) / 2.0 * FRAME_PERIOD
+
+        timings: list[PhonemeTiming] = []
+        for i in range(n):
+            # Insert word boundary separator before this phone
+            if i > 0 and i in wb_set:
+                prev_end = timings[-1].end_ms if timings else 0.0
+                timings.append(PhonemeTiming(ipa=" ", start_ms=prev_end, end_ms=prev_end))
+
+            if i == 0:
+                start_ms = boundaries[0][0] * FRAME_PERIOD
+                end_ms = mid_ms(*boundaries[1])
+            elif i == n - 1:
+                start_ms = mid_ms(*boundaries[i])
+                end_ms = boundaries[i + 1][1] * FRAME_PERIOD
+            else:
+                start_ms = mid_ms(*boundaries[i])
+                end_ms = mid_ms(*boundaries[i + 1])
+
+            timings.append(PhonemeTiming(ipa=phones[i], start_ms=start_ms, end_ms=end_ms))
+
+        return timings
+
     def synthesize_phones(
         self,
         phones: list[str],
@@ -988,7 +1095,7 @@ class DiphoneEngine:
         formant_sharpening: float = 1.0,
         vtln_alpha: float = 1.0,
         timbre_signature: np.ndarray | None = None,
-    ) -> np.ndarray:
+    ) -> DiphoneResult:
         """Synthesize from a phone list using diphone chain.
 
         Args:
@@ -1006,7 +1113,7 @@ class DiphoneEngine:
             timbre_signature: vecteur cepstral de timbre cible (None = pas de transfert)
 
         Returns:
-            np.float32 audio array at 44100 Hz
+            DiphoneResult with audio samples and phoneme timings
         """
         if not self.loaded:
             self.load()
@@ -1232,7 +1339,10 @@ class DiphoneEngine:
             })
 
         if not diphone_segments:
-            return np.array([], dtype=np.float32)
+            return DiphoneResult(
+                samples=np.array([], dtype=np.float32),
+                sample_rate=SIWIS_SR,
+            )
 
         f0_cat, sp_cat, ap_cat, boundaries = concat_diphones(diphone_segments)
 
@@ -1274,4 +1384,11 @@ class DiphoneEngine:
         if peak > 0:
             audio = (audio * 0.9 / peak).astype(np.float32)
 
-        return audio
+        # Build phoneme timings from diphone boundaries
+        timings = self._build_timings(phones, boundaries, word_boundaries)
+
+        return DiphoneResult(
+            samples=audio,
+            sample_rate=SIWIS_SR,
+            phoneme_timings=timings,
+        )
